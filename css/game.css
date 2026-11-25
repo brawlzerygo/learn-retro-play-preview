@@ -815,3 +815,36 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 @keyframes coinHeads{0%{transform:translateY(0) rotateY(0) scale(.5)}45%{transform:translateY(-90px) rotateY(1080deg) scale(1.08)}100%{transform:translateY(0) rotateY(1800deg) scale(1)}}
 @keyframes coinTails{0%{transform:translateY(0) rotateY(0) scale(.5)}45%{transform:translateY(-90px) rotateY(1080deg) scale(1.08)}100%{transform:translateY(0) rotateY(1980deg) scale(1)}}
 .coin .cf i{background-size:215% auto;background-position:50% 40%}
+
+/* a card in flight from a hand to the table (the hand card itself) */
+.flyc{position:absolute;z-index:14;border-radius:5px;background:center/cover;box-shadow:0 14px 30px rgba(0,0,0,.6);pointer-events:none;transform-origin:50% 50%;will-change:transform}
+/* the Graveyard view: Graveyard and Banished tabs */
+.gyv .gytabs{display:flex;gap:10px;margin:0 0 14px}
+.gyv .gytabs button{flex:0 0 auto;height:48px;padding:0 22px;border:0;border-radius:2px;transform:skewX(-10deg);background:#1d2127;color:#cfd3d9;font:italic 900 22px 'Barlow Condensed';text-transform:uppercase;letter-spacing:.04em}
+.gyv .gytabs button b{margin-left:8px;color:var(--acc-hi)}
+.gyv .gytabs button.on{background:var(--acc);color:#140a04}.gyv .gytabs button.on b{color:#140a04}
+.gyv .gytabs button.on.ban{background:#7a5cff;color:#fff}.gyv .gytabs button.on.ban b{color:#fff}
+/* the coin's face, second pass (Zack, 2026-11-25: "center the face so its in the middle of the coin, and make it blend in with the color of
+   the coin"): Pot of Greed's face from the card art, centred, turned to gold (luminosity over the coin's gold) and stamped into the metal
+   with a raised ring of our own dots. Our own treatment of the card art; the official Konami coin is not copied (rule 10). */
+.coin .cf i{position:relative;width:146px;height:146px;border-radius:50%;background:radial-gradient(circle at 38% 30%,#ffe9a8,#d9a53c 45%,#8f5f14 85%);box-shadow:inset 0 0 0 3px rgba(90,55,8,.85),inset 0 0 0 7px rgba(255,226,140,.55),inset 0 0 0 9px rgba(110,70,12,.7),inset 0 8px 18px rgba(60,35,4,.55);overflow:hidden;isolation:isolate}
+.coin .cf i::before{content:"";position:absolute;inset:14px;border-radius:50%;background:url(../img/55144522.webp) 50% 44%/300% auto;filter:grayscale(1) contrast(1.55) brightness(1.08);mix-blend-mode:luminosity;opacity:.95;
+  -webkit-mask:radial-gradient(circle,#000 58%,transparent 72%);mask:radial-gradient(circle,#000 58%,transparent 72%)}
+.coin .cf i::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 35% 25%,rgba(255,250,220,.55),transparent 42%),repeating-conic-gradient(from 0deg,rgba(255,232,150,.9) 0 3deg,transparent 3deg 12deg);
+  -webkit-mask:radial-gradient(circle,transparent 66%,#000 67%,#000 73%,transparent 74%),radial-gradient(circle,#000 100%,#000 100%);mask:radial-gradient(circle,transparent 66%,#000 67%,#000 73%,transparent 74%);mix-blend-mode:overlay}
+#stage.m .coin .cf i{width:110px;height:110px}
+#stage.m .coin .cf i::before{inset:10px}
+.coin .cf i::before{background-position:44% 41%;background-size:250% auto;filter:grayscale(1) contrast(1.35) brightness(1.22)}
+
+/* the coin, third pass (Zack, 2026-11-25, with a fan-art reference): a silver stamped coin in that style, but our own design: the Pot of
+   Greed face from the card art embossed in silver at the centre, and an engraved ring of our own lettering (LEARN RETRO · PLAY · DUEL) */
+.coin .cf,.coin .cb{background:radial-gradient(circle at 32% 26%,#ffffff,#d9dde2 30%,#9aa1a9 62%,#5d636b 88%,#3d4248);
+  box-shadow:inset 0 0 0 4px #4b5057,inset 0 0 0 8px #e9edf1,inset 0 0 0 11px #6c727a,inset 0 -6px 14px rgba(0,0,0,.35),0 12px 40px rgba(0,0,0,.6),0 0 40px rgba(220,230,255,.25)}
+.coin .cring{position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px)}
+.coin .cring text{font:800 15px 'Barlow Condensed';letter-spacing:2.4px;fill:#3c4148;paint-order:stroke;stroke:rgba(255,255,255,.55);stroke-width:.8px}
+.coin .cf i{width:124px;height:124px;background:radial-gradient(circle at 38% 30%,#fbfcfd,#c5cad0 45%,#7d848c 85%);box-shadow:inset 0 0 0 3px rgba(55,60,66,.85),inset 0 0 0 6px rgba(255,255,255,.6),inset 0 6px 14px rgba(0,0,0,.4)}
+.coin .cf i::before{inset:10px;filter:grayscale(1) contrast(1.45) brightness(1.18);mix-blend-mode:luminosity}
+.coin .cf i::after{display:none}
+.coin .cb img{filter:grayscale(1) brightness(.55) contrast(1.4) drop-shadow(0 1px 0 rgba(255,255,255,.6))}
+#stage.m .coin .cf i{width:92px;height:92px}
+#stage.m .coin .cring text{font-size:14px}

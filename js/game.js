@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=57';
-import * as S from './sfx.js?v=57';
+import { Table } from './table.js?v=60';
+import * as S from './sfx.js?v=60';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -50,9 +50,9 @@ function lview() {
 function mview() {
   if (LAND) return lview();
   const rowTop = SH - sabPx() - ROW_B - 48, bottom = rowTop - 10;
-  let k = Math.min(1.06, (bottom - 205) / 295); if (k < 0.9) k = Math.min(1.06, (bottom - 112) / 295);
+  let k = Math.min(1.12, (bottom - 205) / 262); if (k < 0.9) k = Math.min(1.12, (bottom - 112) / 262);
   const w = Math.round(MV.w * k), h = Math.round(MV.h * k);
-  return { w, h, ox: Math.round((MV.w - w) / 2), oy: Math.round(bottom - 510 * k), dpr: Math.min(3, (window.devicePixelRatio || 1) * scale) }; }
+  return { w, h, ox: Math.round((MV.w - w) / 2), oy: Math.round(bottom - 499 * k), dpr: Math.min(3, (window.devicePixelRatio || 1) * scale) }; }
 const ROW_B = 252, HW = 96;   // the row's distance above the safe bottom edge, and a hand card's width (css/mobile.css --row, .hc)
 function switchLayout() {
   stage.classList.toggle('m', MOBILE); stage.classList.toggle('ml', LAND); document.documentElement.classList.toggle('m', MOBILE);
@@ -71,7 +71,7 @@ function fit() {
     const v = mview(); for (const k of ['w', 'h', 'ox', 'oy']) stage.style.setProperty('--g' + k, v[k] + 'px');
     // the prompt strip: in the open band between the computer's hand and the board when there is one, else on the center line
     stage.style.setProperty('--cx', LG.cx + 'px');
-    const top = v.oy + 215 * v.h / MV.h; if (!LAND && top - 112 >= 52) stage.style.setProperty('--py', Math.round(top - 26) + 'px'); else stage.style.removeProperty('--py'); stage.classList.toggle('mline', !LAND && top - 112 < 52); try { if (table) { table.setView(v); placeMid(); } } catch (e) { /* the table isn't made yet */ } }
+    const top = v.oy + 237 * v.h / MV.h; if (!LAND && top - 112 >= 52) stage.style.setProperty('--py', Math.round(top - 26) + 'px'); else stage.style.removeProperty('--py'); stage.classList.toggle('mline', !LAND && top - 112 < 52); try { if (table) { table.setView(v); placeMid(); } } catch (e) { /* the table isn't made yet */ } }
   else scale = Math.min(innerWidth / 1920, innerHeight / 1080);
   stage.style.transform = `translate(-50%,-50%) scale(${scale})`;
   stage.classList.toggle('m', MOBILE); stage.classList.toggle('ml', LAND); document.documentElement.classList.toggle('m', MOBILE);
@@ -126,7 +126,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=57');
+const W = new Worker('js/worker.js?v=60');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -278,6 +278,7 @@ const cardText = (f, r) => f === 'edison' && r.ps && !/^No rulings/.test(r.ps) ?
 /* ---------- a pile on the table: every card in a Graveyard, the banished cards, your Extra Deck ---------- */
 function pileView(pi, kind) {
   if (!D || !D.view) return;
+  if (kind === 'gy' || kind === 'ban') return gyView(pi, kind);
   const P = D.view.p[pi], who = pi === 0 ? 'Your' : "The computer's";
   if (kind === 'deck') { toast(`${who} Deck: ${P.deck} cards.`); return; }
   if (kind === 'extra' && pi === 1) { toast(`The computer's ${D.fmt === 'goat' ? 'Fusion' : 'Extra'} Deck: ${P.extra.length} cards, face-down.`); return; }
@@ -293,6 +294,25 @@ function pileView(pi, kind) {
   $('#layer').append(v, p);
   v.onclick = closeDeckList; p.querySelector('#dlClose').onclick = closeDeckList;
   p.onmouseover = e => peekOver(e, p, D.fmt);
+}
+function gyView(pi, kind) {
+  const P = D.view.p[pi], who = pi === 0 ? 'Your' : "The computer's";
+  if (!P.gy.length && !P.ban.length) { toast(`${who} Graveyard is empty.`); return; }
+  if (!P[kind].length) kind = kind === 'gy' ? 'ban' : 'gy';
+  closeDeckList(); S.play('click');
+  const v = document.createElement('div'); v.className = 'veil'; v.id = 'dlVeil'; v.style.zIndex = 59;
+  const p = document.createElement('div'); p.className = 'pn dlist gyv'; p.id = 'dlist';
+  const draw = () => {
+    const list = [...P[kind]].reverse();
+    p.innerHTML = `<div class="head"><h3 class="disp">${who} cards</h3><button class="gb sm" id="dlClose"><svg><use href="#i-x"/></svg>Close<span class="key">Esc</span><span class="shine"></span></button></div>
+      <div class="gytabs"><button class="${kind === 'gy' ? 'on' : ''}" data-k="gy">Graveyard <b>${P.gy.length}</b></button><button class="${kind === 'ban' ? 'on ban' : ''}" data-k="ban">Banished <b>${P.ban.length}</b></button></div>
+      <div class="body">${list.length ? `<div class="grid">${list.map(c => { const r = rec(D.fmt, c.id); return `<div class="dl" data-id="${c.id}"><div class="card" style="background-image:url(${artUrl(c.id)})"></div>${esc(r ? r.n : '')}</div>`; }).join('')}</div>` : `<div class="mute" style="padding:20px 4px">No ${kind === 'gy' ? 'cards in the Graveyard' : 'banished cards'}.</div>`}</div>
+      <div class="pn peek hidden" id="dlPeek"></div>`;
+    p.querySelector('#dlClose').onclick = closeDeckList;
+    p.querySelector('.gytabs').onclick = e => { const b = e.target.closest('[data-k]'); if (b && b.dataset.k !== kind) { kind = b.dataset.k; S.play('click'); draw(); } };
+    if (MOBILE) p.querySelector('.body').onclick = e => { const t = e.target.closest('[data-id]'); if (t) cardSheet(t.dataset.id); };
+  };
+  draw(); $('#layer').append(v, p); v.onclick = closeDeckList; p.onmouseover = e => peekOver(e, p, D.fmt);
 }
 function peekOver(e, p, f) {
   const t = e.target.closest('[data-id]'); if (!t) return; const r = rec(f, t.dataset.id); if (!r) return; const pk = p.querySelector('#dlPeek'); pk.classList.remove('hidden');
@@ -748,12 +768,41 @@ async function anim(ev) {
     return;
   }
 }
+// the hand card flies over the table to its zone: from its own spot, growing or shrinking to the zone's size, turning for Defense
+// Position, showing its face or back as it will land; then the table card appears in the same place
+async function flyFromHand(r, ev, toSide) {
+  const zone = ev.to === 'fz' ? 'fz' : ev.to, up = ev.pos !== 'set', def = ev.to === 'm' && (ev.pos === 'def' || ev.pos === 'set');
+  const sr = stage.getBoundingClientRect(), x0 = (r.left - sr.left) / scale, y0 = (r.top - sr.top) / scale, w0 = r.width / scale, h0 = r.height / scale;
+  const c = table.slot(toSide, zone, ev.zi), q = table.project(c), e = table.project(c.clone().setX(c.x + table.CW / 2));
+  const w1 = Math.abs(e.x - q.x) * 2, h1 = w1 * 614 / 421, opp = toSide !== 1;
+  const fly = document.createElement('div'); fly.className = 'flyc';
+  const face = ev.id != null && (up || ev.owner === 0) ? artUrl(ev.id) : 'img/back.webp';
+  Object.assign(fly.style, { left: x0 + 'px', top: y0 + 'px', width: w0 + 'px', height: h0 + 'px', backgroundImage: `url(${ev.owner === 0 && ev.id != null ? artUrl(ev.id) : 'img/back.webp'})` });
+  $('#layer').appendChild(fly);
+  S.play(up ? 'place' : 'set');
+  const dx = q.x - (x0 + w0 / 2), dy = q.y - (y0 + h0 / 2), sc = w1 / w0, rot = (def ? 90 : 0) + (opp ? 180 : 0);
+  const dur = 560 * SPEED[SET.speed];
+  const a = fly.animate([
+    { transform: 'translate(0,0) scale(1) rotate(0deg)', offset: 0 },
+    { transform: `translate(${dx * 0.5}px,${dy * 0.5 - 30}px) scale(${(1 + sc) / 2 * 1.08}) rotate(${rot / 2}deg)`, offset: 0.5 },
+    { transform: `translate(${dx}px,${dy}px) scale(${sc}) rotate(${rot}deg)`, offset: 1 }], { duration: dur, easing: 'cubic-bezier(.3,.7,.25,1)', fill: 'forwards' });
+  setTimeout(() => { fly.style.backgroundImage = `url(${up ? artUrl(ev.id) : 'img/back.webp'})`; }, dur * 0.5);
+  await a.finished.catch(() => {});
+  await table.place(ev.u, toSide, zone, ev.zi, { id: ev.id, up, pos: ev.pos, from: c.clone().setY(0.06), fromUp: up, fromRotY: table.pose(toSide, def), dur: 90, lift: 0 });
+  fly.remove();
+}
 async function animMove(ev) {
   const p = ev.owner, fromSide = side(ev.prevCtrl != null && ['m', 'st', 'fz'].includes(ev.from) ? ev.prevCtrl : p), toSide = side(['m', 'st', 'fz'].includes(ev.to) ? ev.ctrl : p);
   const dp = D.disp.p; const fast = ev.reason === 'deal';
   // where it starts
   let from = null;
   if (['m', 'st', 'fz'].includes(ev.from)) from = table.where(ev.u);
+  else if (ev.from === 'hand' && ['m', 'st', 'fz'].includes(ev.to)) {
+    const el = p === 0 ? $(`#hand [data-u="${ev.u}"]`) : $$('#ohand .card').pop();
+    const r = el && el.getBoundingClientRect(); if (el && p === 0) el.style.visibility = 'hidden'; dropHand(p, ev.u);
+    if (r && r.width) { await flyFromHand(r, ev, toSide); return; }
+    from = handPoint(p, ev.u);
+  }
   else if (ev.from === 'hand') { from = handPoint(p, ev.u); dropHand(p, ev.u); }
   else if (pileKind(ev.from)) { from = table.pileTop(fromSide, pileKind(ev.from)); bumpPile(fromSide, pileKind(ev.from), -1, ev.u); }
   if (ev.destroyed && table.has(ev.u)) { S.play('destroy'); await table.shatter(ev.u); if (ev.owner === 1) D.stats.destroyed++; }
@@ -830,7 +879,7 @@ function renderHands(newU) {
   for (const d of old.values()) { d.classList.add('gone'); d.removeAttribute('data-u'); setTimeout(() => d.remove(), 240); }
   $('#hcMe').textContent = n;
   const on = D.disp.p[1].hand.length, oe = $('#ohand'); oe.innerHTML = '';
-  const os = MOBILE ? Math.min(20, 160 / Math.max(1, on)) : Math.min(92, 520 / Math.max(1, on)), ox = MOBILE ? (LAND ? LG.cx : SW / 2) - (os * (on - 1)) / 2 - 13 : 300 - (os * (on - 1)) / 2 - 48;
+  const os = MOBILE ? Math.min(30, 230 / Math.max(1, on)) : Math.min(92, 520 / Math.max(1, on)), ox = MOBILE ? (LAND ? LG.cx : SW / 2) - (os * (on - 1)) / 2 - 20 : 300 - (os * (on - 1)) / 2 - 48;
   for (let i = 0; i < on; i++) { const c = document.createElement('div'); c.className = 'card'; c.style.left = (ox + i * os) + 'px'; c.style.transform = `rotate(${(i - (on - 1) / 2) * -3}deg)`; oe.appendChild(c); }
   $('#hcOp').textContent = on;
 }
