@@ -677,3 +677,13 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
 .bstat{display:flex;gap:22px;font:900 22px 'Barlow Condensed';font-style:italic}
 .bstat i{font-style:italic;color:rgba(255,255,255,.45);font-weight:800}
 .bstat .ok{color:#8dff9e}.bstat .bad{color:#ff8a7a}
+
+/* the how-to as its own window over your deck */
+.roster{position:absolute}
+.roster .howto{position:absolute;left:50%;top:50%;translate:-50% -46%;width:800px;max-width:none;margin:0;padding:30px 34px 24px;z-index:6;justify-content:flex-start;gap:11px}
+.roster .howto .hfoot{display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1)}
+.roster .howto .chk{margin:0}
+.roster .hq{width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:none;color:#fff;font:900 18px 'Barlow Condensed';cursor:pointer;flex:none;align-self:center}
+.roster .hq:hover{border-color:var(--acc);color:var(--acc)}
+.roster .dropme{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;margin:6px 0 10px;border:2px dashed rgba(255,255,255,.18);border-radius:6px;color:rgba(255,255,255,.55);font-size:18px}
+.roster .dropme b{font:italic 900 40px 'Barlow Condensed';text-transform:uppercase;color:rgba(255,255,255,.8)}

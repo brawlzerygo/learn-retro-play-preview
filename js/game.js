@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=31';
-import * as S from './sfx.js?v=31';
+import { Table } from './table.js?v=32';
+import * as S from './sfx.js?v=32';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const stage = $('#stage');
@@ -57,7 +57,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=31');
+const W = new Worker('js/worker.js?v=32');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -223,14 +223,15 @@ const LIMIT = r => r && r.b === 'F' ? 0 : r && r.b === 'L' ? 1 : r && r.b === 'S
 // the empty deck shows how the builder works (Zack, 2026-11-24: "update with the new mechanics... and any other brief useful tutorial type info")
 function howTo(f, xl) {
   const tip = (h, t) => `<div class="tip"><b>${h}</b><span>${t}</span></div>`;
-  return `<div class="howto"><h4 class="disp">Build your deck</h4>
+  return `<div class="pn howto" id="howto"><h4 class="disp">Build your deck</h4>
     ${tip('Click a card', 'to read it, then Add to deck.')}
     ${tip('Drag a card', `here to add it. Drag one back to the cards on the left to remove it.`)}
     ${tip('Right-click', 'adds a card from the left, or removes one from your deck, in one go.')}
     ${tip('Search and filter', `by name or card text, or show only Monsters, Spells, Traps or ${xl} cards.`)}
     ${tip('Deck rules', `40 to 60 cards in the Main Deck, up to 15 in the ${xl} Deck, 3 copies at most. Cards marked F, L or S are Forbidden, Limited (1) or Semi-Limited (2) on the ${f === 'goat' ? 'Goat' : 'Edison'} banlist.`)}
     ${tip('Start from a deck', 'copies one of the prebuilt decks so you can change it.')}
-    ${tip('Save', 'names your deck. It then shows up under My decks when you pick a deck to duel.')}</div>`;
+    ${tip('Save', 'names your deck. It then shows up under My decks when you pick a deck to duel.')}
+    <div class="hfoot"><label class="chk"><input type="checkbox" id="htOff"><span></span>Don't show this again</label><button class="gb pri" id="htOk">OK<span class="shine"></span></button></div></div>`;
 }
 function deckProblems(f, d) {
   const out = []; const all = [...d.main, ...d.extra]; const n = new Map(); for (const id of all) n.set(id, (n.get(id) || 0) + 1);
@@ -332,9 +333,15 @@ function renderDeckSide() {
   const fe = fitCards(Math.max(1, extra.length), RW, eH - 30), we = Math.min(fe.w, w, 100);
   const tile = id => `<div class="x" data-id="${id}" draggable="true"><img alt="" draggable="false" src="${artUrl(id)}"></div>`;
   const statLine = probs.length ? `<span style="color:#ff8a7a">${esc(probs[0])}</span>` : `<span style="color:#8dff9e">Legal under the ${f === 'goat' ? 'Goat' : 'Edison'} banlist · ready to duel</span>`;
-  $('#bDeck').innerHTML = `<div class="rhead"><div class="lbl">Your deck</div><div class="stat">${statLine}</div></div>
-    ${main.length ? `<div class="main" style="grid-template-columns:repeat(${fm.cols},${w}px)">${main.map(tile).join('')}</div>` : howTo(f, xl)}
+  // the how-to window (Zack, 2026-11-24: "a distinct window with an 'ok' and 'do not show me this again'"): shown over an empty deck until OK
+  // (this visit) or "Don't show this again" (lrplay:howto); the ? beside Your deck opens it again
+  const showHow = B.howto !== false && localStorage.getItem('lrplay:howto') !== 'off' || B.howto === true;
+  $('#bDeck').innerHTML = `<div class="rhead"><div class="lbl">Your deck</div><button class="hq" id="htQ" title="How the Deck Builder works">?</button><div class="stat">${statLine}</div></div>
+    ${main.length ? `<div class="main" style="grid-template-columns:repeat(${fm.cols},${w}px)">${main.map(tile).join('')}</div>` : `<div class="dropme"><b>Drag cards here</b><span>or click a card on the left to read it and add it</span></div>`}
+    ${showHow && (!main.length || B.howto === true) ? howTo(f, xl) : ''}
     <div class="extra" style="grid-template-columns:repeat(${fe.cols},${we}px)"><div class="xl">${xl} deck · ${extra.length}</div>${extra.map(tile).join('')}</div>`;
+  $('#htQ').onclick = () => { B.howto = true; S.play('click'); renderDeckSide(); };
+  if ($('#htOk')) $('#htOk').onclick = () => { if ($('#htOff').checked) localStorage.setItem('lrplay:howto', 'off'); B.howto = false; S.play('click'); renderDeckSide(); };
   $('#bName').oninput = e => { d.name = e.target.value; B.dirty = true; $('#bSave').textContent = 'Save'; };
   $('#bSave').onclick = saveDeck; $('#bNew').onclick = async () => { if (B.dirty && !(await ask('Start a new deck without saving this one?', 'New deck'))) return; B.deck = newDeck(f); B.dirty = false; S.play('click'); renderBuilder(); };
   $('#bDel').onclick = async () => { const all = MY(); if (!all.some(x => x.id === d.id)) { B.deck = newDeck(f); B.dirty = false; renderBuilder(); return; } if (!(await ask(`Delete "${d.name}"? This can't be undone.`, 'Delete'))) return; saveMY(all.filter(x => x.id !== d.id)); B.deck = null; S.play('destroy'); openBuilder(); };
