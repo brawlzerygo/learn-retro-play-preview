@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=61';
-import * as S from './sfx.js?v=61';
+import { Table } from './table.js?v=62';
+import * as S from './sfx.js?v=62';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -53,7 +53,7 @@ function mview() {
   let k = Math.min(1.12, (bottom - 205) / 262); if (k < 0.9) k = Math.min(1.12, (bottom - 112) / 262);
   const w = Math.round(MV.w * k), h = Math.round(MV.h * k);
   return { w, h, ox: Math.round((MV.w - w) / 2), oy: Math.round(bottom - 499 * k), dpr: Math.min(3, (window.devicePixelRatio || 1) * scale) }; }
-const ROW_B = 252, HW = 96;   // the row's distance above the safe bottom edge, and a hand card's width (css/mobile.css --row, .hc)
+const ROW_B = 236, HW = 96;   // the row's distance above the safe bottom edge, and a hand card's width (css/mobile.css --row, .hc)
 function switchLayout() {
   stage.classList.toggle('m', MOBILE); stage.classList.toggle('ml', LAND); document.documentElement.classList.toggle('m', MOBILE);
   try {
@@ -126,7 +126,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=61');
+const W = new Worker('js/worker.js?v=62');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -770,6 +770,18 @@ async function anim(ev) {
 }
 // the hand card flies over the table to its zone: from its own spot, growing or shrinking to the zone's size, turning for Defense
 // Position, showing its face or back as it will land; then the table card appears in the same place
+function stageBox(r) { const sr = stage.getBoundingClientRect(); return { x: (r.left - sr.left) / scale, y: (r.top - sr.top) / scale, w: r.width / scale, h: r.height / scale }; }
+function pileBox(sd, kind) { const c = table.pileTop(sd, kind), q = table.project(c), e = table.project(c.clone().setX(c.x + table.CW / 2)); const w = Math.abs(e.x - q.x) * 2; return { cx: q.x, cy: q.y, w }; }
+// a flat card flying over everything: from a box (stage pixels) to a centre point and width, turning by rot, its picture changing halfway
+async function fly2D(b, to, img, o = {}) {
+  const fly = document.createElement('div'); fly.className = 'flyc';
+  Object.assign(fly.style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px', backgroundImage: `url(${img})` }); $('#layer').appendChild(fly);
+  const dx = to.cx - (b.x + b.w / 2), dy = to.cy - (b.y + b.h / 2), sc = to.w / b.w, rot = o.rot || 0, dur = (o.dur || 420) * SPEED[SET.speed];
+  const a = fly.animate([{ transform: `translate(0,0) scale(1) rotate(0deg)` }, { transform: `translate(${dx * 0.5}px,${dy * 0.5 - (o.arc || 24)}px) scale(${(1 + sc) / 2 * 1.05}) rotate(${rot / 2}deg)`, offset: 0.5 },
+    { transform: `translate(${dx}px,${dy}px) scale(${sc}) rotate(${rot}deg)` }], { duration: dur, easing: 'cubic-bezier(.3,.7,.25,1)', fill: 'forwards' });
+  if (o.img2) setTimeout(() => { fly.style.backgroundImage = `url(${o.img2})`; }, dur * 0.5);
+  await a.finished.catch(() => {}); if (!o.keep) fly.remove(); return fly;
+}
 async function flyFromHand(r, ev, toSide) {
   const zone = ev.to === 'fz' ? 'fz' : ev.to, up = ev.pos !== 'set', def = ev.to === 'm' && (ev.pos === 'def' || ev.pos === 'set');
   const sr = stage.getBoundingClientRect(), x0 = (r.left - sr.left) / scale, y0 = (r.top - sr.top) / scale, w0 = r.width / scale, h0 = r.height / scale;
@@ -803,6 +815,17 @@ async function animMove(ev) {
     if (r && r.width) { await flyFromHand(r, ev, toSide); return; }
     from = handPoint(p, ev.u);
   }
+  else if (ev.from === 'hand' && pileKind(ev.to)) {
+    // a discard (or any card from a hand to a pile): the hand card itself flies to the pile
+    const el = p === 0 ? $(`#hand [data-u="${ev.u}"]`) : $$('#ohand .card').pop(); const r = el && el.getBoundingClientRect();
+    if (el && p === 0) el.style.visibility = 'hidden'; dropHand(p, ev.u);
+    if (r && r.width) {
+      const k = pileKind(ev.to), shows = (k === 'gy' || k === 'ban') && ev.id != null;
+      S.play('set'); await fly2D(stageBox(r), pileBox(toSide, k), p === 0 && ev.id != null ? artUrl(ev.id) : 'img/back.webp', { img2: p === 1 && shows ? artUrl(ev.id) : null, rot: toSide === 1 ? 0 : 180, dur: 420 });
+      bumpPile(toSide, k, +1, ev.u, ev.id); return;
+    }
+    from = handPoint(p, ev.u);
+  }
   else if (ev.from === 'hand') { from = handPoint(p, ev.u); dropHand(p, ev.u); }
   else if (pileKind(ev.from)) { from = table.pileTop(fromSide, pileKind(ev.from)); bumpPile(fromSide, pileKind(ev.from), -1, ev.u); }
   if (ev.destroyed && table.has(ev.u)) { S.play('destroy'); await table.shatter(ev.u); if (ev.owner === 1) D.stats.destroyed++; }
@@ -816,6 +839,17 @@ async function animMove(ev) {
   if (ev.to === 'hand') {
     const to = handPoint(p, null);
     if (table.has(ev.u)) await table.remove(ev.u, to, { up: p === 0, dur: 360 });
+    else if (from && pileKind(ev.from)) {
+      // a draw: the card's place in the hand is made first (hidden), and the card flies from the Deck straight into it
+      addHand(p, { u: ev.u, id: p === 0 ? ev.id : null });
+      const el = p === 0 ? $(`#hand [data-u="${ev.u}"]`) : $$('#ohand .card').pop();
+      if (el) { el.style.visibility = 'hidden'; S.play(fast ? 'deal' : 'draw');
+        await fly2D(pileBox(fromSide, pileKind(ev.from)), (() => { const b = stageBox(el.getBoundingClientRect()); return { cx: b.x + b.w / 2, cy: b.y + b.h / 2, w: b.w }; })(), 'img/back.webp',
+          { img2: p === 0 && ev.id != null ? artUrl(ev.id) : null, rot: 0, dur: fast ? 260 : 400, arc: 30 })
+          .then(() => {}); el.style.visibility = ''; }
+      if (fast) await waitMs(40);
+      return;
+    }
     else if (from) { S.play(fast ? 'deal' : 'draw'); await table.fly(p === 0 ? ev.id : null, from, to, { up: false, toUp: p === 0 && ev.id != null, rotY: p === 0 ? 0 : Math.PI, dur: fast ? 200 : 340, lift: 0.4 }); }
     addHand(p, { u: ev.u, id: p === 0 ? ev.id : null });
     if (fast) await waitMs(40);
@@ -1023,7 +1057,7 @@ function promptPick(pr) {
 function togglePick(k, pr) { if (D.picks.has(k)) D.picks.delete(k); else { if (D.picks.size >= pr.max) { if (pr.max === 1) D.picks.clear(); else return; } D.picks.add(k); } S.play('click'); }
 function confirmBar(pr) {
   const box = document.createElement('div'); box.className = 'pn amenu respond'; Object.assign(box.style, { right: '36px', bottom: '120px', position: 'absolute' });
-  box.innerHTML = `<div class="ph">Chosen: <b id="pickN">0</b></div><button class="gb pri wide" data-ok disabled><svg><use href="#i-check"/></svg><span class="cl">${MOBILE && pr.max === 1 ? 'Tap a target' : 'Confirm'}</span><span class="key">Enter</span><span class="shine"></span></button>`;
+  box.innerHTML = `<div class="ph">Chosen: <b id="pickN">0</b></div><button class="gb pri wide" data-ok disabled><svg><use href="#i-check"/></svg><span class="cl">${MOBILE ? (pr.max === 1 ? 'Tap a target' : `Choose ${pr.min || 1}`) : 'Confirm'}</span><span class="key">Enter</span><span class="shine"></span></button>`;
   box.onclick = e => { const b = e.target.closest('[data-ok]'); if (b && !b.disabled) send([...D.picks]); };
   $('#layer').appendChild(box);
 }
@@ -1036,6 +1070,7 @@ function pickU(u) {
   // phones: a single target waits for Confirm, which names the card, so a mis-tap never resolves anything
   if (MOBILE && pr.max === 1) { for (const x of pr.opts) if (x.key !== o.key && table.has(x.u)) table.glow(x.u, 0x7fd3ff); const b = $('#layer [data-ok]'); if (b) { const nm = D.picks.size ? (o.label || nameOfU(u)) : ''; b.querySelector('.cl').textContent = nm ? `Confirm: ${nm}` : 'Confirm'; } }
   const n = $('#pickN'); if (n) n.textContent = D.picks.size; const ok = $('#layer [data-ok]'); if (ok) ok.disabled = !(D.picks.size >= pr.min && D.picks.size <= pr.max);
+  if (MOBILE && pr.max > 1 && ok) { const need = (pr.min || 1) - D.picks.size; ok.querySelector('.cl').textContent = need > 0 ? `Choose ${need} more` : `Confirm (${D.picks.size})`; }
   return true;
 }
 function promptChoose(pr) {

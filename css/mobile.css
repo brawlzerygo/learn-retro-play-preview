@@ -608,3 +608,25 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .banb{display:none!important}
 #stage.m .gyv .gytabs button{flex:1;height:42px;font-size:17px;padding:0 10px}
 #stage.m .flyc{border-radius:4px}
+
+/* ---------- slimmer bars (Zack, 2026-11-25: "make the player/opponents name/lp banner smaller/less tall, can remove the colored rectangles
+   under the lp... use the xtra space to make everything else sit comfortably") ----------
+   Each bar is one 44-point line: avatar, name, Life Points. The space they gave back moves the computer's hand off its Spell/Trap row
+   and gives your hand and the row above it room to breathe. */
+#stage.m:not(.ml) .lp{height:44px;gap:9px;padding:0 12px 0 8px}
+#stage.m:not(.ml) .lp.op{top:calc(var(--sat) + 2px)}
+#stage.m:not(.ml) .lp.me{bottom:calc(var(--sab) + 4px);padding-right:62px}
+#stage.m:not(.ml) .lp .em{width:30px;height:30px}
+#stage.m:not(.ml) .lp>div:nth-child(2){flex-direction:row;align-items:center;gap:8px}
+#stage.m:not(.ml) .lp .who{flex:1;min-width:0;padding-right:0;font-size:11px}
+#stage.m:not(.ml) .lp .num{margin:0;font-size:30px;line-height:1}
+#stage.m:not(.ml) .lp .bar{display:none}
+#stage.m:not(.ml) .ohand{top:calc(var(--sat) + 44px)}
+#stage.m:not(.ml) #tMenu{bottom:calc(var(--sab) + 9px);height:34px;width:42px}
+#stage.m:not(.ml){--row:calc(var(--sab) + 236px)}
+#stage.m:not(.ml) .hand{bottom:calc(var(--sab) + 56px)}
+
+/* choosing cards from your hand (a discard, Delinquent Duo...): the bar above your hand stays solid and readable while Confirm waits */
+#stage.m .amenu.respond .gb[disabled]{opacity:1;pointer-events:none}
+#stage.m .amenu.respond .gb[disabled]::before{background:#1d2127!important;box-shadow:inset 0 -3px 0 rgba(255,255,255,.08),0 8px 18px rgba(0,0,0,.45)!important}
+#stage.m .amenu.respond .gb[disabled],#stage.m .amenu.respond .gb[disabled] .cl{color:#8c939c}
