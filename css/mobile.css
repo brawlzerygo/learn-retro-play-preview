@@ -650,7 +650,7 @@ html.m,html.m body{position:fixed;inset:0;width:100%;height:100%;margin:0}
 #stage.m .ldeck .tg{font-size:10px}
 #stage.m .mbtabs button{font-size:15px}
 #stage.m .dlist .head #dlCopy{order:3;flex:1 1 100%;justify-content:center}
-#stage.m #bLists{display:none}
+#stage.m #bView{display:none}
 #stage.m .dlist .peek{display:none!important}
 #stage.m .blists .lhead{flex-direction:column;align-items:stretch}
 #stage.m .blists .lfmt{order:0}

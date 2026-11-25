@@ -887,3 +887,6 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .blists .lhead{flex-direction:row;align-items:center;justify-content:space-between}
 .blists .lfmt{order:2}
 .blists .lfmt .gb{flex:none}
+.board .act .bview{display:flex;gap:6px;margin-right:10px}
+.board .cell.name{min-width:230px}.board .act{gap:6px}.board .act .gb.sm{padding:0 11px;font-size:17px}.board .act .gb.sm svg{width:18px;height:18px}
+.board .cell.name{min-width:280px}.board .name input{font-size:46px}
