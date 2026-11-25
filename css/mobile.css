@@ -630,3 +630,6 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .amenu.respond .gb[disabled]{opacity:1;pointer-events:none}
 #stage.m .amenu.respond .gb[disabled]::before{background:#1d2127!important;box-shadow:inset 0 -3px 0 rgba(255,255,255,.08),0 8px 18px rgba(0,0,0,.45)!important}
 #stage.m .amenu.respond .gb[disabled],#stage.m .amenu.respond .gb[disabled] .cl{color:#8c939c}
+/* the computer's bar gets a blue outline like yours has orange, and its hand lies over the bar's lower edge (Zack, 2026-11-25) */
+#stage.m:not(.ml) .lp.op::before{box-shadow:inset 0 0 0 2px var(--opp),0 8px 20px rgba(0,0,0,.55)}
+#stage.m:not(.ml) .ohand{z-index:12;top:calc(var(--sat) + 30px)}
