@@ -581,3 +581,23 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
 .board .name input{width:100%}
 .board .act{gap:8px;padding:0 16px;flex:none}
 .board .savebtn{flex:none;padding:0 34px}
+
+/* the duel menu: Resume, Settings (the same rows as the Settings screen), Give up, Quit to main menu */
+.pmenu{min-width:640px;z-index:41}
+.pmenu .opts .gb{justify-content:flex-start}
+.pmenu .pset{width:880px}
+.pmenu .vrow{height:72px;font-size:32px;padding:0 20px}
+.pmenu .vrow .vt{width:200px}
+.pmenu .vrow:hover{background:rgba(255,106,31,.12)}
+/* the turn banner: room for its subtitle under the big text */
+.banner{height:170px;top:445px}
+.banner .sub{bottom:12px;font-size:18px}
+/* a long chain stops above the turn counter and scrolls */
+.chainp{max-height:330px;overflow-y:auto;scrollbar-width:thin}
+
+/* playable and pickable cards in hand: a crisp 2px outline and a short glow, not a big halo */
+.hc.play{box-shadow:0 0 0 2px var(--acc),0 0 12px rgba(255,106,31,.5),0 16px 30px rgba(0,0,0,.75)}
+.hc.pick{box-shadow:0 0 0 2px #7fd3ff,0 0 12px rgba(127,211,255,.5),0 16px 30px rgba(0,0,0,.75)}
+
+/* the duel menu button: top-left, where Back sits on every other screen */
+#tMenu{position:absolute;left:40px;top:30px;z-index:9}

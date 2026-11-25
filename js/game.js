@@ -780,7 +780,7 @@ function duelKey(e) {
   const pr = D && D.prompt;
   if (e.key === 'Escape' && closeDeckList()) return; if (e.key === 'h' || e.key === 'H') return askHint();
   if (!pr) return;
-  if (e.key === 'Escape') { if (closeDeckList()) return; if (D.zoneMode) cancelZone(); else closeMenu(); return; }
+  if (e.key === 'Escape') { if (closeDeckList()) return; if (closeDuelMenu()) return; if (D.zoneMode) return cancelZone(); if ($('#amenu')) return closeMenu(); return duelMenu(); }
   if (pr.type === 'respond' && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); return send(['pass']); }
   if (pr.type === 'yesno' && (e.key === 'y' || e.key === 'n')) return send([e.key]);
   if (pr.type === 'idle') { const k = { b: 'bp', e: pr.opts.some(o => o.key === 'endbp') ? 'endbp' : 'end' }[e.key.toLowerCase()]; if (k && pr.opts.some(o => o.key === k)) return send([k]); }
@@ -799,12 +799,35 @@ $('#tLog').onclick = () => {
   p.innerHTML = `<div class="ph">Duel log</div><div class="lines">${D.log.map(l => `<div class="${/^— Turn/.test(l) ? 'turn' : ''}">${esc(l)}</div>`).join('')}</div>`;
   $('#layer').appendChild(p); const ln = p.querySelector('.lines'); ln.scrollTop = ln.scrollHeight;
 };
-$('#tMenu').onclick = () => {
-  S.play('click'); const v = document.createElement('div'); v.className = 'veil'; const dl = document.createElement('div'); dl.className = 'pn dlg';
-  dl.innerHTML = `<h3 class="disp">Paused</h3><div class="opts"><button class="gb wide pri" data-a="resume"><span class="lbl">Resume</span><span class="shine"></span></button><button class="gb wide" data-a="quit"><span class="lbl">Give up the duel</span><span class="shine"></span></button><button class="gb wide" data-a="title"><span class="lbl">Quit to Home</span><span class="shine"></span></button></div>`;
-  $('#layer').append(v, dl);
-  dl.onclick = e => { const b = e.target.closest('[data-a]'); if (!b) return; v.remove(); dl.remove(); if (b.dataset.a === 'quit') { W.postMessage({ type: 'giveup' }); endDuel({ winner: 1, why: 'You gave up.' }); } if (b.dataset.a === 'title') { D = null; show('title'); } };
-};
+// the duel menu (Zack, 2026-11-24: "a menu/settings/quit option in the duel... adjust settings and quit to main menu during a game. will ask if youre sure")
+function duelMenu() {
+  if ($('#pauseMenu')) return closeDuelMenu();
+  S.play('click'); const v = document.createElement('div'); v.className = 'veil'; v.id = 'pauseVeil'; const dl = document.createElement('div'); dl.className = 'pn dlg pmenu'; dl.id = 'pauseMenu';
+  const rows = () => SETROWS.map((r, i) => [r, i]).filter(([r]) => r.k !== 'table').map(([r, i]) => { const v2 = SET[r.k] != null ? SET[r.k] : r.vals[0];
+    const val = r.blocks ? `<span class="blocks">${r.vals.slice(1).map(x => `<i class="${x <= v2 ? 'f' : ''}"></i>`).join('')}</span><span class="vn">${v2}</span>` : `<span class="vt">${r.lab(v2)}</span>`;
+    return `<div class="vrow" data-i="${i}"><span>${r.name}</span><span class="dots"></span><span class="val"><span class="arr" data-d="-1">◀</span>${val}<span class="arr" data-d="1">▶</span></span></div>`; }).join('');
+  const main = () => { dl.innerHTML = `<h3 class="disp">Menu</h3><div class="opts">
+      <button class="gb wide pri" data-a="resume"><span class="lbl">Resume</span><span class="key">Esc</span><span class="shine"></span></button>
+      <button class="gb wide" data-a="settings"><svg><use href="#i-cog"/></svg><span class="lbl">Settings</span><span class="shine"></span></button>
+      <button class="gb wide" data-a="giveup"><span class="lbl">Give up the duel</span><span class="shine"></span></button>
+      <button class="gb wide" data-a="home"><svg><use href="#i-home"/></svg><span class="lbl">Quit to main menu</span><span class="shine"></span></button></div>`; };
+  const settings = () => { dl.innerHTML = `<h3 class="disp">Settings</h3><div class="pset">${rows()}</div><div class="btns"><button class="gb" data-a="back"><svg><use href="#i-back"/></svg>Back<span class="shine"></span></button></div>`; };
+  main(); $('#layer').append(v, dl); v.onclick = closeDuelMenu;
+  dl.onclick = async e => {
+    const ar = e.target.closest('[data-d]'), row = e.target.closest('[data-i]');
+    if (ar && row) { changeSetting(+row.dataset.i, +ar.dataset.d); return settings(); }
+    const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a;
+    if (a === 'resume') return closeDuelMenu();
+    if (a === 'settings') { S.play('click'); return settings(); }
+    if (a === 'back') { S.play('click'); return main(); }
+    const live = D && !D.over;
+    const confirm = async (q, y) => { if (!live) return true; dl.style.visibility = 'hidden'; const ok = await ask(q, y); dl.style.visibility = ''; return ok; };
+    if (a === 'giveup') { if (!(await confirm('Give up this duel? It counts as a loss.', 'Give up'))) return; closeDuelMenu(); W.postMessage({ type: 'giveup' }); endDuel({ winner: 1, why: 'You gave up.' }); }
+    if (a === 'home') { if (!(await confirm('Quit to the main menu? This duel will end and won\'t be saved.', 'Quit'))) return; closeDuelMenu(); W.postMessage({ type: 'giveup' }); D = null; show('title'); }
+  };
+}
+function closeDuelMenu() { const a = $('#pauseMenu'), b = $('#pauseVeil'); if (a) { a.remove(); b && b.remove(); S.play('click'); return true; } return false; }
+$('#tMenu').onclick = duelMenu;
 function toast(t, ms = 2600) { const d = document.createElement('div'); d.className = 'pn toast'; d.textContent = t; (cur === 'duel' ? $('#layer') : stage).appendChild(d); setTimeout(() => d.remove(), ms); }
 
 

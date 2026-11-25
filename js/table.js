@@ -199,9 +199,19 @@ export class Table {
   lightZones(list) { // [{side, zone, i}]
     for (const z of this.zones) { const d = z.userData.zone; z.visible = !!list.find(l => l.side === d.side && l.zone === d.zone && l.i === d.i); }
   }
+  // a crisp outline just outside the card with a short soft glow (Zack, 2026-11-24: "the glow of the cards... needs to get cleaned up"; it was a pulsing blob)
+  glowTex(color) {
+    this._gt = this._gt || new Map(); if (this._gt.has(color)) return this._gt.get(color);
+    const PAD = 0.1, S = 340, w = Math.round((this.CW + 2 * PAD) * S), h = Math.round((this.CH + 2 * PAD) * S), cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const x = cv.getContext('2d'), css = '#' + color.toString(16).padStart(6, '0'), ins = PAD * S - 4;
+    x.shadowColor = css; x.shadowBlur = 16; x.strokeStyle = css; x.lineWidth = 5;
+    x.beginPath(); x.roundRect(ins, ins, w - 2 * ins, h - 2 * ins, 10); x.stroke(); x.stroke();
+    x.shadowBlur = 0; x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 1.5; x.beginPath(); x.roundRect(ins, ins, w - 2 * ins, h - 2 * ins, 10); x.stroke();
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; this._gt.set(color, t); return t;
+  }
   glow(u, color = 0xff7a30) {
-    const c = this.cards.get(u); if (!c) return; if (this.glows.has(u)) { this.glows.get(u).material.color.setHex(color); return; }
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(this.CW + 0.16, this.CH + 0.16), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .5, depthWrite: false, blending: THREE.AdditiveBlending }));
+    const c = this.cards.get(u); if (!c) return; if (this.glows.has(u)) { const m = this.glows.get(u); m.material.map = this.glowTex(color); m.material.needsUpdate = true; return; }
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(this.CW + 0.2, this.CH + 0.2), new THREE.MeshBasicMaterial({ map: this.glowTex(color), transparent: true, depthWrite: false }));
     m.rotation.x = -Math.PI / 2; m.userData.halo = u; this.scene.add(m); this.glows.set(u, m);
   }
   unglow(u) { const m = this.glows.get(u); if (m) { this.scene.remove(m); this.glows.delete(u); } }
@@ -258,7 +268,7 @@ export class Table {
     this.step(now);
     const pulse = 0.5 + 0.5 * Math.sin(now / 220);
     for (const z of this.zones) if (z.visible) z.material.opacity = 0.22 + pulse * 0.3;
-    for (const [u, m] of this.glows) { const c = this.cards.get(u); if (!c) continue; m.position.set(c.g.position.x, 0.005, c.g.position.z); m.rotation.z = c.def ? Math.PI / 2 : 0; m.material.opacity = 0.25 + pulse * 0.35; }
+    for (const [u, m] of this.glows) { const c = this.cards.get(u); if (!c) continue; m.position.set(c.g.position.x, 0.005, c.g.position.z); m.rotation.z = c.def ? Math.PI / 2 : 0; m.material.opacity = 0.8 + pulse * 0.2; }
     for (const m of this.rings) { const c = this.cards.get(m.userData.follow); if (c) m.position.set(c.g.position.x, c.g.position.y + 0.03, c.g.position.z); m.rotation.z = now / 900; }
     this.onFrame();
     this.renderer.render(this.scene, this.camera);

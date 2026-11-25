@@ -80,7 +80,7 @@ const hooks = {
 
 function promptFor0() {
   const pr = g.prompt; if (!pr || pr.p !== 0) return null;
-  const all = [...g.p[0].hand, ...g.p[0].deck, ...g.p[0].extra, ...g.p[0].gy, ...g.p[0].ban, ...g.p[1].gy, ...g.p[1].ban,
+  const all = [...g.p[0].hand, ...g.p[1].hand, ...g.p[0].deck, ...g.p[0].extra, ...g.p[0].gy, ...g.p[0].ban, ...g.p[1].gy, ...g.p[1].ban,
     ...g.p[0].m, ...g.p[0].st, g.p[0].fz, ...g.p[1].m, ...g.p[1].st, g.p[1].fz].filter(Boolean);
   const byU = new Map(all.map(c => [c.u, c]));
   return { type: pr.type, text: pr.text, min: pr.min, max: pr.max, hint: pr.hint || null,
