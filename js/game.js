@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=56';
-import * as S from './sfx.js?v=56';
+import { Table } from './table.js?v=57';
+import * as S from './sfx.js?v=57';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -82,7 +82,7 @@ const toStage = e => { const r = stage.getBoundingClientRect(); return { x: (e.c
 /* ---------- settings ---------- */
 const SET = Object.assign({ vol: 50, speed: 'relaxed', hintLimit: '3', muted: false, theme: 'broadcast' }, JSON.parse(localStorage.getItem('lrplay:set') || '{}'));
 const saveSet = () => localStorage.setItem('lrplay:set', JSON.stringify(SET));
-const SPEED = { relaxed: 1, normal: 1, fast: 0.55, instant: 0.04 };
+const SPEED = { relaxed: 1.15, normal: 1.05, fast: 0.55, instant: 0.04 };   // a touch slower card moves (Zack, 2026-11-25: "slow down the card action animations just slightly")
 const GAP = { relaxed: 1.6, normal: 1, fast: 0.55, instant: 0.04 };
 const BEAT = { relaxed: 1100, normal: 450, fast: 160, instant: 0 };   // ms after each computer play
 if (SET.paceV !== 2) { SET.speed = 'relaxed'; SET.paceV = 2; localStorage.setItem('lrplay:set', JSON.stringify(SET)); }   // once: everyone starts on Relaxed
@@ -126,7 +126,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=56');
+const W = new Worker('js/worker.js?v=57');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -761,7 +761,7 @@ async function animMove(ev) {
   if (['m', 'st', 'fz'].includes(ev.to)) {
     const up = ev.pos !== 'set';
     S.play(up ? 'place' : 'set');
-    await table.place(ev.u, toSide, ev.to === 'fz' ? 'fz' : ev.to, ev.zi, { id: ev.id, up, pos: ev.pos, from, fromUp: ev.from === 'hand' && p === 0 ? true : up, dur: ev.from === 'hand' ? 520 : 440 });
+    await table.place(ev.u, toSide, ev.to === 'fz' ? 'fz' : ev.to, ev.zi, { id: ev.id, up, pos: ev.pos, from, fromUp: ev.from === 'hand' && p === 0 ? true : up, dur: ev.from === 'hand' ? 580 : 460 });
     return;
   }
   if (ev.to === 'hand') {
