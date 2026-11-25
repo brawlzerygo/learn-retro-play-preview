@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=77';
-import * as S from './sfx.js?v=77';
+import { Table } from './table.js?v=78';
+import * as S from './sfx.js?v=78';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -137,7 +137,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=77');
+const W = new Worker('js/worker.js?v=78');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -200,9 +200,20 @@ $$('.fmt').forEach(x => { x.onclick = () => { S.unlock(); chooseFmt(x.dataset.fm
 const TIERS = { edison: ['Best', 'Competitive', 'Rogue', 'Contender', 'Casual'], goat: ['A', 'B', 'C', 'D', 'T'] };
 const TIERNAME = { A: 'Tier A', B: 'Tier B', C: 'Tier C', D: 'Tier D', T: 'Tournament' };
 let pickingOpp = false, PK = { you: false, cpu: false };
-function keyCards(f, d) { // three cards to show for a deck: its strongest monsters, Extra Deck first
-  const ids = [...new Set([...d.extra, ...d.main])]; const rs = ids.map(id => rec(f, id)).filter(r => r && !['spell', 'trap'].includes(r.k));
-  rs.sort((a, b) => (+b.atk || 0) - (+a.atk || 0)); const out = rs.slice(0, 3).map(r => r.id); while (out.length < 3 && ids[out.length]) out.push(ids[out.length]); return out;
+// three cards to show for a deck: its signature monsters, the ones it runs most that few other decks share (its engine: Blackwings,
+// Frogs, Plants...), Main Deck first (Zack, 2026-11-25: "should be their main engines/effect monsters/what theyre known for... instead of
+// a lot of the same synchros"); the Extra Deck only fills in when the Main Deck has fewer than three monsters
+const deckFreq = {};
+function keyCards(f, d) {
+  if (!deckFreq[f]) { const m = new Map(); for (const x of FM[f].decks) for (const id of new Set(x.main)) m.set(id, (m.get(id) || 0) + 1); deckFreq[f] = m; }
+  const fq = deckFreq[f], N = FM[f].decks.length, count = new Map(); for (const id of d.main) count.set(id, (count.get(id) || 0) + 1);
+  const mons = [...count.keys()].filter(id => { const r = rec(f, id); return r && !['spell', 'trap'].includes(r.k); });
+  const score = id => { const r = rec(f, id); return count.get(id) * Math.log((N + 1) / ((fq.get(id) || 1))) + (r && r.k !== 'normal' ? 0.3 : 0) + (+(r && r.atk) || 0) / 10000; };
+  mons.sort((a, b) => score(b) - score(a));
+  const out = mons.slice(0, 3);
+  for (const id of [...new Set(d.extra)]) { if (out.length >= 3) break; out.push(id); }
+  for (const id of count.keys()) { if (out.length >= 3) break; if (!out.includes(id)) out.push(id); }
+  return out;
 }
 async function renderDecks() {
   await readyP;
