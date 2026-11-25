@@ -756,3 +756,8 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 #stage.phone .dk{min-height:104px;font-size:20px}
 #stage.phone .mute{font-size:max(1em,22px)}
 .tk .touch{display:none}#stage.touch .tk .mouse{display:none}#stage.touch .tk .touch{display:inline}
+
+/* drawn arrows and separators, never symbol characters (phones draw those as emoji; Zack, 2026-11-24) */
+.vrow .arr{display:inline-flex;align-items:center;cursor:pointer}
+.vrow .arr svg{width:26px;height:26px;fill:currentColor;stroke:none}
+.dia{display:inline-block;width:9px;height:9px;background:currentColor;transform:rotate(45deg);margin:0 18px;vertical-align:middle;opacity:.8}

@@ -287,13 +287,23 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .sttab{font-size:12px}
 #stage.m .sttab th{font-size:9px;padding:4px;white-space:nowrap}
 #stage.m .sttab td{padding:6px 4px}
-/* short phones (an SE): smaller home cards so the buttons and small print fit */
-@media (max-height:720px){
-  #stage.m #s-title .heroes{top:calc(var(--sat) + 62px);height:210px}
-  #stage.m #s-title .heroes .card{width:130px;height:190px}
-  #stage.m #s-title .heroes .h1{left:30px}
-  #stage.m #s-title .heroes .h2{left:130px}
-  #stage.m #mainMenu{top:calc(var(--sat) + 270px)}
-  #stage.m #s-title .legal{bottom:calc(var(--sab) + 96px)}
-  #stage.m #s-title .savenote{bottom:calc(var(--sab) + 64px)}
-}
+
+/* home on phones: a single column (logo, cards, buttons, small print) that never overlaps, whatever the phone's height
+   (Zack, 2026-11-24: "the big buttons are overlapping the disclaimer text") */
+#stage.m #s-title{display:none;flex-direction:column;align-items:stretch;padding:calc(var(--sat) + 10px) 20px calc(var(--sab) + 74px);overflow-y:auto}
+#stage.m #s-title.on{display:flex}
+#stage.m #s-title .menubg{position:absolute}
+#stage.m #s-title .ttl-logo,#stage.m #s-title .heroes,#stage.m #s-title #mainMenu,#stage.m #s-title .legal,#stage.m #s-title .savenote{position:relative;left:auto;right:auto;top:auto;bottom:auto;margin-left:0}
+#stage.m #s-title .heroes{flex:0 1 270px;min-height:150px;width:auto;height:auto;margin:14px 0 18px;display:flex;justify-content:center;align-items:center}
+#stage.m #s-title .heroes .card{position:relative;left:auto!important;top:auto!important;height:min(248px,100%);width:auto;aspect-ratio:421/614}
+#stage.m #s-title .heroes .h1{transform:rotate(-8deg) translateX(18px);z-index:1}
+#stage.m #s-title .heroes .h2{transform:rotate(7deg) translateX(-18px);z-index:2}
+#stage.m #s-title #mainMenu{width:auto;flex:none}
+#stage.m #s-title .legal{margin-top:auto;padding-top:18px;width:auto}
+#stage.m #s-title .savenote{margin-top:8px;width:auto}
+#stage.m .vrow .arr svg{width:20px;height:20px}
+#stage.m #s-title .ttl-logo{order:1}
+#stage.m #s-title .heroes{order:2}
+#stage.m #s-title #mainMenu{order:3}
+#stage.m #s-title .savenote{order:4;margin-top:auto;padding-top:18px}
+#stage.m #s-title .legal{order:5;margin-top:8px;padding-top:0}
