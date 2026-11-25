@@ -656,3 +656,9 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
 .chk input:checked+span{background:var(--acc);border-color:var(--acc)}
 .chk input:checked+span::after{content:"";width:6px;height:12px;border:solid #140a04;border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-1px)}
 #stage[data-scr=build] .toast{top:220px}
+
+/* drag and drop: the pane you can drop on lights up */
+#bPool .pc,#bDeck .x{cursor:grab}
+.dragging{opacity:.35}
+#bPool.droppable,#bDeck.droppable{outline:2px dashed rgba(255,106,31,.5);outline-offset:-6px;transition:outline-color .15s,background .15s}
+#bPool.over,#bDeck.over{outline:3px solid var(--acc);background:rgba(255,106,31,.08)}
