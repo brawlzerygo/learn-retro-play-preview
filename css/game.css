@@ -848,3 +848,4 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .coin .cb img{filter:grayscale(1) brightness(.55) contrast(1.4) drop-shadow(0 1px 0 rgba(255,255,255,.6))}
 #stage.m .coin .cf i{width:92px;height:92px}
 #stage.m .coin .cring text{font-size:14px}
+.coin .cf i::before{background-size:138% auto;background-position:50% 40%;-webkit-mask:radial-gradient(circle,#000 66%,transparent 76%);mask:radial-gradient(circle,#000 66%,transparent 76%)}
