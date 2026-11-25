@@ -668,3 +668,12 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
 .roster .howto h4{font-size:44px;margin-bottom:6px}
 .roster .howto .tip{display:flex;gap:16px;align-items:baseline;font-size:18px;line-height:1.45;color:rgba(255,255,255,.85)}
 .roster .howto .tip b{flex:none;width:190px;font:800 19px 'Barlow Condensed';letter-spacing:.1em;text-transform:uppercase;color:var(--acc-hi)}
+
+/* the Deck Builder's bottom bar: controls on the left, the live deck count on the right (Zack, 2026-11-24: "update the bottom bar/overhaul") */
+.bkeys{position:absolute;left:0;right:0;bottom:0;height:62px;display:flex;align-items:center;gap:30px;padding:0 40px;background:rgba(8,9,12,.97);border-top:3px solid var(--acc);z-index:3;font:700 18px 'Barlow Condensed';letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.8)}
+.bkeys .kh{display:flex;align-items:center;gap:10px}
+.bkeys .key{margin:0;font-size:12px;height:26px;text-transform:uppercase;letter-spacing:.06em}
+.bkeys .sp{flex:1}
+.bstat{display:flex;gap:22px;font:900 22px 'Barlow Condensed';font-style:italic}
+.bstat i{font-style:italic;color:rgba(255,255,255,.45);font-weight:800}
+.bstat .ok{color:#8dff9e}.bstat .bad{color:#ff8a7a}

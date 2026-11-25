@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=30';
-import * as S from './sfx.js?v=30';
+import { Table } from './table.js?v=31';
+import * as S from './sfx.js?v=31';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const stage = $('#stage');
@@ -57,7 +57,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=30');
+const W = new Worker('js/worker.js?v=31');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -316,6 +316,9 @@ function renderDeckSide() {
   const f = B.fmt, d = B.deck, probs = deckProblems(f, d);
   const nMon = d.main.filter(id => typeOrder(f, id) === 0).length, nSp = d.main.filter(id => typeOrder(f, id) === 2).length, nTr = d.main.filter(id => typeOrder(f, id) === 3).length;
   const okMain = d.main.length >= 40 && d.main.length <= 60;
+  // the bottom bar's live count: Main and Extra/Fusion against their limits, and whether the deck is ready to duel
+  const xn = f === 'goat' ? 'Fusion' : 'Extra';
+  $('#bStat').innerHTML = `<span class="${okMain ? 'ok' : 'bad'}">Main ${d.main.length}<i> / 40–60</i></span><span class="${d.extra.length > 15 ? 'bad' : ''}">${xn} ${d.extra.length}<i> / 15</i></span><span class="${probs.length ? 'bad' : 'ok'}">${probs.length ? 'Not ready' : 'Ready to duel'}</span>`;
   $('#bBoard').innerHTML = `<div class="cell name" style="flex:1"><div class="k">Deck · ${f === 'goat' ? 'Goat' : 'Edison'}</div><input id="bName" value="${esc(d.name)}" maxlength="40"></div>
     <div class="cell"><div class="k">Main</div><div class="v ${okMain ? 'ok' : 'bad'}">${d.main.length}</div></div>
     <div class="cell"><div class="k">${f === 'goat' ? 'Fusion' : 'Extra'}</div><div class="v ${d.extra.length > 15 ? 'bad' : ''}">${d.extra.length}</div></div>
