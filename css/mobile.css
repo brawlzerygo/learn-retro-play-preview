@@ -633,3 +633,6 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 /* the computer's bar gets a blue outline like yours has orange, and its hand lies over the bar's lower edge (Zack, 2026-11-25) */
 #stage.m:not(.ml) .lp.op::before{box-shadow:inset 0 0 0 2px var(--opp),0 8px 20px rgba(0,0,0,.55)}
 #stage.m:not(.ml) .ohand{z-index:12;top:calc(var(--sat) + 30px)}
+/* the phone stage fills the real screen from its top-left corner (the home-screen app runs under the status bar) */
+#stage.m{position:fixed;left:0;top:0;transform-origin:0 0}
+html.m,html.m body{position:fixed;inset:0;width:100%;height:100%;margin:0}
