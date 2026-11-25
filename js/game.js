@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=51';
-import * as S from './sfx.js?v=51';
+import { Table } from './table.js?v=52';
+import * as S from './sfx.js?v=52';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -78,13 +78,15 @@ addEventListener('resize', fit); fit();
 const toStage = e => { const r = stage.getBoundingClientRect(); return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale }; };
 
 /* ---------- settings ---------- */
-const SET = Object.assign({ vol: 50, speed: 'normal', hintLimit: '3', muted: false, theme: 'broadcast' }, JSON.parse(localStorage.getItem('lrplay:set') || '{}'));
+const SET = Object.assign({ vol: 50, speed: 'relaxed', hintLimit: '3', muted: false, theme: 'broadcast' }, JSON.parse(localStorage.getItem('lrplay:set') || '{}'));
 const saveSet = () => localStorage.setItem('lrplay:set', JSON.stringify(SET));
-const SPEED = { relaxed: 1.35, normal: 1, fast: 0.55, instant: 0.04 };
+const SPEED = { relaxed: 1.8, normal: 1, fast: 0.55, instant: 0.04 };
+const BEAT = { relaxed: 900, normal: 450, fast: 160, instant: 0 };   // ms after each computer play
+if (SET.paceV !== 2) { SET.speed = 'relaxed'; SET.paceV = 2; localStorage.setItem('lrplay:set', JSON.stringify(SET)); }   // once: everyone starts on Relaxed
 S.setVolume(SET.vol / 100); S.setMuted(SET.muted); S.load();
 /* Settings: one row per setting, ↑↓ to choose a row, ←→ to change it (Rewind's layout, Broadcast style) */
 const SETROWS = [
-  { k: 'speed', name: 'Duel speed', vals: ['relaxed', 'normal', 'fast', 'instant'], lab: v => v, desc: 'How fast cards move and banners play during a duel.' },
+  { k: 'speed', name: 'Duel speed', vals: ['relaxed', 'normal', 'fast', 'instant'], lab: v => v, desc: 'How fast cards move, banners play and the computer takes its turn. Relaxed gives you time to follow every play.' },
   { k: 'hintLimit', name: 'Hints per duel', vals: ['off', '1', '3', '5', 'unlimited'], lab: v => v, desc: 'A hint shows the strongest play and why it beats the next best, like the hint button on a chess site.' },
   { k: 'vol', name: 'Sound effects', vals: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], blocks: true, desc: 'How loud cards, summons and battles are.' },
   { k: 'muted', name: 'Sound', vals: [false, true], lab: v => v ? 'off' : 'on', desc: 'Turn every sound on or off.' },
@@ -121,7 +123,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=51');
+const W = new Worker('js/worker.js?v=52');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -674,7 +676,10 @@ async function pump() {
     const m = D.q.shift(); const myD = D;
     for (const l of m.log) D.log.push(l);
     clearInteract();
-    for (const ev of m.events) { try { await anim(ev); } catch (e) { console.error('anim', e, ev); } if (D !== myD) return; }
+    for (const ev of m.events) { try { await anim(ev); } catch (e) { console.error('anim', e, ev); } if (D !== myD) return;
+      // a beat after each computer play: summons, activations, attacks, flips, position changes, cards put on the field
+      const play = ['summon', 'chain', 'attack', 'flip', 'pos'].includes(ev.type) || (ev.type === 'move' && ['m', 'st', 'fz'].includes(ev.to));
+      if (play && (ev.p === 1 || (ev.p == null && D.tp === 1)) && BEAT[SET.speed]) await sleep(BEAT[SET.speed]); }
     reconcile(m.view);
     if (m.over) { D.busy = false; return endDuel(m.over); }
     if (m.prompt) setPrompt(m.prompt);
@@ -1076,7 +1081,7 @@ function duelKey(e) {
 
 /* ---------- tools ---------- */
 $('#tHint').onclick = askHint;
-$('#tSpeed').onclick = () => { const order = ['normal', 'fast', 'instant', 'relaxed']; SET.speed = order[(order.indexOf(SET.speed) + 1) % order.length]; saveSet(); table.speed = SPEED[SET.speed]; toast('Duel speed: ' + SET.speed); S.play('click'); };
+$('#tSpeed').onclick = () => { const order = ['relaxed', 'normal', 'fast', 'instant']; SET.speed = order[(order.indexOf(SET.speed) + 1) % order.length]; saveSet(); table.speed = SPEED[SET.speed]; toast('Duel speed: ' + SET.speed); S.play('click'); };
 const soundIcon = () => $('#tSound use').setAttribute('href', SET.muted ? '#i-mute' : '#i-sound');
 $('#tSound').onclick = () => { SET.muted = !SET.muted; S.setMuted(SET.muted); saveSet(); soundIcon(); S.play('click'); }; soundIcon();
 $('#tLog').onclick = () => {
