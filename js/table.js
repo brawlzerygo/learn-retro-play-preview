@@ -12,6 +12,7 @@ export class Table {
   constructor(canvas, cam, opts = {}) {
     this.cam = cam; this.speed = 1; this.tokenArt = opts.tokenArt || {};
     const b = cam.board; Object.assign(this, { CW: b.CW, CH: b.CH, G: b.G, MID: b.MID });
+    this.GPAD = 0.16;   // how far the card glow reaches past the card
     this.COLX = i => (i - 3) * (this.CW + this.G);
     this.ROW_M = -(this.MID / 2 + this.CH / 2); this.ROW_S = this.ROW_M - (this.CH + this.G);
 
@@ -189,9 +190,10 @@ export class Table {
 
   /* ---------- highlights ---------- */
   buildZones() {
-    const geo = new THREE.PlaneGeometry(this.CW + 0.08, this.CH + 0.08);
+    this.GPAD = this.GPAD || 0.16;
+    const geo = new THREE.PlaneGeometry(this.CW + 2 * this.GPAD, this.CH + 2 * this.GPAD);
     for (const side of [1, -1]) for (const zone of ['m', 'st']) for (let i = 0; i < 5; i++) {
-      const mat = new THREE.MeshBasicMaterial({ color: 0xff7a30, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+      const mat = this.glowMat(0xff7a30, 0.2);
       const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.copy(this.slot(side, zone, i)); m.position.y = 0.004;
       m.userData.zone = { side, zone, i }; m.visible = false; this.scene.add(m); this.zones.push(m);
     }
@@ -199,20 +201,35 @@ export class Table {
   lightZones(list) { // [{side, zone, i}]
     for (const z of this.zones) { const d = z.userData.zone; z.visible = !!list.find(l => l.side === d.side && l.zone === d.zone && l.i === d.i); }
   }
-  // a crisp outline just outside the card with a short soft glow (Zack, 2026-11-24: "the glow of the cards... needs to get cleaned up"; it was a pulsing blob)
-  glowTex(color) {
-    this._gt = this._gt || new Map(); if (this._gt.has(color)) return this._gt.get(color);
-    const PAD = 0.1, S = 340, w = Math.round((this.CW + 2 * PAD) * S), h = Math.round((this.CH + 2 * PAD) * S), cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-    const x = cv.getContext('2d'), css = '#' + color.toString(16).padStart(6, '0'), ins = PAD * S - 4;
-    x.shadowColor = css; x.shadowBlur = 16; x.strokeStyle = css; x.lineWidth = 5;
-    x.beginPath(); x.roundRect(ins, ins, w - 2 * ins, h - 2 * ins, 10); x.stroke(); x.stroke();
-    x.shadowBlur = 0; x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 1.5; x.beginPath(); x.roundRect(ins, ins, w - 2 * ins, h - 2 * ins, 10); x.stroke();
-    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; this._gt.set(color, t); return t;
+  // the card glow (Zack, 2026-11-24: "soup that up and make it pretty"): a soft bloom around the card, a bright rim on its edge,
+  // and a light that travels around the border; the color fades toward white in the moving highlight. One shader for cards and zones.
+  glowMat(color, fill = 0) {
+    const c = new THREE.Color(color);
+    return new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { uTime: { value: 0 }, uColor: { value: c }, uHalf: { value: new THREE.Vector2(this.CW / 2, this.CH / 2) }, uPad: { value: this.GPAD }, uFill: { value: fill }, uAmp: { value: 1 } },
+      vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `
+        uniform float uTime, uPad, uFill, uAmp; uniform vec3 uColor; uniform vec2 uHalf; varying vec2 vP;
+        float sdBox(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+        void main(){
+          float d = sdBox(vP, uHalf, 0.03);
+          float bloom = exp(-max(d, 0.0) / 0.06) * smoothstep(uPad, uPad * 0.55, d) * smoothstep(-0.012, 0.0, d);
+          float rim = smoothstep(0.016, 0.0, abs(d - 0.004));
+          float ang = atan(vP.y / uHalf.y, vP.x / uHalf.x);
+          float sweep = pow(0.5 + 0.5 * cos(ang - uTime * 1.9), 14.0) + 0.6 * pow(0.5 + 0.5 * cos(ang - uTime * 1.9 + 3.14159), 18.0);
+          float breathe = 0.82 + 0.18 * sin(uTime * 2.6);
+          float inside = d < 0.0 ? uFill * (0.55 + 0.45 * breathe) * (0.35 + 0.65 * smoothstep(-0.12, 0.0, d)) : 0.0;
+          vec3 col = mix(uColor, vec3(1.0, 0.97, 0.9), clamp(sweep * rim * 0.9, 0.0, 1.0));
+          float a = (bloom * 0.85 * breathe + rim * (0.65 + 0.35 * breathe) + sweep * (rim * 1.2 + bloom * 0.5)) * uAmp + inside;
+          gl_FragColor = vec4(col * a, a);
+        }`,
+    });
   }
   glow(u, color = 0xff7a30) {
-    const c = this.cards.get(u); if (!c) return; if (this.glows.has(u)) { const m = this.glows.get(u); m.material.map = this.glowTex(color); m.material.needsUpdate = true; return; }
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(this.CW + 0.2, this.CH + 0.2), new THREE.MeshBasicMaterial({ map: this.glowTex(color), transparent: true, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2; m.userData.halo = u; this.scene.add(m); this.glows.set(u, m);
+    const c = this.cards.get(u); if (!c) return; if (this.glows.has(u)) { this.glows.get(u).material.uniforms.uColor.value.setHex(color); return; }
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(this.CW + 2 * this.GPAD, this.CH + 2 * this.GPAD), this.glowMat(color));
+    m.rotation.x = -Math.PI / 2; m.userData.halo = u; m.userData.t0 = performance.now(); this.scene.add(m); this.glows.set(u, m);
   }
   unglow(u) { const m = this.glows.get(u); if (m) { this.scene.remove(m); this.glows.delete(u); } }
   unglowAll() { for (const u of [...this.glows.keys()]) this.unglow(u); }
@@ -267,8 +284,8 @@ export class Table {
     const now = performance.now(); this.lastFrame = now;
     this.step(now);
     const pulse = 0.5 + 0.5 * Math.sin(now / 220);
-    for (const z of this.zones) if (z.visible) z.material.opacity = 0.22 + pulse * 0.3;
-    for (const [u, m] of this.glows) { const c = this.cards.get(u); if (!c) continue; m.position.set(c.g.position.x, 0.005, c.g.position.z); m.rotation.z = c.def ? Math.PI / 2 : 0; m.material.opacity = 0.8 + pulse * 0.2; }
+    const T = now / 1000; for (const z of this.zones) if (z.visible) z.material.uniforms.uTime.value = T + z.userData.zone.i * 0.7;
+    for (const [u, m] of this.glows) { const c = this.cards.get(u); if (!c) continue; m.position.set(c.g.position.x, 0.005, c.g.position.z); m.rotation.z = c.def ? Math.PI / 2 : 0; m.material.uniforms.uTime.value = T + (u % 7) * 0.9; m.material.uniforms.uAmp.value = Math.min(1, (now - m.userData.t0) / 220); }
     for (const m of this.rings) { const c = this.cards.get(m.userData.follow); if (c) m.position.set(c.g.position.x, c.g.position.y + 0.03, c.g.position.z); m.rotation.z = now / 900; }
     this.onFrame();
     this.renderer.render(this.scene, this.camera);

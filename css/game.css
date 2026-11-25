@@ -601,3 +601,14 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
 
 /* the duel menu button: top-left, where Back sits on every other screen */
 #tMenu{position:absolute;left:40px;top:30px;z-index:9}
+
+/* hand glow (Zack, 2026-11-24: "soup that up and make it pretty"): a gradient border with light running around it, and a soft breathing glow */
+@property --gang{syntax:'<angle>';inherits:false;initial-value:0deg}
+.hc.play,.hc.pick{box-shadow:0 16px 30px rgba(0,0,0,.75);--g1:#ff6a1f;--g2:#ffe2b0;--gs:rgba(255,106,31,.55)}
+.hc.pick{--g1:#4fc3ff;--g2:#e6f7ff;--gs:rgba(79,195,255,.55)}
+.hc.play::before,.hc.pick::before{content:"";position:absolute;inset:-3px;border-radius:10px;padding:3px;pointer-events:none;z-index:2;
+  background:conic-gradient(from var(--gang),var(--g1) 0deg,var(--g1) 200deg,var(--g2) 250deg,#fff 268deg,var(--g2) 286deg,var(--g1) 330deg);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:gspin 2.6s linear infinite}
+.hc.play::after,.hc.pick::after{content:"";position:absolute;inset:-8px;border-radius:14px;pointer-events:none;z-index:-1;box-shadow:0 0 22px 4px var(--gs);animation:gbreath 2.4s ease-in-out infinite}
+@keyframes gspin{to{--gang:360deg}}
+@keyframes gbreath{0%,100%{opacity:.55}50%{opacity:1}}
