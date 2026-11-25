@@ -1,15 +1,20 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=33';
-import * as S from './sfx.js?v=33';
+import { Table } from './table.js?v=34';
+import * as S from './sfx.js?v=34';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const stage = $('#stage');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const sleep = ms => new Promise(r => setTimeout(r, document.hidden ? 0 : ms));
 let scale = 1;
-function fit() { scale = Math.min(innerWidth / 1920, innerHeight / 1080); stage.style.transform = `translate(-50%,-50%) scale(${scale})`; }
+// touch screens and phones (Zack, 2026-11-24: "Touch + landscape"): .touch drops hover and key prompts, .phone (a touch screen
+// where the stage shrinks below 0.6) scales the duel HUD and card text up from their corners (css/game.css)
+const TAP = () => TOUCH ? 'tap' : 'click'; // on-screen words follow the device
+const TOUCH = /[?&]touch\b/.test(location.search) || matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 && !matchMedia('(pointer: fine)').matches;
+function fit() { scale = Math.min(innerWidth / 1920, innerHeight / 1080); stage.style.transform = `translate(-50%,-50%) scale(${scale})`;
+  stage.classList.toggle('touch', TOUCH); stage.classList.toggle('phone', TOUCH && scale < 0.6); }
 addEventListener('resize', fit); fit();
 const toStage = e => { const r = stage.getBoundingClientRect(); return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale }; };
 
@@ -57,7 +62,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=33');
+const W = new Worker('js/worker.js?v=34');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -224,9 +229,9 @@ const LIMIT = r => r && r.b === 'F' ? 0 : r && r.b === 'L' ? 1 : r && r.b === 'S
 function howTo(f, xl) {
   const tip = (h, t) => `<div class="tip"><b>${h}</b><span>${t}</span></div>`;
   return `<div class="pn howto" id="howto"><h4 class="disp">Build your deck</h4>
-    ${tip('Click a card', 'to read it, then Add to deck.')}
-    ${tip('Drag a card', `here to add it. Drag one back to the cards on the left to remove it.`)}
-    ${tip('Right-click', 'adds a card from the left, or removes one from your deck, in one go.')}
+    ${tip(TOUCH ? 'Tap a card' : 'Click a card', 'to read it, then Add to deck.')}
+    ${TOUCH ? tip('Hold a card and drag it', 'here to add it. Hold one in your deck and drag it back to the left to remove it.') : tip('Drag a card', `here to add it. Drag one back to the cards on the left to remove it.`)}
+    ${TOUCH ? '' : tip('Right-click', 'adds a card from the left, or removes one from your deck, in one go.')}
     ${tip('Search and filter', `by name or card text, or show only Monsters, Spells, Traps or ${xl} cards.`)}
     ${tip('Deck rules', `40 to 60 cards in the Main Deck, up to 15 in the ${xl} Deck, 3 copies at most. Cards marked F, L or S are Forbidden, Limited (1) or Semi-Limited (2) on the ${f === 'goat' ? 'Goat' : 'Edison'} banlist.`)}
     ${tip('Start from a deck', 'copies one of the prebuilt decks so you can change it.')}
@@ -337,7 +342,7 @@ function renderDeckSide() {
   // (this visit) or "Don't show this again" (lrplay:howto); the ? beside Your deck opens it again
   const showHow = B.howto !== false && localStorage.getItem('lrplay:howto') !== 'off' || B.howto === true;
   $('#bDeck').innerHTML = `<div class="rhead"><div class="lbl">Your deck</div><button class="hq" id="htQ" title="How the Deck Builder works">?</button><div class="stat">${statLine}</div></div>
-    ${main.length ? `<div class="main" style="grid-template-columns:repeat(${fm.cols},${w}px)">${main.map(tile).join('')}</div>` : `<div class="dropme"><b>Drag cards here</b><span>or click a card on the left to read it and add it</span></div>`}
+    ${main.length ? `<div class="main" style="grid-template-columns:repeat(${fm.cols},${w}px)">${main.map(tile).join('')}</div>` : `<div class="dropme"><b>Drag cards here</b><span>or ${TAP()} a card on the left to read it and add it</span></div>`}
     ${showHow && (!main.length || B.howto === true) ? howTo(f, xl) : ''}
     <div class="extra" style="grid-template-columns:repeat(${fe.cols},${we}px)"><div class="xl">${xl} deck · ${extra.length}</div>${extra.map(tile).join('')}</div>`;
   $('#htQ').onclick = () => { B.howto = true; S.play('click'); renderDeckSide(); };
@@ -384,6 +389,48 @@ function closeCardZoom() { const z = $('#czoom'); if (z) { z.remove(); return tr
   pool.addEventListener('dragend', end); deck.addEventListener('dragend', end);
   deck.addEventListener('dragover', over(deck, 'pool')); deck.addEventListener('dragleave', leave(deck)); deck.addEventListener('drop', drop(deck, 'pool', addCard));
   pool.addEventListener('dragover', over(pool, 'deck')); pool.addEventListener('dragleave', leave(pool)); pool.addEventListener('drop', drop(pool, 'deck', removeCard));
+})();
+
+/* touch drag in the Deck Builder (Zack, 2026-11-24: touch): phones and tablets have no HTML drag and drop, so holding a card
+   for a moment picks it up (a quick swipe still scrolls the list), it follows your finger, and letting go over the other
+   pane adds or removes it, the same as a mouse drag. */
+(function builderTouchDrag() {
+  const pool = $('#bPool'), deck = $('#bDeck'); let hold = null, drag = null;
+  const paneAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && (el.closest('#bPool') || el.closest('#bDeck')); };
+  const cancel = () => { if (hold) clearTimeout(hold.t); hold = null; if (drag) { drag.g.remove(); drag.src.classList.remove('dragging'); pool.classList.remove('droppable', 'over'); deck.classList.remove('droppable', 'over'); } drag = null; };
+  const startHold = from => e => {
+    if (e.touches.length !== 1) return cancel(); const t = e.target.closest('[data-id]'); if (!t) return;
+    const p0 = e.touches[0]; hold = { x: p0.clientX, y: p0.clientY, t: setTimeout(() => {
+      closeCardZoom(); const g = document.createElement('div'); g.className = 'tdrag'; g.style.backgroundImage = `url(${artUrl(t.dataset.id)})`;
+      const s = toStage({ clientX: hold.x, clientY: hold.y }); g.style.left = s.x + 'px'; g.style.top = s.y + 'px'; stage.appendChild(g);
+      drag = { id: t.dataset.id, from, g, src: t }; t.classList.add('dragging'); (from === 'pool' ? deck : pool).classList.add('droppable');
+      S.play('hover'); if (navigator.vibrate) navigator.vibrate(15); }, 260) };
+  };
+  const move = e => {
+    if (!hold && !drag) return; const p = e.touches[0];
+    if (!drag) { if (Math.hypot(p.clientX - hold.x, p.clientY - hold.y) > 10) cancel(); return; }
+    e.preventDefault(); const s = toStage(p); drag.g.style.left = s.x + 'px'; drag.g.style.top = s.y + 'px';
+    const target = drag.from === 'pool' ? deck : pool; target.classList.toggle('over', paneAt(p.clientX, p.clientY) === target);
+  };
+  const end = e => {
+    if (!drag) return cancel(); const p = e.changedTouches[0], d = drag, over = paneAt(p.clientX, p.clientY); cancel();
+    if (d.from === 'pool' && over === deck) addCard(d.id); else if (d.from === 'deck' && over === pool) removeCard(d.id);
+    e.preventDefault();
+  };
+  for (const [el, from] of [[pool, 'pool'], [deck, 'deck']]) {
+    el.addEventListener('touchstart', startHold(from), { passive: true }); el.addEventListener('touchmove', move, { passive: false });
+    el.addEventListener('touchend', end, { passive: false }); el.addEventListener('touchcancel', cancel);
+  }
+  // a long press would also bring up the browser's own menu or a right-click: neither belongs here
+  for (const el of [pool, deck]) el.addEventListener('contextmenu', e => { if (TOUCH) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+})();
+
+/* full screen on touch screens that allow it (Android); on an iPhone, Add to Home Screen opens the game full screen */
+(function fullBtn() {
+  const b = $('#gFull'); const can = TOUCH && document.fullscreenEnabled && document.documentElement.requestFullscreen;
+  if (!can) return; const upd = () => { b.hidden = !!document.fullscreenElement; }; upd();
+  document.addEventListener('fullscreenchange', upd);
+  b.onclick = () => { S.play('click'); document.documentElement.requestFullscreen({ navigationUI: 'hide' }).then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {})).catch(() => {}); };
 })();
 
 /* My decks (Zack, 2026-11-24: "a rename and delete option"; no scroll bar): open, rename or delete each saved deck in this format */
@@ -457,7 +504,7 @@ async function ensureTable() {
   table.speed = SPEED[SET.speed];
   table.bindPointer($('#gl'), toStage);
   table.onHover = h => { $('#gl').classList.toggle('point', !!(h && (h.u != null || h.pile || h.zone))); if (!D) return; if (h && h.u != null) inspectU(h.u); else if (h && h.pile) hoverPile(h.pile); };
-  table.onClick = h => { if (D) fieldClick(h); };
+  table.onClick = h => { if (D) fieldClick(h); if (TOUCH && !h) $('#inspect').classList.add('hidden'); };
   table.onFrame = frameOverlay;
   // turn medallion and phase dial sit on the board's center line, just outside the mat
   const half = camData.board.BOARD_W / 2 + 0.62, L = table.project(new (table.camera.position.constructor)(-half, 0, 0)), R = table.project(new (table.camera.position.constructor)(half, 0, 0));
@@ -739,12 +786,12 @@ function promptIdle(pr) {
   for (const u of by.keys()) if (table.has(u)) table.glow(u, battle ? 0xff5030 : 0xff7a30);
   if (pr.opts.some(o => o.kind === 'phase')) $('#dial').classList.add('ready');
   if (D.pendingU != null) { const u = D.pendingU; D.pendingU = null; const os = by.get(u); if (os) { const el = $(`#hand [data-u="${u}"]`); if (el) openMenu(u, os, el); else if (table.has(u)) openMenu(u, os, null, table.cardScreen(u, -1)); } }
-  if (SET.hintLimit !== 'off' && D.turn <= 2 && !D.hintShown) { D.hintShown = true; toast('Tip: click a glowing card to play it. The dial on the right moves to the next phase.', 4200); }
+  if (SET.hintLimit !== 'off' && D.turn <= 2 && !D.hintShown) { D.hintShown = true; toast(`Tip: ${TAP()} a glowing card to play it. The dial on the right moves to the next phase.`, 4200); }
 }
 function promptRespond(pr) {
   const by = optsByU(pr); D.byU = by;
   const mine = D.tp === 0; // on your own turn this window is optional: any other card you click keeps you playing
-  $('#prompt').innerHTML = mine ? `You can use an effect now, or click any card to keep playing <span class="key">Space</span> Continue` : `${esc(pr.text)} <span class="key">Space</span> Pass`;
+  $('#prompt').innerHTML = mine ? `You can use an effect now, or ${TAP()} any card to keep playing${TOUCH ? '' : ' <span class="key">Space</span> Continue'}` : `${esc(pr.text)}${TOUCH ? '' : ' <span class="key">Space</span> Pass'}`;
   $$('#hand .hc').forEach(c => c.classList.toggle('play', by.has(+c.dataset.u)));
   for (const u of by.keys()) if (table.has(u)) table.glow(u, 0x7fd3ff);
   const box = document.createElement('div'); box.className = 'pn amenu respond'; Object.assign(box.style, { right: '36px', bottom: '120px', position: 'absolute' });
@@ -836,7 +883,7 @@ function openMenu(u, os, el, at) {
   m.innerHTML = os.map((o, i) => `<button class="gb sm wide ${i === 0 ? 'pri' : ''}" data-k="${esc(o.key)}"><svg><use href="#${ICON[o.kind] || 'i-bolt'}"/></svg><span class="lbl">${esc(o.label)}</span><span class="key">${i + 1}</span><span class="shine"></span></button>`).join('');
   let x, y; if (el) { const r = el.getBoundingClientRect(), sr = stage.getBoundingClientRect(); x = (r.left - sr.left) / scale + 70 - 150; y = 1080 - 190 - os.length * 54 - 30; }
   else { x = at.x - 150; y = at.y - 30 - os.length * 54; }
-  m.style.left = Math.max(20, Math.min(1600, x)) + 'px'; m.style.top = Math.max(150, y) + 'px';
+  m.style.left = Math.max(stage.classList.contains('phone') ? 650 : 20, Math.min(stage.classList.contains('phone') ? 1450 : 1600, x)) + 'px'; // on phones it clears the card text on the left m.style.top = Math.max(150, y) + 'px';
   m.onclick = e => { const b = e.target.closest('[data-k]'); if (b) choose(os.find(o => o.key === b.dataset.k)); };
   $('#layer').appendChild(m); D.menu = { u, os }; if (el) el.classList.add('up');
 }

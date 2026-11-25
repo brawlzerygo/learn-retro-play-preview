@@ -274,6 +274,8 @@ export class Table {
       return null;
     };
     el.addEventListener('pointermove', e => this.onHover(pick(e), e));
+    // a touch has no hover: the finger going down shows the card the same way a mouse over it would (Zack, 2026-11-24: touch)
+    el.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') this.onHover(pick(e), e); });
     el.addEventListener('click', e => this.onClick(pick(e), e));
   }
 
