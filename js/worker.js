@@ -8,9 +8,12 @@
  out: {type:'update', events:[...], view, prompt|null, over|null, log:[lines]}
 */
 self.window = self;
-importScripts('../engine/manifest.js');
-importScripts(...self.ENGINE_FILES.map(f => '../engine/' + f));
-importScripts('../data/edison.js', '../data/goat.js', '../data/tokens.js');
+// every engine, card and data file carries the game's version (the worker's own ?v=), so a phone never keeps an old card list after an
+// update (Zack, 2026-11-25: decks still looked grayed out on a phone that had saved the old files)
+const V = (self.location.search.match(/[?&]v=(\d+)/) || [])[1] || String(Date.now());
+importScripts('../engine/manifest.js?v=' + V);
+importScripts(...self.ENGINE_FILES.map(f => '../engine/' + f + '?v=' + V));
+importScripts('../data/edison.js?v=' + V, '../data/goat.js?v=' + V, '../data/tokens.js?v=' + V);
 const E = self.EdisonEngine, AI = self.EdisonAI;
 
 let g = null, fmt = null, level = 'intermediate', buf = [], logAt = 0;
