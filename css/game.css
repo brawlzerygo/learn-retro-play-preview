@@ -693,7 +693,8 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
    shrinks below about 0.6, where the duel HUD, buttons and card text are scaled up from their own corner so they stay
    readable and tappable. The board and the layout stay the same. */
 #rotate{display:none}
-@media (orientation:portrait) and (pointer:coarse) and (max-width:700px){
+/* phones play upright (the phone layout, css/mobile.css): held sideways, they ask to be turned back */
+@media (orientation:landscape) and (pointer:coarse) and (max-height:520px){
   #rotate{display:flex;position:fixed;inset:0;z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0b0c10;color:#f4f4f2;font-family:'Atkinson Hyperlegible',sans-serif;text-align:center;padding:30px}
   #rotate svg{width:84px;height:84px;fill:none;stroke:#ff6a1f;stroke-width:1.6;stroke-linecap:round;animation:rot 2.2s ease-in-out infinite}
   #rotate b{font:italic 900 34px 'Barlow Condensed';text-transform:uppercase}

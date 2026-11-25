@@ -16,8 +16,9 @@
 <meta name="apple-mobile-web-app-title" content="LR Play">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Atkinson+Hyperlegible+Next:wght@500;700;800&family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800;1,900&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/game.css?v=34">
-<link rel="stylesheet" href="css/rewind.css?v=34">
+<link rel="stylesheet" href="css/game.css?v=35">
+<link rel="stylesheet" href="css/rewind.css?v=35">
+<link rel="stylesheet" href="css/mobile.css?v=35">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute">
@@ -43,12 +44,13 @@
   <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM17 9l5 6M22 9l-5 6"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
   <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></symbol>
 </svg>
 <!-- phones held upright: the game is played sideways (Zack, 2026-11-24: touch + landscape) -->
-<div id="rotate"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><b>Turn your phone sideways</b><span>Learn Retro Play is played in landscape.</span></div>
-<div id="stage">
+<div id="rotate"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><b>Turn your phone upright</b><span>On a phone, Learn Retro Play is played upright.</span></div>
+<div id="stage" data-scr="title">
 
   <!-- TITLE -->
   <section class="screen on" id="s-title">
@@ -113,6 +115,7 @@
     <div class="menubg bc"></div>
     <div class="board" id="bBoard"></div>
     <div class="savebar bd"><i>i</i>Your decks, stats and settings are saved in this browser. Clearing cookies and site data deletes them.</div>
+    <div class="mbtabs" id="mbTabs"></div>
     <div class="bbar" id="bBar"></div>
     <div class="pool2" id="bPool"></div>
     <div class="roster" id="bDeck"></div>
@@ -167,6 +170,8 @@
     <div class="keybar"><div class="kh"><span class="key">Esc</span>Back</div><div class="sp"></div></div>
   </section>
 
+  <!-- phones: the tab bar on the menu screens (css/mobile.css) -->
+  <nav id="mTabs"><button data-tab="title" class="on"><svg><use href="#i-home"/></svg>Home</button><button data-tab="build"><svg><use href="#i-cards"/></svg>Decks</button><button data-tab="stats"><svg><use href="#i-chart"/></svg>Stats</button><button data-tab="settings"><svg><use href="#i-gear"/></svg>Settings</button></nav>
   <button class="gb gback" id="gBack"><svg><use href="#i-back"/></svg>Back<span class="shine"></span></button>
 
   <div id="crt"></div>
@@ -180,7 +185,7 @@
 <script src="data/edison.js"></script>
 <script src="data/goat.js"></script>
 <script src="data/tokens.js"></script>
-<script type="module" src="js/game.js?v=34"></script>
+<script type="module" src="js/game.js?v=35"></script>
 <div style="position:fixed;left:50%;top:0;transform:translateX(-50%);z-index:9999;padding:2px 10px;opacity:.85;background:#ff6a1f;color:#140a04;font:800 13px/1.4 Verdana,sans-serif;letter-spacing:.12em;border-radius:3px;pointer-events:none">PREVIEW</div>
 </body>
 </html>

@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=34';
-import * as S from './sfx.js?v=34';
+import { Table } from './table.js?v=35';
+import * as S from './sfx.js?v=35';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const stage = $('#stage');
@@ -13,8 +13,23 @@ let scale = 1;
 // where the stage shrinks below 0.6) scales the duel HUD and card text up from their corners (css/game.css)
 const TAP = () => TOUCH ? 'tap' : 'click'; // on-screen words follow the device
 const TOUCH = /[?&]touch\b/.test(location.search) || matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 && !matchMedia('(pointer: fine)').matches;
-function fit() { scale = Math.min(innerWidth / 1920, innerHeight / 1080); stage.style.transform = `translate(-50%,-50%) scale(${scale})`;
-  stage.classList.toggle('touch', TOUCH); stage.classList.toggle('phone', TOUCH && scale < 0.6); }
+/* the phone layout (Zack, 2026-11-24: "a specific mobile version/layout... doesnt need to be in landscape... could not affect the web
+   experience"): phones get an upright stage 390 points wide and as tall as the screen (#stage.m, css/mobile.css), the upright Card Shop
+   render and its camera, and phone screens built from the same game. Computers and tablets keep the 1920x1080 stage. ?mobile tries it. */
+const MOBILE = /[?&]mobile\b/.test(location.search) || (TOUCH && Math.min(screen.width, screen.height) < 520);
+let SW = 1920, SH = 1080;
+const MV = { w: 390, h: 845 };            // the upright render (1080x2340) drawn at the phone's width
+// the board sits between the computer's bar (top ~110) and your row, hand and bar (bottom ~330); on short phones (an SE) it shrinks
+// a little so nothing covers it. In the render at full size the board (with its rim) spans y 215 to 510.
+function mview() { const k = Math.min(1, (SH - 440) / 295), w = Math.round(MV.w * k), h = Math.round(MV.h * k), c = (110 + SH - 330) / 2;
+  return { w, h, ox: Math.round((MV.w - w) / 2), oy: Math.round(Math.min(0, c - 362 * k)), dpr: Math.min(3, (window.devicePixelRatio || 1) * scale) }; }
+function fit() {
+  if (MOBILE) { scale = innerWidth / 390; SW = 390; SH = Math.round(innerHeight / scale); stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
+    const v = mview(); for (const k of ['w', 'h', 'ox', 'oy']) stage.style.setProperty('--g' + k, v[k] + 'px'); try { if (table) table.setView(v); } catch (e) { /* the table isn't made yet */ } }
+  else scale = Math.min(innerWidth / 1920, innerHeight / 1080);
+  stage.style.transform = `translate(-50%,-50%) scale(${scale})`;
+  stage.classList.toggle('m', MOBILE); document.documentElement.classList.toggle('m', MOBILE);
+  stage.classList.toggle('touch', TOUCH); stage.classList.toggle('phone', !MOBILE && TOUCH && scale < 0.6); }
 addEventListener('resize', fit); fit();
 const toStage = e => { const r = stage.getBoundingClientRect(); return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale }; };
 
@@ -62,7 +77,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=34');
+const W = new Worker('js/worker.js?v=35');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -75,7 +90,8 @@ window.__lr = { get D() { return D; }, get SEL() { return SEL; }, start: () => s
 const BACK = { settings: 'title', format: 'title', deck: 'format', stats: 'title', build: 'title' };
 async function goBack() { if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; if (BACK[cur]) show(BACK[cur]); }
 $('#gBack').onclick = () => { S.unlock(); goBack(); };
-function show(s) { if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => e.classList.toggle('on', e.id === 's-' + s)); if (s === 'deck') renderDecks(); if (s === 'format') renderFormats(); if (s === 'build') { B.howto = undefined; readyP.then(openBuilder); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
+$('#mTabs').onclick = async e => { const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === cur) return; S.unlock(); if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; show(b.dataset.tab); };
+function show(s) { if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => e.classList.toggle('on', e.id === 's-' + s)); if (s === 'deck') renderDecks(); if (s === 'format') renderFormats(); if (s === 'build') { B.howto = undefined; readyP.then(openBuilder); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
 // browsers keep a page silent until the first click, tap or key press (hovering doesn't count): turn sound on at the very first one, anywhere
 for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, () => S.unlock(), { capture: true, passive: true });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { S.unlock(); show(b.dataset.go); } const h = e.target.closest('[data-href]'); if (h) open(h.dataset.href, '_blank'); });
@@ -230,7 +246,7 @@ function howTo(f, xl) {
   const tip = (h, t) => `<div class="tip"><b>${h}</b><span>${t}</span></div>`;
   return `<div class="pn howto" id="howto"><h4 class="disp">Build your deck</h4>
     ${tip(TOUCH ? 'Tap a card' : 'Click a card', 'to read it, then Add to deck.')}
-    ${TOUCH ? tip('Hold a card and drag it', 'here to add it. Hold one in your deck and drag it back to the left to remove it.') : tip('Drag a card', `here to add it. Drag one back to the cards on the left to remove it.`)}
+    ${MOBILE ? tip('Cards and Your deck', 'are tabs at the top. Tap a card in either to read it, then add or remove it.') : TOUCH ? tip('Hold a card and drag it', 'here to add it. Hold one in your deck and drag it back to the left to remove it.') : tip('Drag a card', `here to add it. Drag one back to the cards on the left to remove it.`)}
     ${TOUCH ? '' : tip('Right-click', 'adds a card from the left, or removes one from your deck, in one go.')}
     ${tip('Search and filter', `by name or card text, or show only Monsters, Spells, Traps or ${xl} cards.`)}
     ${tip('Deck rules', `40 to 60 cards in the Main Deck, up to 15 in the ${xl} Deck, 3 copies at most. Cards marked F, L or S are Forbidden, Limited (1) or Semi-Limited (2) on the ${f === 'goat' ? 'Goat' : 'Edison'} banlist.`)}
@@ -275,6 +291,9 @@ function renderBuilder() {
   $('#bQ').oninput = e => { B.q = e.target.value; renderPool(); };
   $('#bType').onclick = e => { const b = e.target.closest('[data-t]'); if (!b) return; B.type = b.dataset.t; S.play('click'); renderBuilder(); };
   renderPool(); renderDeckSide();
+  if (MOBILE) { const t = $('#mbTabs'); t.innerHTML = `<button class="${B.mtab !== 'deck' ? 'on' : ''}" data-mt="pool">Cards</button><button class="${B.mtab === 'deck' ? 'on' : ''}" data-mt="deck">Your deck · <b id="mbN">${B.deck.main.length}</b></button>`;
+    $('#s-build').classList.toggle('deckview', B.mtab === 'deck'); stage.style.setProperty('--bt', ($('#bBoard').offsetHeight + 10) + 'px');
+    t.onclick = e => { const b = e.target.closest('[data-mt]'); if (!b) return; B.mtab = b.dataset.mt; S.play('click'); closeCardZoom(); t.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); $('#s-build').classList.toggle('deckview', B.mtab === 'deck'); }; }
 }
 function poolCards() {
   const f = B.fmt, q = B.q.trim().toLowerCase();
@@ -319,7 +338,7 @@ function fitCards(n, W, H, gap = 5, ratio = 614 / 421) {
 const typeOrder = (f, id) => { const r = rec(f, id); return !r ? 9 : isExtraK(r) ? 4 : r.k === 'spell' ? 2 : r.k === 'trap' ? 3 : 0; };
 const sortDeck = (f, ids) => [...ids].sort((a, b) => typeOrder(f, a) - typeOrder(f, b) || ((rec(f, a) || {}).n || '').localeCompare((rec(f, b) || {}).n || ''));
 function renderDeckSide() {
-  const f = B.fmt, d = B.deck, probs = deckProblems(f, d);
+  const f = B.fmt, d = B.deck, probs = deckProblems(f, d); if ($('#mbN')) $('#mbN').textContent = d.main.length;
   const nMon = d.main.filter(id => typeOrder(f, id) === 0).length, nSp = d.main.filter(id => typeOrder(f, id) === 2).length, nTr = d.main.filter(id => typeOrder(f, id) === 3).length;
   const okMain = d.main.length >= 40 && d.main.length <= 60;
   // the bottom bar's live count: Main and Extra/Fusion against their limits, and whether the deck is ready to duel
@@ -499,8 +518,8 @@ $('#resAgain').onclick = () => startDuel();
 let table = null, camData = null, D = null; // D: the duel's client state
 async function ensureTable() {
   if (table) return;
-  camData = await (await fetch('assets/scenes/shop-camera.json')).json();
-  table = new Table($('#gl'), camData, { tokenArt: TOKEN_ART });
+  camData = await (await fetch(MOBILE ? 'assets/scenes/shop-m-camera.json' : 'assets/scenes/shop-camera.json')).json();
+  table = new Table($('#gl'), camData, { tokenArt: TOKEN_ART, view: MOBILE ? mview() : undefined });
   table.speed = SPEED[SET.speed];
   table.bindPointer($('#gl'), toStage);
   table.onHover = h => { $('#gl').classList.toggle('point', !!(h && (h.u != null || h.pile || h.zone))); if (!D) return; if (h && h.u != null) inspectU(h.u); else if (h && h.pile) hoverPile(h.pile); };
@@ -508,7 +527,8 @@ async function ensureTable() {
   table.onFrame = frameOverlay;
   // turn medallion and phase dial sit on the board's center line, just outside the mat
   const half = camData.board.BOARD_W / 2 + 0.62, L = table.project(new (table.camera.position.constructor)(-half, 0, 0)), R = table.project(new (table.camera.position.constructor)(half, 0, 0));
-  Object.assign($('#turnm').style, { left: L.x + 'px', top: L.y + 'px' }); Object.assign($('#dial').style, { left: R.x + 'px', top: R.y + 'px' });
+  if (!MOBILE) { Object.assign($('#turnm').style, { left: L.x + 'px', top: L.y + 'px' }); Object.assign($('#dial').style, { left: R.x + 'px', top: R.y + 'px' }); }
+  if (MOBILE) mobileDuelInput();
 }
 async function startDuel() {
   const f = SEL.fmt, s = SEL[f];
@@ -677,18 +697,20 @@ function reconcile(v) {
 
 /* ---------- HUD pieces ---------- */
 function renderHands(newU) {
-  const h = D.disp.p[0].hand, n = h.length, step = Math.min(150, 900 / Math.max(1, n)), x0 = 550 - (step * (n - 1)) / 2 - 70;
+  const h = D.disp.p[0].hand, n = h.length;
+  // phones: 86-point cards fanned across the bottom, overlapping more as the hand grows
+  const step = MOBILE ? Math.min(68, (SW - 40 - 86) / Math.max(1, n - 1)) : Math.min(150, 900 / Math.max(1, n)), x0 = MOBILE ? SW / 2 - 43 - (step * (n - 1)) / 2 : 550 - (step * (n - 1)) / 2 - 70;
   const el = $('#hand'); const old = new Map([...el.children].map(c => [+c.dataset.u, c]));
   h.forEach((c, i) => {
     let d = old.get(c.u); if (!d) { d = document.createElement('div'); d.className = 'hc in'; d.dataset.u = c.u; el.appendChild(d); }
     old.delete(c.u);
     d.style.backgroundImage = `url(${artUrl(c.id)})`; d.style.left = (x0 + i * step) + 'px';
-    const rot = (i - (n - 1) / 2) * Math.min(4, 24 / n); d.style.transform = `rotate(${rot}deg)`; d.style.zIndex = i + 1;
+    const rot = (i - (n - 1) / 2) * Math.min(MOBILE ? 3 : 4, 24 / n); d.style.transform = `rotate(${rot}deg)`; d.style.zIndex = i + 1;
   });
   for (const d of old.values()) d.remove();
   $('#hcMe').textContent = n;
   const on = D.disp.p[1].hand.length, oe = $('#ohand'); oe.innerHTML = '';
-  const os = Math.min(92, 520 / Math.max(1, on)), ox = 300 - (os * (on - 1)) / 2 - 48;
+  const os = MOBILE ? Math.min(20, 160 / Math.max(1, on)) : Math.min(92, 520 / Math.max(1, on)), ox = MOBILE ? SW / 2 - (os * (on - 1)) / 2 - 13 : 300 - (os * (on - 1)) / 2 - 48;
   for (let i = 0; i < on; i++) { const c = document.createElement('div'); c.className = 'card'; c.style.left = (ox + i * os) + 'px'; c.style.transform = `rotate(${(i - (on - 1) / 2) * -3}deg)`; oe.appendChild(c); }
   $('#hcOp').textContent = on;
 }
@@ -715,7 +737,7 @@ async function turnBanner() { S.play('turn'); $('#dial').classList.toggle('op', 
 function renderChain() {
   const el = $('#chainp'); if (!D.chain.length) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
-  el.innerHTML = `<div class="ph">Chain · resolves top down</div>` + [...D.chain].reverse().map(L => `<div class="link ${L.p === 0 ? '' : 'op'} ${L.res ? 'res' : ''}"><div class="no disp">${L.link}</div><div class="card" style="background-image:url(${artUrl(L.id)})"></div><div><div class="t">${esc(L.name)}</div><div class="s">${L.p === 0 ? 'You' : 'Computer'}${L.res ? ' · resolving' : ''}</div></div></div>`).join('');
+  el.innerHTML = `<div class="ph">Chain · resolves top down</div>` + [...D.chain].reverse().map(L => `<div class="link ${L.p === 0 ? '' : 'op'} ${L.res ? 'res' : ''}" data-id="${L.id}"><div class="no disp">${L.link}</div><div class="card" style="background-image:url(${artUrl(L.id)})"></div><div><div class="t">${esc(L.name)}</div><div class="s">${L.p === 0 ? 'You' : 'Computer'}${L.res ? ' · resolving' : ''}</div></div></div>`).join('');
 }
 // ATK/DEF badges under monsters, counts on piles
 const badges = new Map();
@@ -746,8 +768,9 @@ function frameOverlay() {
 }
 
 /* ---------- inspect ---------- */
+let lastId = null;
 function inspect(id) {
-  if (id == null) return; const r = rec(D.fmt, id); if (!r) return; const el = $('#inspect');
+  if (id == null) return; lastId = id; const r = rec(D.fmt, id); if (!r) return; const el = $('#inspect');
   const mon = !['spell', 'trap'].includes(r.k);
   const meta = mon ? [r.a, r.r, r.k === 'token' ? 'Token' : null, r.lv ? `Level ${r.lv}` : null, `${r.atk} / ${r.def}`].filter(Boolean).join(' · ') : `${r.k === 'spell' ? 'Spell' : 'Trap'}${r.sub && r.sub !== 'Normal' ? ' · ' + r.sub : ''}`;
   const text = D.fmt === 'edison' && r.ps && !/^No rulings/.test(r.ps) ? r.ps : (r.tx || '');
@@ -881,19 +904,22 @@ function openMenu(u, os, el, at) {
   closeMenu(); S.play('click');
   const m = document.createElement('div'); m.className = 'pn amenu'; m.id = 'amenu'; m.style.position = 'absolute';
   m.innerHTML = os.map((o, i) => `<button class="gb sm wide ${i === 0 ? 'pri' : ''}" data-k="${esc(o.key)}"><svg><use href="#${ICON[o.kind] || 'i-bolt'}"/></svg><span class="lbl">${esc(o.label)}</span><span class="key">${i + 1}</span><span class="shine"></span></button>`).join('');
+  if (MOBILE) { const id = idAnyU(u); m.classList.add('mrow'); if (id != null) m.insertAdjacentHTML('beforeend', `<button class="gb sm wide rd" data-read="${id}">Read<span class="shine"></span></button>`);
+    m.onclick = e => { const r = e.target.closest('[data-read]'); if (r) { cardSheet(r.dataset.read); return; } const b = e.target.closest('[data-k]'); if (b) choose(os.find(o => o.key === b.dataset.k)); };
+    $('#layer').appendChild(m); D.menu = { u, os }; if (el) el.classList.add('up'); $('#s-duel').classList.add('acting'); return; }
   let x, y; if (el) { const r = el.getBoundingClientRect(), sr = stage.getBoundingClientRect(); x = (r.left - sr.left) / scale + 70 - 150; y = 1080 - 190 - os.length * 54 - 30; }
   else { x = at.x - 150; y = at.y - 30 - os.length * 54; }
   m.style.left = Math.max(stage.classList.contains('phone') ? 650 : 20, Math.min(stage.classList.contains('phone') ? 1450 : 1600, x)) + 'px'; // on phones it clears the card text on the left m.style.top = Math.max(150, y) + 'px';
   m.onclick = e => { const b = e.target.closest('[data-k]'); if (b) choose(os.find(o => o.key === b.dataset.k)); };
   $('#layer').appendChild(m); D.menu = { u, os }; if (el) el.classList.add('up');
 }
-function closeMenu() { const m = $('#amenu'); if (m) m.remove(); $$('#hand .hc.up').forEach(c => c.classList.remove('up')); if (D) D.menu = null; }
+function closeMenu() { const m = $('#amenu'); if (m) m.remove(); $('#s-duel').classList.remove('acting'); $$('#hand .hc.up').forEach(c => c.classList.remove('up')); if (D) D.menu = null; }
 function choose(o) {
   closeMenu();
   const z = zoneFor(o);
   if (z) { // the player picks the zone; the engine places it there (E.act's zone hint)
     const P = D.view.p[0], free = P[z].map((c, i) => c ? -1 : i).filter(i => i >= 0);
-    if (free.length > 1) { $('#hand').classList.add('low'); D.zoneMode = { o, z }; table.lightZones(free.map(i => ({ side: 1, zone: z, i }))); $('#prompt').innerHTML = `Choose a zone for <b>${esc(nameOfU(o.u))}</b> <span class="key">Esc</span> Cancel`; S.play('click'); return; }
+    if (free.length > 1) { $('#hand').classList.add('low'); D.zoneMode = { o, z }; table.lightZones(free.map(i => ({ side: 1, zone: z, i }))); $('#prompt').innerHTML = TOUCH ? `${MOBILE ? 'Tap a lit zone' : 'Choose a zone'} for <b>${esc(nameOfU(o.u))}</b> <button class="pcx" id="zCancel">Cancel</button>` : `Choose a zone for <b>${esc(nameOfU(o.u))}</b> <span class="key">Esc</span> Cancel`; if ($('#zCancel')) $('#zCancel').onclick = e => { e.stopPropagation(); cancelZone(); }; S.play('click'); return; }
     if (free.length === 1) return send([o.key], { u: o.u, to: z, zi: free[0] });
   }
   send([o.key]);
@@ -915,7 +941,7 @@ $('#dial').onclick = e => {
   const ph = D.prompt.opts.filter(o => o.kind === 'phase'); if (!ph.length) { S.play('error'); return; }
   closeMenu(); S.play('click');
   const m = document.createElement('div'); m.className = 'dial-menu'; m.id = 'amenu';
-  const r = $('#dial'); m.style.left = (parseFloat(r.style.left) - 120) + 'px'; m.style.top = (parseFloat(r.style.top) + 70) + 'px';
+  const r = $('#dial'); if (MOBILE) m.classList.add('mrow'); else { m.style.left = (parseFloat(r.style.left) - 120) + 'px'; m.style.top = (parseFloat(r.style.top) + 70) + 'px'; }
   m.innerHTML = ph.map(o => `<button class="gb sm" data-k="${o.key}"><svg><use href="#${o.key === 'bp' ? 'i-swords' : 'i-end'}"/></svg>${esc(o.label)}<span class="key">${o.key === 'bp' ? 'B' : 'E'}</span><span class="shine"></span></button>`).join('');
   m.onclick = ev => { const b = ev.target.closest('[data-k]'); if (b) send([b.dataset.k]); };
   $('#layer').appendChild(m);
@@ -972,6 +998,40 @@ function duelMenu() {
 }
 function closeDuelMenu() { const a = $('#pauseMenu'), b = $('#pauseVeil'); if (a) { a.remove(); b && b.remove(); S.play('click'); return true; } return false; }
 $('#tMenu').onclick = duelMenu;
+
+/* ---------- phone duel input (the phone layout) ----------
+   Hold a card (in your hand, on the field or a pile top) to read it in a sheet that slides up; a tap still plays. */
+function idAnyU(u) { if (!D) return null; const h = D.disp.p[0].hand.find(x => x.u === u); if (h && h.id != null) return h.id; return D.view ? idOfU(u) : null; }
+function cardSheet(id) {
+  if (id == null) return; const f = D ? D.fmt : B.fmt, r = rec(f, id); if (!r) return; closeSheet(); S.play('click');
+  const v = document.createElement('div'); v.className = 'veil msv'; v.id = 'msVeil';
+  const p = document.createElement('div'); p.className = 'msheet'; p.id = 'msheet';
+  const mon = !['spell', 'trap'].includes(r.k);
+  p.innerHTML = `<div class="grab"></div><div class="mtop"><div class="card" style="background-image:url(${artUrl(id)})"></div><div class="mh"><h3>${esc(r.n)}</h3><div class="meta">${esc(cardMeta(r))}</div>${mon && r.atk != null ? `<div class="num disp">${esc(r.atk)}<i> / ${esc(r.def)}</i></div>` : ''}</div></div><p>${esc(cardText(f, r))}</p><button class="gb wide" data-x>Close<span class="shine"></span></button>`;
+  (cur === 'duel' ? $('#layer') : stage).append(v, p);
+  const close = () => closeSheet(); v.onclick = close; p.querySelector('[data-x]').onclick = close;
+  let y0 = null; p.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true });
+  p.addEventListener('touchmove', e => { if (y0 == null) return; const dy = e.touches[0].clientY - y0; if (dy > 0 && p.scrollTop <= 0) p.style.transform = `translateY(${dy}px)`; }, { passive: true });
+  p.addEventListener('touchend', e => { const dy = e.changedTouches[0].clientY - (y0 == null ? 0 : y0); y0 = null; if (dy > 90 && p.scrollTop <= 0) close(); else p.style.transform = ''; });
+}
+function closeSheet() { const a = $('#msheet'), b = $('#msVeil'); if (a) { a.remove(); b && b.remove(); return true; } return false; }
+let mobileBound = false;
+function mobileDuelInput() {
+  if (mobileBound) return; mobileBound = true;
+  let hold = null, ate = false;
+  const start = (e, idFn) => { if (e.pointerType === 'mouse' && !/[?&]mobile\b/.test(location.search)) return; const x = e.clientX, y = e.clientY;
+    hold = { x, y, t: setTimeout(() => { const id = idFn(); hold = null; if (id != null) { ate = true; if (navigator.vibrate) navigator.vibrate(12); cardSheet(id); } }, 430) }; };
+  const cancel = () => { if (hold) clearTimeout(hold.t); hold = null; };
+  const moveC = e => { if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) cancel(); };
+  $('#hand').addEventListener('pointerdown', e => { const c = e.target.closest('.hc'); if (c) start(e, () => idAnyU(+c.dataset.u)); });
+  $('#gl').addEventListener('pointerdown', e => start(e, () => lastId));  // the table's own pointerdown (bound first) has just set lastId
+  for (const el of [$('#hand'), $('#gl')]) { el.addEventListener('pointermove', moveC); el.addEventListener('pointerup', cancel); el.addEventListener('pointercancel', cancel); el.addEventListener('contextmenu', e => e.preventDefault()); }
+  // the click that ends a hold only opened the sheet: it must not also play the card
+  addEventListener('click', e => { if (ate) { ate = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  // tapping a chain link reads its card
+  $('#chainp').addEventListener('click', e => { const l = e.target.closest('[data-id]'); if (l) cardSheet(l.dataset.id); });
+}
+
 function toast(t, ms = 2600) { const d = document.createElement('div'); d.className = 'pn toast'; d.textContent = t; (cur === 'duel' ? $('#layer') : stage).appendChild(d); setTimeout(() => d.remove(), ms); }
 
 
