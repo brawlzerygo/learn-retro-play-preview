@@ -636,3 +636,18 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 /* the phone stage fills the real screen from its top-left corner (the home-screen app runs under the status bar) */
 #stage.m{position:fixed;left:0;top:0;transform-origin:0 0}
 html.m,html.m body{position:fixed;inset:0;width:100%;height:100%;margin:0}
+/* phones: Deck lists is the third tab; two decks a row */
+#stage.m #s-build.listview .blists{left:10px;right:10px;top:calc(var(--bt,150px) + 48px);bottom:calc(var(--sab) + 62px)}
+#stage.m .blists .lhead{gap:8px;margin-bottom:10px}
+#stage.m .blists .seg .gb{height:30px;font-size:13px;padding:0 9px}
+#stage.m .blists .lgrid{grid-template-columns:1fr 1fr;gap:8px;overscroll-behavior:contain}
+#stage.m .ldeck{flex-direction:column;align-items:flex-start;gap:6px;min-height:0;padding:10px}
+#stage.m .ldeck .lfan{width:100%;height:84px}
+#stage.m .ldeck .lfan .card{width:50px;height:73px}
+#stage.m .ldeck .lfan .card[data-j="1"]{left:24px}#stage.m .ldeck .lfan .card[data-j="2"]{left:48px}
+#stage.m .ldeck .lname{font-size:17px}
+#stage.m .ldeck .lsub{font-size:11px}
+#stage.m .ldeck .tg{font-size:10px}
+#stage.m .mbtabs button{font-size:15px}
+#stage.m .dlist .head #dlCopy{order:3;flex:1 1 100%;justify-content:center}
+#stage.m #bLists{display:none}

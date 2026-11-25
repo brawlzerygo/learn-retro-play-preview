@@ -857,3 +857,23 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .flyc .fin i.bk{transform:rotateY(180deg)}
 /* the computer's hand: smooth edges on the turned card backs */
 .ohand .card{border-radius:3px;backface-visibility:hidden;-webkit-backface-visibility:hidden;outline:1px solid transparent;background-size:cover;background-position:center;box-shadow:0 3px 8px rgba(0,0,0,.55),0 0 0 .5px rgba(0,0,0,.6);will-change:transform}
+
+/* Deck lists in the Deck Builder: every prebuilt deck at a glance */
+.blists{display:none}
+#s-build.listview .blists{display:flex;flex-direction:column;position:absolute;left:40px;right:40px;top:168px;bottom:66px;z-index:4}
+#s-build.listview .pool2,#s-build.listview .roster,#s-build.listview .bbar,#s-build.listview .bpeek{display:none!important}
+.blists .lhead{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap}
+.blists .seg{display:flex;gap:6px;flex-wrap:wrap}
+.blists .lgrid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-content:start;padding:4px;scrollbar-width:thin}
+.ldeck{position:relative;display:flex;align-items:center;gap:14px;min-height:110px;padding:10px 14px;background:rgba(16,18,22,.92);border-radius:3px;cursor:pointer;box-shadow:inset 0 -3px 0 rgba(255,255,255,.05);transition:background .15s,transform .15s}
+.ldeck:hover{background:#1d2127;transform:translateY(-2px)}
+.ldeck.off{opacity:.55}
+.ldeck .lfan{position:relative;width:96px;height:96px;flex:none}
+.ldeck .lfan .card{position:absolute;top:6px;width:58px;height:85px;border-radius:3px;background:center/cover;box-shadow:0 6px 14px rgba(0,0,0,.6)}
+.ldeck .lfan .card[data-j="0"]{left:0;transform:rotate(-8deg)}.ldeck .lfan .card[data-j="1"]{left:20px;z-index:2;top:2px}.ldeck .lfan .card[data-j="2"]{left:40px;transform:rotate(8deg)}
+.ldeck .lmeta{min-width:0;flex:1}
+.ldeck .lname{font:italic 900 24px 'Barlow Condensed';text-transform:uppercase;line-height:1.05}
+.ldeck .lsub{font-size:14px;color:var(--mute);margin-top:4px}
+.ldeck .tg{position:absolute;right:10px;top:8px;font-size:12px}
+#s-build.listview .blists{top:204px}
+.blists .lgrid{grid-auto-rows:max-content}.ldeck{height:auto;flex:none}.ldeck .lfan{flex:none}#stage.m .ldeck{height:auto}

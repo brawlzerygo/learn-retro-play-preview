@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=68';
-import * as S from './sfx.js?v=68';
+import { Table } from './table.js?v=71';
+import * as S from './sfx.js?v=71';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -132,7 +132,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=68');
+const W = new Worker('js/worker.js?v=71');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -255,7 +255,7 @@ async function renderDecks() {
 }
 $('#duelGo').onclick = () => { S.unlock(); if (!(PK.you && PK.cpu)) { S.play('error'); toast(!PK.you ? 'Choose your deck first.' : "Choose the computer's deck first."); return; } startDuel(); };
 // the whole list of a deck: Main Deck by card type, then the Extra (Fusion) Deck, with counts; hover a card to read it
-function deckList(f, d, title) {
+function deckList(f, d, title, opts = {}) {
   closeDeckList(); S.play('click');
   const main = sortDeck(f, d.main), extra = sortDeck(f, d.extra);
   const W = 1576, H = extra.length ? 560 : 740, m = fitCards(main.length, W, H, 8), wm = Math.min(m.w, 150);
@@ -264,13 +264,14 @@ function deckList(f, d, title) {
   const nMon = main.filter(id => typeOrder(f, id) === 0).length, nSp = main.filter(id => typeOrder(f, id) === 2).length, nTr = main.filter(id => typeOrder(f, id) === 3).length;
   const v = document.createElement('div'); v.className = 'veil'; v.id = 'dlVeil'; v.style.zIndex = 59;
   const p = document.createElement('div'); p.className = 'pn dlist'; p.id = 'dlist';
-  p.innerHTML = `<div class="head"><h3 class="disp" style="font-size:52px">${esc(title)}: ${esc(d.name)}</h3><span class="tg hot">${main.length} cards</span><span class="tg">${nMon} mon · ${nSp} spell · ${nTr} trap</span><button class="gb sm" id="dlClose"><svg><use href="#i-x"/></svg>Close<span class="key">Esc</span><span class="shine"></span></button></div>
+  p.innerHTML = `<div class="head"><h3 class="disp" style="font-size:52px">${esc(title)}: ${esc(d.name)}</h3><span class="tg hot">${main.length} cards</span><span class="tg">${nMon} mon · ${nSp} spell · ${nTr} trap</span>${opts.copy ? `<button class="gb sm pri" id="dlCopy"><svg><use href="#i-cards"/></svg>Copy to Deck Builder<span class="shine"></span></button>` : ''}<button class="gb sm" id="dlClose"><svg><use href="#i-x"/></svg>Close<span class="key">Esc</span><span class="shine"></span></button></div>
     <div class="body"><div class="sec2">Main Deck</div><div class="fitgrid" style="grid-template-columns:repeat(${m.cols},${wm}px)">${main.map(id => tile(id, wm)).join('')}</div>
     ${extra.length ? `<div class="sec2" style="margin-top:14px">${f === 'goat' ? 'Fusion Deck' : 'Extra Deck'} · ${extra.length}</div><div class="fitgrid" style="grid-template-columns:repeat(${Math.max(e.cols, 1)},${we}px)">${extra.map(id => tile(id, we)).join('')}</div>${d.extraNote ? `<div class="mute" style="font-size:14px;margin-top:6px">${esc(d.extraNote)}.</div>` : ''}` : ''}</div>
     <div class="pn peek hidden" id="dlPeek"></div>`;
   stage.append(v, p);
-  v.onclick = closeDeckList; p.querySelector('#dlClose').onclick = closeDeckList;
+  v.onclick = closeDeckList; p.querySelector('#dlClose').onclick = closeDeckList; if (opts.copy) p.querySelector('#dlCopy').onclick = () => { closeDeckList(); opts.copy(); };
   p.onmouseover = e2 => peekOver(e2, p, f);
+  if (MOBILE) p.querySelector('.body').onclick = e => { const t = e.target.closest('[data-id]'); if (t) cardSheet(t.dataset.id); };
 }
 function closeDeckList() { const a = $('#dlist'), b = $('#dlVeil'); if (a) { a.remove(); b && b.remove(); S.play('click'); return true; } return false; }
 
@@ -371,6 +372,25 @@ const deckByKey = (f, k) => allDecks(f).find(d => d.key === k);
 /* ---------- the builder screen ---------- */
 const B = { fmt: null, deck: null, q: '', type: 'all', dirty: false };
 function newDeck(f) { return { id: Date.now().toString(36), fmt: f, name: 'My new deck', main: [], extra: [] }; }
+function renderLists() {
+  const f = B.lfmt || B.fmt, tiers = TIERS[f], el = $('#bListsPanel'); B.ltier = B.ltier || 'all';   // its own format choice, so the deck you are building is left alone
+  const decks = FM[f].decks.filter(d => B.ltier === 'all' || d.tier === B.ltier);
+  const xl = f === 'goat' ? 'Fusion' : 'Extra';
+  el.innerHTML = `<div class="lhead"><div class="seg ltiers">${['all', ...tiers].map(t => `<button class="gb sm ${B.ltier === t ? 'pri' : ''}" data-lt="${t}">${t === 'all' ? 'All' : (TIERNAME[t] || t)}<span class="shine"></span></button>`).join('')}</div>
+    <div class="seg lfmt">${['goat', 'edison'].map(x => `<button class="gb sm ${x === f ? 'pri' : ''}" data-lf="${x}">${x === 'goat' ? 'Goat' : 'Edison'}<span class="shine"></span></button>`).join('')}</div></div>
+    <div class="lgrid">${decks.map((d, i) => { const kc = keyCards(f, d), ok = deckInfo(f, d).ready;
+      return `<div class="ldeck ${ok ? '' : 'off'}" data-i="${FM[f].decks.indexOf(d)}"><div class="lfan">${kc.map((id, j) => `<div class="card" style="background-image:url(${artUrl(id)})" data-j="${j}"></div>`).join('')}</div>
+        <div class="lmeta"><div class="lname">${esc(d.name)}</div><div class="lsub">${d.main.length} cards${d.extra.length ? ` · ${d.extra.length} ${xl}` : ''}</div></div><span class="tg ${d.tier === tiers[0] ? 'hot' : ''}">${esc(TIERNAME[d.tier] || d.tier)}</span></div>`; }).join('')}</div>`;
+  el.onclick = e => {
+    const t = e.target.closest('[data-lt]'); if (t) { B.ltier = t.dataset.lt; S.play('click'); renderLists(); return; }
+    const fm = e.target.closest('[data-lf]'); if (fm && fm.dataset.lf !== f) { B.lfmt = fm.dataset.lf; B.ltier = 'all'; S.play('click'); renderLists(); return; }
+    const c = e.target.closest('[data-i]'); if (!c) return; const d = FM[f].decks[+c.dataset.i];
+    deckList(f, d, `${f === 'goat' ? 'Goat' : 'Edison'} · ${TIERNAME[d.tier] || d.tier}`, { copy: async () => { if (B.dirty && !(await ask('Replace the deck you are building with a copy of this one?', 'Copy'))) return;
+      B.fmt = f; B.deck = { ...newDeck(f), name: 'My ' + d.name, main: [...d.main], extra: [...d.extra] }; B.dirty = true; setBView('build'); renderBuilder(); toast(`${d.name} copied. Change it and Save it as your own.`); } });
+  };
+}
+// the Deck Builder's views: building (Cards and Your deck) or Deck lists
+function setBView(v) { B.view = v; $('#s-build').classList.toggle('listview', v === 'lists'); if (MOBILE && v !== 'lists' && B.mtab === 'lists') B.mtab = 'pool'; if (v === 'lists') renderLists(); }
 function openBuilder() {
   B.fmt = B.fmt || SEL.fmt; if (!B.deck || B.deck.fmt !== B.fmt) { const mine = MY().filter(d => d.fmt === B.fmt); B.deck = mine.length ? JSON.parse(JSON.stringify(mine[0])) : newDeck(B.fmt); B.dirty = false; }
   renderBuilder();
@@ -384,9 +404,10 @@ function renderBuilder() {
   $('#bQ').oninput = e => { B.q = e.target.value; renderPool(); };
   $('#bType').onclick = e => { const b = e.target.closest('[data-t]'); if (!b) return; B.type = b.dataset.t; S.play('click'); renderBuilder(); };
   renderPool(); renderDeckSide();
-  if (MOBILE) { const t = $('#mbTabs'); t.innerHTML = `<button class="${B.mtab !== 'deck' ? 'on' : ''}" data-mt="pool">Cards</button><button class="${B.mtab === 'deck' ? 'on' : ''}" data-mt="deck">Your deck · <b id="mbN">${B.deck.main.length}</b></button>`;
+  if (MOBILE) { const t = $('#mbTabs'); t.innerHTML = `<button class="${!B.mtab || B.mtab === 'pool' ? 'on' : ''}" data-mt="pool">Cards</button><button class="${B.mtab === 'deck' ? 'on' : ''}" data-mt="deck">Your deck · <b id="mbN">${B.deck.main.length}</b></button><button class="${B.mtab === 'lists' ? 'on' : ''}" data-mt="lists">Deck lists</button>`;
     $('#s-build').classList.toggle('deckview', B.mtab === 'deck'); stage.style.setProperty('--bt', ($('#bBoard').offsetHeight + 10) + 'px');
-    t.onclick = e => { const b = e.target.closest('[data-mt]'); if (!b) return; B.mtab = b.dataset.mt; S.play('click'); closeCardZoom(); t.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); $('#s-build').classList.toggle('deckview', B.mtab === 'deck'); }; }
+    t.onclick = e => { const b = e.target.closest('[data-mt]'); if (!b) return; B.mtab = b.dataset.mt; S.play('click'); closeCardZoom(); t.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); $('#s-build').classList.toggle('deckview', B.mtab === 'deck'); setBView(B.mtab === 'lists' ? 'lists' : 'build'); }; }
+  if (B.view === 'lists') setBView('lists');
 }
 function poolCards() {
   const f = B.fmt, q = B.q.trim().toLowerCase();
@@ -441,7 +462,7 @@ function renderDeckSide() {
     <div class="cell"><div class="k">Main</div><div class="v ${okMain ? 'ok' : 'bad'}">${d.main.length}</div></div>
     <div class="cell"><div class="k">${f === 'goat' ? 'Fusion' : 'Extra'}</div><div class="v ${d.extra.length > 15 ? 'bad' : ''}">${d.extra.length}</div></div>
     <div class="cell"><div class="k">Mon · Spell · Trap</div><div class="v">${nMon}·${nSp}·${nTr}</div></div>
-    <div class="act"><button class="gb sm" id="bMine">My decks<span class="shine"></span></button><button class="gb sm" id="bCopy">Start from a deck<span class="shine"></span></button><button class="gb sm" id="bNew">New<span class="shine"></span></button><button class="gb sm" id="bDel">Delete<span class="shine"></span></button></div>
+    <div class="act"><button class="gb sm ${B.view === 'lists' ? 'pri' : ''}" id="bLists"><svg><use href="#i-list"/></svg>Deck lists<span class="shine"></span></button><button class="gb sm" id="bMine">My decks<span class="shine"></span></button><button class="gb sm" id="bCopy">Start from a deck<span class="shine"></span></button><button class="gb sm" id="bNew">New<span class="shine"></span></button><button class="gb sm" id="bDel">Delete<span class="shine"></span></button></div>
     <button class="savebtn" id="bSave">${B.dirty ? 'Save' : 'Saved'}</button>`;
   // the roster (right half): every card of the Main Deck and the Extra (Fusion) Deck, sized to fit without scrolling
   const main = sortDeck(f, d.main), extra = sortDeck(f, d.extra), RW = 912, xl = f === 'goat' ? 'Fusion' : 'Extra';
@@ -463,6 +484,7 @@ function renderDeckSide() {
   $('#bSave').onclick = saveDeck; $('#bNew').onclick = async () => { if (B.dirty && !(await ask('Start a new deck without saving this one?', 'New deck'))) return; B.deck = newDeck(f); B.dirty = false; S.play('click'); renderBuilder(); };
   $('#bDel').onclick = async () => { const all = MY(); if (!all.some(x => x.id === d.id)) { B.deck = newDeck(f); B.dirty = false; renderBuilder(); return; } if (!(await ask(`Delete "${d.name}"? This can't be undone.`, 'Delete'))) return; saveMY(all.filter(x => x.id !== d.id)); B.deck = null; S.play('destroy'); openBuilder(); };
   $('#bMine').onclick = () => myDecksDialog(f);
+  $('#bLists').onclick = () => { S.play('click'); const v = B.view === 'lists' ? 'build' : 'lists'; if (MOBILE) B.mtab = v === 'lists' ? 'lists' : 'pool'; setBView(v); $('#bLists').classList.toggle('pri', v === 'lists'); if (MOBILE) renderBuilder(); };
   $('#bCopy').onclick = () => pickDialog('Start from a deck', FM[f].decks, x => { B.deck = { ...newDeck(f), name: 'My ' + x.name, main: [...x.main], extra: [...x.extra] }; B.dirty = true; renderBuilder(); });
   const dk = $('#bDeck'); dk.onclick = e => { const t = e.target.closest('[data-id]'); if (t) cardZoom(t.dataset.id, 'remove'); };
   dk.oncontextmenu = e => { e.preventDefault(); const t = e.target.closest('[data-id]'); if (t) addCard(t.dataset.id); };
