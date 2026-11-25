@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=73';
-import * as S from './sfx.js?v=73';
+import { Table } from './table.js?v=74';
+import * as S from './sfx.js?v=74';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -63,10 +63,15 @@ function switchLayout() {
   } catch (e) { /* first call, before the game is set up */ }
 }
 function placeMid() { try { if (!table) return; const p = table.project(new (table.camera.position.constructor)(0, 0, 0)); stage.style.setProperty('--midy', Math.round(p.y) + 'px'); } catch (e) { /* no table yet */ } }
+// the home-screen app draws under the status bar but iOS reports its height without that strip, which left a gap at the bottom
+// (Zack, 2026-11-25: "only on the home screen version, lets extend this so as much space is used as possible"); there the game takes
+// the phone's full screen height. In Safari the window height is right and stays as it is.
+const homeApp = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+const phoneHeight = () => homeApp() ? Math.max(innerHeight, screen.height, document.documentElement.clientHeight) : innerHeight;
 function fit() {
   if (PHONE) { document.documentElement.classList.toggle('sideways', !uprightNow()); document.documentElement.classList.add('m'); if (!uprightNow()) return; }   // sideways: nothing to lay out until it turns back
   if (!MOBILE) { stage.style.width = stage.style.height = ''; }
-  if (MOBILE) { if (LAND) { scale = innerHeight / 390; SH = 390; SW = Math.round(innerWidth / scale); } else { scale = innerWidth / 390; SW = 390; SH = Math.round(innerHeight / scale); }
+  if (MOBILE) { if (LAND) { scale = innerHeight / 390; SH = 390; SW = Math.round(innerWidth / scale); } else { scale = innerWidth / 390; SW = 390; SH = Math.round(phoneHeight() / scale); }
     stage.style.width = SW + 'px'; stage.style.height = SH + 'px'; stage.style.setProperty('--sw', SW + 'px');
     const v = mview(); for (const k of ['w', 'h', 'ox', 'oy']) stage.style.setProperty('--g' + k, v[k] + 'px');
     // the prompt strip: in the open band between the computer's hand and the board when there is one, else on the center line
@@ -132,7 +137,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=73');
+const W = new Worker('js/worker.js?v=74');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
