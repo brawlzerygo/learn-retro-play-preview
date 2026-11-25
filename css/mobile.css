@@ -589,3 +589,14 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
    waits until the chain resolves, and your options are the buttons above your hand */
 #stage.m:not(.ml) .chainp{top:var(--py,var(--midy,380px));translate:0 -50%;padding:5px 8px}
 #stage.m:not(.ml) #s-duel.chaining .prompt{visibility:hidden}
+
+/* your card's buttons on phones: every label shown in full (Zack, 2026-11-25: "the text on the action bars needs to be fully legible...
+   right now the font is big and gets cut off"): a smaller face, wrapping to a second line when needed, two buttons a row when there are
+   more than two, Read kept narrow */
+#stage.m .amenu.mrow .gb,#stage.m .dial-menu.mrow .gb,#stage.m .amenu.respond .gb{height:auto;min-height:48px;padding:6px 10px;gap:6px;font-size:15px;line-height:1.05;letter-spacing:.02em;white-space:normal;text-align:center;flex:1 1 40%}
+#stage.m .amenu.mrow .gb .lbl,#stage.m .amenu.respond .gb .lbl{overflow:visible;text-overflow:clip;white-space:normal}
+#stage.m .amenu.mrow .gb svg,#stage.m .dial-menu.mrow .gb svg,#stage.m .amenu.respond .gb svg{width:17px;height:17px}
+#stage.m .amenu.mrow .gb.rd{flex:0 0 64px;padding:6px 4px}
+#stage.m .amenu.mrow:has(.gb:nth-child(3):not(.rd)) .gb:not(.rd){flex-basis:44%}
+#stage.m .amenu.mrow .gb:not(.rd),#stage.m .dial-menu.mrow .gb,#stage.m .amenu.respond .gb{flex:1 1 0;min-width:0}
+#stage.m .amenu.mrow:has(.gb:nth-child(4):not(.rd)) .gb:not(.rd),#stage.m .amenu.respond:has(.gb:nth-of-type(4)) .gb{flex:1 1 40%}
