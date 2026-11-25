@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=65';
-import * as S from './sfx.js?v=65';
+import { Table } from './table.js?v=66';
+import * as S from './sfx.js?v=66';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -126,7 +126,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=65');
+const W = new Worker('js/worker.js?v=66');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -806,7 +806,7 @@ async function flyFromHand(r, ev, toSide) {
   const w1 = Math.abs(e.x - q.x) * 2, opp = toSide !== 1;
   const start = ev.owner === 0 && ev.id != null ? artUrl(ev.id) : 'img/back.webp', end = up && ev.id != null ? artUrl(ev.id) : 'img/back.webp';
   S.play(up ? 'place' : 'set');
-  const fly = await fly2D(stageBox(r), { cx: q.x, cy: q.y, w: w1 }, { from: start, to: end, rot: (def ? 90 : 0) + (opp ? 180 : 0), dur: 560, arc: 30, keep: true });
+  const fly = await fly2D(stageBox(r), { cx: q.x, cy: q.y, w: w1 }, { from: start, to: end, rot: (opp ? 180 : 0) - (def ? 90 : 0), dur: 560, arc: 30, keep: true });   // turned the same way the table card lies (the 3D table turns counterclockwise for Defense Position), so a Set monster never lands the wrong way round and corrects itself (Zack, 2026-11-25)
   await table.place(ev.u, toSide, zone, ev.zi, { id: ev.id, up, pos: ev.pos, from: c.clone().setY(0.06), fromUp: up, fromRotY: table.pose(toSide, def), dur: 90, lift: 0 });
   fly.remove();
 }
