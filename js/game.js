@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=42';
-import * as S from './sfx.js?v=42';
+import { Table } from './table.js?v=44';
+import * as S from './sfx.js?v=44';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -25,9 +25,12 @@ const TOUCH = /[?&](touch|mobile|phone)\b/.test(location.search) || matchMedia('
    render and its camera, and phone screens built from the same game. Computers and tablets keep the 1920x1080 stage. ?mobile tries it. */
 const FORCE_M = /[?&]mobile\b/.test(location.search);
 const PHONE = FORCE_M || /[?&]phone\b/.test(location.search) || (TOUCH && Math.min(screen.width, screen.height) < 520);
-// a phone held upright gets the phone layout; held sideways it gets the landscape layout (the 1920x1080 stage with the touch pass)
+// phones always get the phone UI: upright (#stage.m) or, held sideways, its landscape version (#stage.m.ml; Zack, 2026-11-25: "the landscape
+// version on mobile is literally just the web ui. it needs to match the mobile ui but be formatted for landscape")
 const uprightNow = () => FORCE_M || innerHeight >= innerWidth;
-let MOBILE = PHONE && uprightNow();
+const MOBILE = PHONE;
+let LAND = PHONE && !uprightNow();
+let LG = { cx: 195 };     // landscape: the board's middle, for the hands
 let SW = 1920, SH = 1080;
 const MV = { w: 390, h: 845 };            // the upright render (1080x2340) drawn at the phone's width
 // the board on phones (Zack, 2026-11-24: "a bit too much dead space between my hand and the board, lets make the board a bit bigger"):
@@ -35,14 +38,22 @@ const MV = { w: 390, h: 845 };            // the upright render (1080x2340) draw
 // In the render at full size the board with its rim spans y 215 to 510. The prompt and chain strip sit above it when there is room;
 // on short phones (an SE) the board shrinks to fit under the computer's hand instead.
 const sabPx = () => { const pr = $('#sabProbe'); return pr ? pr.offsetHeight : 10; };
+// landscape phones: the landscape render (its board spans x 12.5-87.5% at the near edge and y 22.4-92.8%) between a left column (bars,
+// prompt, chain) and a right column (turn, phase, Hint, your card's buttons), its near edge just above your hand
+const LCOL = 188, RCOL = 128;
+function lview() {
+  const cw = SW - LCOL - RCOL; let w = cw / 0.75, h = w * 9 / 16; const maxH = (SH - 52 - 56) / 0.704; if (h > maxH) { h = maxH; w = h * 16 / 9; }
+  const cx = LCOL + cw / 2; LG = { cx };
+  return { w: Math.round(w), h: Math.round(h), ox: Math.round(cx - w / 2), oy: Math.round(SH - 52 - 0.928 * h), dpr: Math.min(3, (window.devicePixelRatio || 1) * scale) }; }
 function mview() {
+  if (LAND) return lview();
   const rowTop = SH - sabPx() - ROW_B - 48, bottom = rowTop - 10;
   let k = Math.min(1.06, (bottom - 205) / 295); if (k < 0.9) k = Math.min(1.06, (bottom - 112) / 295);
   const w = Math.round(MV.w * k), h = Math.round(MV.h * k);
   return { w, h, ox: Math.round((MV.w - w) / 2), oy: Math.round(bottom - 510 * k), dpr: Math.min(3, (window.devicePixelRatio || 1) * scale) }; }
 const ROW_B = 252, HW = 96;   // the row's distance above the safe bottom edge, and a hand card's width (css/mobile.css --row, .hc)
 function switchLayout() {
-  stage.classList.toggle('m', MOBILE); document.documentElement.classList.toggle('m', MOBILE);
+  stage.classList.toggle('m', MOBILE); stage.classList.toggle('ml', LAND); document.documentElement.classList.toggle('m', MOBILE);
   try {
     closeSheet(); if (typeof closeCardZoom === 'function') closeCardZoom();
     if (table) rebuildTable();
@@ -51,15 +62,17 @@ function switchLayout() {
 }
 function placeMid() { try { if (!table) return; const p = table.project(new (table.camera.position.constructor)(0, 0, 0)); stage.style.setProperty('--midy', Math.round(p.y) + 'px'); } catch (e) { /* no table yet */ } }
 function fit() {
-  if (PHONE && uprightNow() !== MOBILE) { MOBILE = !MOBILE; switchLayout(); }
+  if (PHONE && !uprightNow() !== LAND) { LAND = !LAND; switchLayout(); }
   if (!MOBILE) { stage.style.width = stage.style.height = ''; }
-  if (MOBILE) { scale = innerWidth / 390; SW = 390; SH = Math.round(innerHeight / scale); stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
+  if (MOBILE) { if (LAND) { scale = innerHeight / 390; SH = 390; SW = Math.round(innerWidth / scale); } else { scale = innerWidth / 390; SW = 390; SH = Math.round(innerHeight / scale); }
+    stage.style.width = SW + 'px'; stage.style.height = SH + 'px'; stage.style.setProperty('--sw', SW + 'px');
     const v = mview(); for (const k of ['w', 'h', 'ox', 'oy']) stage.style.setProperty('--g' + k, v[k] + 'px');
     // the prompt strip: in the open band between the computer's hand and the board when there is one, else on the center line
-    const top = v.oy + 215 * v.h / MV.h; if (top - 112 >= 52) stage.style.setProperty('--py', Math.round(top - 26) + 'px'); else stage.style.removeProperty('--py'); stage.classList.toggle('mline', top - 112 < 52); try { if (table) { table.setView(v); placeMid(); } } catch (e) { /* the table isn't made yet */ } }
+    stage.style.setProperty('--cx', LG.cx + 'px');
+    const top = v.oy + 215 * v.h / MV.h; if (!LAND && top - 112 >= 52) stage.style.setProperty('--py', Math.round(top - 26) + 'px'); else stage.style.removeProperty('--py'); stage.classList.toggle('mline', !LAND && top - 112 < 52); try { if (table) { table.setView(v); placeMid(); } } catch (e) { /* the table isn't made yet */ } }
   else scale = Math.min(innerWidth / 1920, innerHeight / 1080);
   stage.style.transform = `translate(-50%,-50%) scale(${scale})`;
-  stage.classList.toggle('m', MOBILE); document.documentElement.classList.toggle('m', MOBILE);
+  stage.classList.toggle('m', MOBILE); stage.classList.toggle('ml', LAND); document.documentElement.classList.toggle('m', MOBILE);
   stage.classList.toggle('touch', TOUCH); stage.classList.toggle('phone', !MOBILE && TOUCH && scale < 0.6); }
 addEventListener('resize', fit); fit();
 const toStage = e => { const r = stage.getBoundingClientRect(); return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale }; };
@@ -108,7 +121,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=42');
+const W = new Worker('js/worker.js?v=44');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -553,7 +566,7 @@ async function ensureTable() {
   await makeTable();
 }
 async function makeTable() {
-  const key = MOBILE ? 'shop-m' : 'shop';
+  const key = MOBILE && !LAND ? 'shop-m' : 'shop';
   camData = CAMS[key] || (CAMS[key] = await (await fetch(`assets/scenes/${key}-camera.json`)).json());
   table = new Table($('#gl'), camData, { tokenArt: TOKEN_ART, view: MOBILE ? mview() : undefined });
   table.speed = SPEED[SET.speed];
@@ -745,7 +758,8 @@ function reconcile(v) {
 function renderHands(newU) {
   const h = D.disp.p[0].hand, n = h.length;
   // phones: 86-point cards fanned across the bottom, overlapping more as the hand grows
-  const step = MOBILE ? Math.min(74, (SW - 36 - HW) / Math.max(1, n - 1)) : Math.min(150, 900 / Math.max(1, n)), x0 = MOBILE ? SW / 2 - HW / 2 - (step * (n - 1)) / 2 : 550 - (step * (n - 1)) / 2 - 70;
+  const hw = LAND ? 74 : HW, hx = LAND ? LG.cx : SW / 2, room = LAND ? SW - LCOL - RCOL + 40 : SW - 36;
+  const step = MOBILE ? Math.min(LAND ? 60 : 74, (room - hw) / Math.max(1, n - 1)) : Math.min(150, 900 / Math.max(1, n)), x0 = MOBILE ? hx - hw / 2 - (step * (n - 1)) / 2 : 550 - (step * (n - 1)) / 2 - 70;
   const el = $('#hand'); const old = new Map([...el.children].map(c => [+c.dataset.u, c]));
   h.forEach((c, i) => {
     let d = old.get(c.u); if (!d) { d = document.createElement('div'); d.className = 'hc in'; d.dataset.u = c.u; el.appendChild(d); }
@@ -756,7 +770,7 @@ function renderHands(newU) {
   for (const d of old.values()) d.remove();
   $('#hcMe').textContent = n;
   const on = D.disp.p[1].hand.length, oe = $('#ohand'); oe.innerHTML = '';
-  const os = MOBILE ? Math.min(20, 160 / Math.max(1, on)) : Math.min(92, 520 / Math.max(1, on)), ox = MOBILE ? SW / 2 - (os * (on - 1)) / 2 - 13 : 300 - (os * (on - 1)) / 2 - 48;
+  const os = MOBILE ? Math.min(20, 160 / Math.max(1, on)) : Math.min(92, 520 / Math.max(1, on)), ox = MOBILE ? (LAND ? LG.cx : SW / 2) - (os * (on - 1)) / 2 - 13 : 300 - (os * (on - 1)) / 2 - 48;
   for (let i = 0; i < on; i++) { const c = document.createElement('div'); c.className = 'card'; c.style.left = (ox + i * os) + 'px'; c.style.transform = `rotate(${(i - (on - 1) / 2) * -3}deg)`; oe.appendChild(c); }
   $('#hcOp').textContent = on;
 }
@@ -771,7 +785,7 @@ function setLP(p, v, instant) {
   const step = () => { const k = Math.min(1, (performance.now() - t0) / dur); el.textContent = Math.round(from + (v - from) * k); if (k < 1) requestAnimationFrame(step); else { el.textContent = v; setTimeout(() => el.classList.remove('hit', 'heal'), 300); } };
   requestAnimationFrame(step); if (v < from) S.play('lp', { gap: 200 });
 }
-function popNum(p, txt, heal) { const d = document.createElement('div'); d.className = 'pop' + (heal ? ' heal' : ''); d.textContent = txt; Object.assign(d.style, MOBILE ? (p === 0 ? { left: '230px', top: (SH - 150) + 'px' } : { left: '230px', top: '70px' }) : p === 0 ? { left: '300px', top: '880px' } : { left: '1640px', top: '200px' }); $('#layer').appendChild(d); setTimeout(() => d.remove(), 1200); }
+function popNum(p, txt, heal) { const d = document.createElement('div'); d.className = 'pop' + (heal ? ' heal' : ''); d.textContent = txt; Object.assign(d.style, MOBILE ? (LAND ? (p === 0 ? { left: '100px', top: (SH - 110) + 'px' } : { left: '100px', top: '70px' }) : p === 0 ? { left: '230px', top: (SH - 150) + 'px' } : { left: '230px', top: '70px' }) : p === 0 ? { left: '300px', top: '880px' } : { left: '1640px', top: '200px' }); $('#layer').appendChild(d); setTimeout(() => d.remove(), 1200); }
 const PH = { draw: 'Draw', standby: 'Standby', main1: 'Main 1', battle: 'Battle', main2: 'Main 2', end: 'End', start: 'Draw' };
 function setPhase(ph) { $('#phaseTxt').textContent = PH[ph] || ph; $('#dial').classList.toggle('op', D.tp !== 0); if (ph !== 'start') S.play('phase', { gap: 300 }); }
 async function banner(txt, sub, op) {

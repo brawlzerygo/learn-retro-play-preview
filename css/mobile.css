@@ -357,3 +357,143 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 @keyframes rowIn{from{opacity:0;transform:translateY(10px)}}
 @keyframes mScrIn{from{opacity:0;transform:translateX(24px)}}
 #stage.m #s-title.leaving{display:flex}
+
+/* =====================================================================================================
+   Phones held sideways (#stage.m.ml; Zack, 2026-11-25: "it needs to match the mobile ui but be formatted for landscape"): the same
+   phone UI on a stage 390 points tall. Duel: the board in the middle (the landscape render), a left column with both bars, the chain
+   and the prompt, a right column with the menu, turn, phase button, log and Hint (your card's buttons take its place), your hand
+   along the bottom. Menu screens use the width: two columns where it helps, a slimmer tab bar.
+   ===================================================================================================== */
+#stage.ml{--sab:max(env(safe-area-inset-bottom,0px),6px);--sal:max(env(safe-area-inset-left,0px),10px);--sar:max(env(safe-area-inset-right,0px),10px)}
+#stage.ml #scene{background:url(../assets/scenes/shop.jpg) var(--gox,0px) var(--goy,0px)/var(--gw) var(--gh) no-repeat,url(../assets/scenes/shop.jpg) center/cover;background-color:#2b170c}
+#stage.ml .menubg{background-image:url(../assets/scenes/shop.jpg)}
+/* left column */
+#stage.ml .lp{width:176px;height:50px;padding:0 10px 0 8px;gap:8px}
+#stage.ml .lp.op{left:var(--sal);right:auto;top:8px}
+#stage.ml .lp.me{left:var(--sal);right:auto;bottom:8px;padding-right:10px}
+#stage.ml .lp .em{width:32px;height:32px}
+#stage.ml .lp .num{font-size:28px;margin-top:-24px}
+#stage.ml .lp .who{font-size:10px;padding-right:64px}
+#stage.ml .lp .bar i{width:8px;height:3px}
+#stage.ml .banb{height:17px;font-size:9px;margin-top:2px}
+#stage.ml .chainp{left:var(--sal);right:auto;top:66px;width:176px;flex-direction:column;align-items:stretch;gap:4px;max-height:150px;overflow-y:auto}
+#stage.ml .chainp .link{max-width:none}
+#stage.ml .prompt,#stage.ml.mline .prompt{left:var(--sal);top:auto;bottom:66px;translate:none;width:176px;max-width:176px;white-space:normal;text-align:left;font-size:12px;padding:6px 10px 6px 14px;overflow:visible}
+/* the computer's hand: small backs at the top, over the board's middle */
+#stage.ml .ohand{left:0;width:var(--sw);top:-6px;height:40px}
+#stage.ml .ohand .card{width:22px;height:32px}
+/* right column */
+#stage.ml #tMenu{right:var(--sar);left:auto;top:8px;bottom:auto}
+#stage.ml .turnm{left:auto!important;right:calc(var(--sar) + 54px);top:8px;bottom:auto;width:56px;height:42px}
+#stage.ml .dial{left:auto!important;right:var(--sar);top:calc(50% - 30px);bottom:auto;width:112px;height:52px}
+#stage.ml .tools{left:auto;right:var(--sar);bottom:8px;width:auto;gap:6px}
+#stage.ml .amenu.mrow,#stage.ml .dial-menu.mrow,#stage.ml .amenu.respond{left:auto!important;right:var(--sar)!important;bottom:8px!important;top:auto!important;width:150px;flex-direction:column;flex-wrap:nowrap;gap:6px}
+#stage.ml .amenu.mrow .gb,#stage.ml .dial-menu.mrow .gb,#stage.ml .amenu.respond .gb{flex:none;width:100%;min-width:0;height:42px;font-size:16px}
+#stage.ml .amenu.mrow .gb.rd{flex:none;width:100%}
+/* your hand */
+#stage.ml .hand{left:0;width:var(--sw);bottom:0;height:150px}
+#stage.ml .hc{width:74px;height:108px;bottom:-56px}
+#stage.ml .hc:hover:not(.up){bottom:-56px}
+#stage.ml .hc.up{bottom:10px}
+#stage.ml .hand.low .hc{bottom:-92px!important}
+#stage.ml .toast{bottom:auto;top:52px;left:var(--cx);max-width:420px}
+#stage.ml .hintp,#stage.ml .logp{left:auto;right:calc(var(--sar) + 140px);top:8px;width:360px;max-height:calc(100% - 16px)}
+#stage.ml .logp{height:calc(100% - 16px)}
+#stage.ml .banner{top:calc(50% - 40px);height:76px}
+#stage.ml .banner .disp{font-size:40px}
+/* sheets are centred and no wider than a phone held upright */
+#stage.ml .msheet,#stage.ml .dlg,#stage.ml .pmenu{left:0;right:0;margin:0 auto;max-width:560px;max-height:92%}
+#stage.ml .msheet .mtop{float:left;margin:0 16px 8px 0}
+#stage.ml .msheet .card{width:120px;height:175px}
+#stage.ml .msheet .mh{min-width:0}
+#stage.ml .msheet p{margin-top:10px}
+#stage.ml .msheet .gb{clear:both}
+/* menu screens */
+#stage.ml #mTabs{height:calc(var(--sab) + 46px);padding:4px 12px var(--sab)}
+#stage.ml #mTabs button{flex-direction:row;gap:8px;font-size:12px}
+#stage.ml #mTabs button svg{width:20px;height:20px}
+#stage.ml .htitle{padding:calc(var(--sat) + 6px) 24px 8px 76px;font-size:34px}
+#stage.ml[data-scr=build] .htitle,#stage.ml[data-scr=stats] .htitle,#stage.ml[data-scr=settings] .htitle{padding-left:24px}
+#stage.ml .gback{top:8px;left:var(--sal)}
+/* home: the buttons on the left, the two cards on the right */
+#stage.ml #s-title.on,#stage.ml #s-title.leaving{display:grid}
+#stage.ml #s-title{grid-template-columns:1fr minmax(220px,38%);grid-template-rows:auto auto 1fr auto auto;column-gap:24px;padding:10px calc(var(--sar) + 16px) calc(var(--sab) + 54px) calc(var(--sal) + 16px)}
+#stage.ml #s-title .ttl-logo{grid-column:1;grid-row:1}
+#stage.ml #s-title #mainMenu{grid-column:1;grid-row:2;margin-top:12px}
+#stage.ml #s-title #mainMenu .mi[data-go=format]{height:56px;font-size:28px}
+#stage.ml #s-title #mainMenu .mi{height:44px}
+#stage.ml #s-title .savenote{grid-column:1;grid-row:4;margin-top:8px;padding-top:0}
+#stage.ml #s-title .legal{grid-column:1;grid-row:5}
+#stage.ml #s-title .heroes{grid-column:2;grid-row:1/6;margin:0;min-height:0;height:100%}
+#stage.ml #s-title .heroes .card{height:min(230px,82%)}
+/* format: side by side */
+#stage.ml .fmt-row{flex-direction:row;padding:0 calc(var(--sar) + 16px) 70px calc(var(--sal) + 16px)}
+#stage.ml .fmt{flex:1;height:230px}
+/* decks: the list on the left, the chosen deck on the right */
+#stage.ml #s-deck.on,#stage.ml #s-deck.leaving{display:grid}
+#stage.ml #s-deck{grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;align-items:start;column-gap:10px;padding-bottom:calc(var(--sab) + 70px)}
+#stage.ml #s-deck .htitle{grid-column:1/-1}
+#stage.ml .dk-wrap{grid-column:1;padding-left:calc(var(--sal) + 6px)}
+#stage.ml .dk-list{max-height:none}
+#stage.ml .dk-side{grid-column:2;margin:0 calc(var(--sar) + 6px) 0 0}
+#stage.ml #s-deck .keybar{left:auto;width:260px;right:0;background:none}
+/* settings and stats: a comfortable width */
+#stage.ml .vlist,#stage.ml .vdesc{max-width:640px;margin-left:auto;margin-right:auto}
+#stage.ml .vdesc{margin-bottom:calc(var(--sab) + 60px)}
+#stage.ml #stBody{padding:0 calc(var(--sar) + 12px) calc(var(--sab) + 60px) calc(var(--sal) + 12px)}
+#stage.ml .sttiles{grid-template-columns:repeat(8,1fr)!important}
+#stage.ml .stcols{display:grid!important;grid-template-columns:1fr 1fr}
+#stage.ml .sfmt,#stage.ml #s-stats .savebar{margin-left:calc(var(--sal) + 14px)}
+/* deck builder: more cards across */
+#stage.ml .board{padding-top:4px}
+#stage.ml .board .cell.name{flex:1 1 auto!important;padding-left:64px}
+#stage.ml .board .act{flex:1 1 auto;order:0}
+#stage.ml .board .savebtn{top:6px}
+#stage.ml[data-scr=build] .gback{top:8px}
+#stage.ml .pool2{grid-template-columns:repeat(8,1fr);bottom:calc(var(--sab) + 50px)}
+#stage.ml .roster{bottom:calc(var(--sab) + 48px)}
+#stage.ml .roster .main,#stage.ml .roster .extra{grid-template-columns:repeat(10,1fr)!important}
+#stage.ml .czoom,#stage.ml .czoom.left,#stage.ml .czoom.right{flex-direction:row;align-items:flex-start;bottom:calc(var(--sab) + 48px)}
+#stage.ml .czoom .zc{width:150px}
+/* lists and results */
+#stage.ml .dlist .fitgrid,#stage.ml .dlist .grid{grid-template-columns:repeat(10,1fr)!important}
+#stage.ml .dlist .peek{left:auto;width:360px;max-height:100%}
+#stage.ml #s-results{padding-left:calc(var(--sal) + 16px);padding-right:calc(var(--sar) + 16px)}
+#stage.ml .res-btns{grid-template-columns:1fr 1fr 1fr}
+#stage.ml .res-btns .gb.pri{grid-column:auto;height:48px;font-size:20px}
+#stage.ml .tiles{grid-template-columns:repeat(6,1fr)}
+#stage.ml .lp .who{padding-right:56px}
+#stage.ml .lp .num{font-size:26px}
+#stage.ml .toast{top:66px;left:var(--sal);translate:none;width:176px;max-width:176px;font-size:12px;text-align:left}
+/* landscape card sheet: the card on the left, its name and text beside it */
+#stage.ml .msheet{display:grid;grid-template-columns:120px 1fr;column-gap:16px;align-content:start}
+#stage.ml .msheet .grab,#stage.ml .msheet>.gb{grid-column:1/-1}
+#stage.ml .msheet .mtop{display:contents;float:none;margin:0}
+#stage.ml .msheet .mtop>.card{grid-column:1;grid-row:2/span 2}
+#stage.ml .msheet .mh{grid-column:2;grid-row:2}
+#stage.ml .msheet p{grid-column:2;grid-row:3;margin:8px 0 12px}
+#stage.ml .msheet>.gb{margin-top:6px}
+#stage.ml .msheet{grid-template-rows:auto auto 1fr auto}#stage.ml .msheet p,#stage.ml .msheet .mh{align-self:start}
+/* landscape Deck Builder: one header row, then the tabs, search and filters on one line, so the cards get the height */
+#stage.ml .board{flex-wrap:nowrap;align-items:center;padding:4px 0}
+#stage.ml .board .cell{padding:2px 8px}
+#stage.ml .board .cell:nth-child(4){display:none}
+#stage.ml .board .name input{font-size:20px}
+#stage.ml .board .cell .v{font-size:18px}
+#stage.ml .board .act{flex:0 1 auto;padding:0 6px;order:0}
+#stage.ml .board .act .gb{height:30px;font-size:13px;padding:0 8px}
+#stage.ml .board .savebtn{position:static;height:36px;margin-right:var(--sar);font-size:18px;padding:0 14px}
+#stage.ml .mbtabs{right:auto;width:230px;left:var(--sal)}
+#stage.ml .mbtabs button{height:34px;font-size:15px}
+#stage.ml .bbar{left:calc(var(--sal) + 242px);right:var(--sar);top:var(--bt,60px);flex-wrap:nowrap;gap:6px}
+#stage.ml .bbar .inp{height:34px;font-size:14px;flex:1 1 120px}
+#stage.ml .bbar #bType{flex-basis:auto;order:0}
+#stage.ml .bbar .seg .gb{height:30px;font-size:12px;padding:0 7px}
+#stage.ml .pool2{top:calc(var(--bt,60px) + 44px);left:var(--sal);right:var(--sar);grid-template-columns:repeat(9,1fr)}
+#stage.ml .roster{top:calc(var(--bt,60px) + 42px)}
+#stage.ml .czoom,#stage.ml .czoom.left,#stage.ml .czoom.right{top:calc(var(--bt,60px) + 42px)}
+#stage.ml #s-deck{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#stage.ml .dk-wrap,#stage.ml .dk-side,#stage.ml .seg-tabs{min-width:0}
+#stage.ml .gback{width:44px;padding:0;justify-content:center;font-size:0}
+#stage.ml .htitle{padding-left:68px}
+#stage.ml .dk-fan{margin-bottom:-46px}
