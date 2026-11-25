@@ -693,7 +693,13 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
    shrinks below about 0.6, where the duel HUD, buttons and card text are scaled up from their own corner so they stay
    readable and tappable. The board and the layout stay the same. */
 #rotate{display:none}
-/* phones play upright or sideways (Zack, 2026-11-24): #rotate is no longer shown */
+/* phones play upright only (Zack, 2026-11-25): held sideways, they ask to be turned back */
+html.m.sideways #rotate{display:flex;position:fixed;inset:0;z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0b0c10;color:#f4f4f2;font-family:'Atkinson Hyperlegible',sans-serif;text-align:center;padding:30px}
+html.m.sideways #rotate svg{width:84px;height:84px;fill:none;stroke:#ff6a1f;stroke-width:1.6;stroke-linecap:round;animation:rotUp 2.2s ease-in-out infinite}
+html.m.sideways #rotate b{font:italic 900 34px 'Barlow Condensed';text-transform:uppercase}
+html.m.sideways #rotate span{color:#9aa0a8;font-size:16px}
+html.m.sideways #stage{visibility:hidden}
+@keyframes rotUp{0%,30%{transform:rotate(-90deg)}60%,100%{transform:rotate(0)}}
 @keyframes rot{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
 html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 #stage.touch{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -792,3 +798,6 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .dk-side .dk-pick h3{font-size:56px;margin:6px 0 10px}
 .dk-side .dk-pick p{font-size:21px;max-width:560px}
 #duelGo.off{opacity:.45;filter:grayscale(.6)}
+
+/* a card leaving your hand lifts and fades while its 3D card flies to the table */
+.hc.gone{pointer-events:none;opacity:0;bottom:40px!important;transition:opacity .22s ease,bottom .22s ease}

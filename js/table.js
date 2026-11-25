@@ -103,11 +103,11 @@ export class Table {
     let dr = rotY - r0; while (dr > Math.PI) dr -= 2 * Math.PI; while (dr < -Math.PI) dr += 2 * Math.PI;
     const peak = o.peak || 0.42;  // where the arc is highest (0..1)
     await this.tween(dur, k => {
-      const m = ease.sine(k);
+      const m = o.smooth ? ease.inOut(k) : ease.sine(k);
       c.g.position.lerpVectors(p0, pos, m);
       const h = k < peak ? Math.sin(Math.PI / 2 * k / peak) : Math.cos(Math.PI / 2 * (k - peak) / (1 - peak));
       c.g.position.y += h * lift;
-      c.g.rotation.y = r0 + dr * ease.inOut(Math.min(1, k * 1.15));
+      c.g.rotation.y = r0 + dr * ease.inOut(Math.min(1, k * (o.smooth ? 1 : 1.15)));
       c.m.rotation.z = z0 + (z1 - z0) * ease.inOut(Math.min(1, Math.max(0, (k - 0.1) / 0.7)));
       if (o.tilt) c.g.rotation.x = Math.sin(Math.PI * k) * o.tilt;
     }, ease.lin);
@@ -136,7 +136,7 @@ export class Table {
     if (o.id != null) this.setFace(c, o.id);
     Object.assign(c, { def, side, zone, i, up: !!o.up });
     const set = !o.up;
-    await this.glide(c, pos, rotY, !!o.up, o.dur || (set ? 380 : 480), o.lift != null ? o.lift : (set ? 0.22 : 0.7), { peak: set ? 0.35 : 0.5, tilt: set ? 0 : -0.25, settle: set ? 0.03 : 0.08 });
+    await this.glide(c, pos, rotY, !!o.up, o.dur || (set ? 380 : 480), o.lift != null ? o.lift : (set ? 0.3 : 0.6), { peak: set ? 0.4 : 0.45, tilt: set ? 0 : -0.18, settle: set ? 0.03 : 0.06, smooth: true });
   }
   // take a card off the field to a point, then remove it
   async remove(u, to, o = {}) {

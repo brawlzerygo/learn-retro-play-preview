@@ -9,7 +9,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .gb.sm{height:40px;font-size:16px;padding:0 13px}
 #stage.m .gb svg{width:20px;height:20px}
 #stage.m .disp,#stage.m .htitle{letter-spacing:.005em}
-#stage.m .menubg{background-image:url(../assets/scenes/shop-m.jpg);background-size:cover;filter:blur(5px) brightness(.34);transform:scale(1.05)}
+#stage.m .menubg{background-image:url(../assets/scenes/shop-m2.jpg);background-size:cover;filter:blur(5px) brightness(.34);transform:scale(1.05)}
 
 /* the tab bar and Back */
 #mTabs{display:none}
@@ -178,7 +178,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .dlist .peek .meta,#stage.m .dlist .peek p{flex:1 1 100%;font-size:13px}
 
 /* ---------- the duel ---------- */
-#stage.m #scene{background:url(../assets/scenes/shop-m.jpg) var(--gox,0px) var(--goy,0px)/var(--gw,390px) var(--gh,845px) no-repeat,url(../assets/scenes/shop-m.jpg) center/cover;background-color:#2b170c}
+#stage.m #scene{background:url(../assets/scenes/shop-m2.jpg) var(--gox,0px) var(--goy,0px)/var(--gw,390px) var(--gh,845px) no-repeat,url(../assets/scenes/shop-m2.jpg) center/cover;background-color:#2b170c}
 #stage.m #gl{width:var(--gw,390px);height:var(--gh,845px);inset:auto;left:var(--gox,0px);top:var(--goy,0px)}
 #stage.m #inspect{display:none!important}
 /* the computer: a bar at the top with its hand under it; you: a bar at the bottom */
@@ -583,3 +583,9 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .a2hs span{padding-bottom:4px}
 #stage.m .a2hs small{color:rgba(255,255,255,.62);letter-spacing:.1em;margin-top:3px}
 #stage.m .a2step svg.ii{display:inline-block;width:17px;height:17px;vertical-align:-3px;margin:0 2px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round}
+
+/* upright phones: while a chain is open, its strip takes the prompt's spot above the board (or on the center line on short phones), so it
+   never covers the computer's hand (Zack, 2026-11-25: "when a card is resolving, the noti fully covers the opponents hand"); the prompt
+   waits until the chain resolves, and your options are the buttons above your hand */
+#stage.m:not(.ml) .chainp{top:var(--py,var(--midy,380px));translate:0 -50%;padding:5px 8px}
+#stage.m:not(.ml) #s-duel.chaining .prompt{visibility:hidden}

@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=52';
-import * as S from './sfx.js?v=52';
+import { Table } from './table.js?v=54';
+import * as S from './sfx.js?v=54';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -29,7 +29,9 @@ const PHONE = FORCE_M || /[?&]phone\b/.test(location.search) || (TOUCH && Math.m
 // version on mobile is literally just the web ui. it needs to match the mobile ui but be formatted for landscape")
 const uprightNow = () => FORCE_M || innerHeight >= innerWidth;
 const MOBILE = PHONE;
-let LAND = PHONE && !uprightNow();
+// sideways phones were tried and set aside (Zack, 2026-11-25: "the landscape view looks super janky right now, lets just stick to upright"):
+// LAND stays false and a phone held sideways sees "Turn your phone upright" (#rotate); the #stage.ml styles remain for a later try
+let LAND = false;
 let LG = { cx: 195 };     // landscape: the board's middle, for the hands
 let SW = 1920, SH = 1080;
 const MV = { w: 390, h: 845 };            // the upright render (1080x2340) drawn at the phone's width
@@ -62,7 +64,7 @@ function switchLayout() {
 }
 function placeMid() { try { if (!table) return; const p = table.project(new (table.camera.position.constructor)(0, 0, 0)); stage.style.setProperty('--midy', Math.round(p.y) + 'px'); } catch (e) { /* no table yet */ } }
 function fit() {
-  if (PHONE && !uprightNow() !== LAND) { LAND = !LAND; switchLayout(); }
+  if (PHONE) { document.documentElement.classList.toggle('sideways', !uprightNow()); document.documentElement.classList.add('m'); if (!uprightNow()) return; }   // sideways: nothing to lay out until it turns back
   if (!MOBILE) { stage.style.width = stage.style.height = ''; }
   if (MOBILE) { if (LAND) { scale = innerHeight / 390; SH = 390; SW = Math.round(innerWidth / scale); } else { scale = innerWidth / 390; SW = 390; SH = Math.round(innerHeight / scale); }
     stage.style.width = SW + 'px'; stage.style.height = SH + 'px'; stage.style.setProperty('--sw', SW + 'px');
@@ -123,7 +125,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=52');
+const W = new Worker('js/worker.js?v=54');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -689,8 +691,11 @@ async function pump() {
 }
 const side = p => p === 0 ? 1 : -1;
 const handPoint = (p, u) => {
-  if (p === 0) { const el = u != null && $(`#hand [data-u="${u}"]`); const x = el ? parseFloat(el.style.left) + 70 + (960 - 550) : 960; return table.screenToWorld(x, 1020, 1.5); }
-  return table.screenToWorld(960, 40, 1.5);
+  const sr = stage.getBoundingClientRect(), mid = MOBILE ? (LAND ? LG.cx : SW / 2) : 960;
+  const at = el => { const r = el.getBoundingClientRect(); return { x: (r.left + r.width / 2 - sr.left) / scale, y: (r.top + r.height * 0.45 - sr.top) / scale }; };
+  if (p === 0) { const el = u != null && $(`#hand [data-u="${u}"]`); const pt = el ? at(el) : { x: mid, y: MOBILE ? SH - 110 : 1020 }; return table.screenToWorld(pt.x, Math.min(pt.y, (MOBILE ? SH : 1080) - 30), MOBILE ? 1.1 : 1.5); }
+  const cs = $$('#ohand .card'), el = cs[cs.length - 1]; const pt = el ? at(el) : { x: mid, y: MOBILE ? 40 : 40 };
+  return table.screenToWorld(pt.x, Math.max(pt.y, 12), MOBILE ? 1.1 : 1.5);
 };
 const pileKind = z => ({ deck: 'deck', deckTop: 'deck', extra: 'extra', gy: 'gy', ban: 'ban' }[z]);
 const waitMs = ms => sleep(ms * SPEED[SET.speed]);
@@ -755,7 +760,7 @@ async function animMove(ev) {
   if (['m', 'st', 'fz'].includes(ev.to)) {
     const up = ev.pos !== 'set';
     S.play(up ? 'place' : 'set');
-    await table.place(ev.u, toSide, ev.to === 'fz' ? 'fz' : ev.to, ev.zi, { id: ev.id, up, pos: ev.pos, from, fromUp: ev.from === 'hand' && p === 0 ? true : up, dur: 460 });
+    await table.place(ev.u, toSide, ev.to === 'fz' ? 'fz' : ev.to, ev.zi, { id: ev.id, up, pos: ev.pos, from, fromUp: ev.from === 'hand' && p === 0 ? true : up, dur: ev.from === 'hand' ? 640 : 460 });
     return;
   }
   if (ev.to === 'hand') {
@@ -821,7 +826,7 @@ function renderHands(newU) {
     d.style.backgroundImage = `url(${artUrl(c.id)})`; d.style.left = (x0 + i * step) + 'px';
     const rot = (i - (n - 1) / 2) * Math.min(MOBILE ? 3 : 4, 24 / n); d.style.transform = `rotate(${rot}deg)`; d.style.zIndex = i + 1;
   });
-  for (const d of old.values()) d.remove();
+  for (const d of old.values()) { d.classList.add('gone'); d.removeAttribute('data-u'); setTimeout(() => d.remove(), 240); }
   $('#hcMe').textContent = n;
   const on = D.disp.p[1].hand.length, oe = $('#ohand'); oe.innerHTML = '';
   const os = MOBILE ? Math.min(20, 160 / Math.max(1, on)) : Math.min(92, 520 / Math.max(1, on)), ox = MOBILE ? (LAND ? LG.cx : SW / 2) - (os * (on - 1)) / 2 - 13 : 300 - (os * (on - 1)) / 2 - 48;
@@ -849,7 +854,7 @@ async function banner(txt, sub, op) {
 }
 async function turnBanner() { S.play('turn'); $('#dial').classList.toggle('op', D.tp !== 0); await banner(D.tp === 0 ? 'Your Turn' : "Computer's Turn", `Turn ${D.turn}`, D.tp !== 0); }
 function renderChain() {
-  const el = $('#chainp'); if (!D.chain.length) { el.classList.add('hidden'); return; }
+  const el = $('#chainp'); $('#s-duel').classList.toggle('chaining', !!D.chain.length); if (!D.chain.length) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
   el.innerHTML = `<div class="ph">Chain · resolves top down</div>` + [...D.chain].reverse().map(L => `<div class="link ${L.p === 0 ? '' : 'op'} ${L.res ? 'res' : ''}" data-id="${L.id}"><div class="no disp">${L.link}</div><div class="card" style="background-image:url(${artUrl(L.id)})"></div><div><div class="t">${esc(L.name)}</div><div class="s">${L.p === 0 ? 'You' : 'Computer'}${L.res ? ' · resolving' : ''}</div></div></div>`).join('');
 }
@@ -997,6 +1002,7 @@ function cardClick(u, el) {
   const pr = D.prompt; if (!pr) return;
   if (pr.type === 'pick') { pickU(u); return; }
   if (D.zoneMode) { cancelZone(); return; }
+  if (D.menu && D.menu.u === u) { closeMenu(); S.play('click'); return; }
   const os = D.byU && D.byU.get(u);
   if ((!os || !os.length) && pr.type === 'respond' && D.tp === 0) { D.pendingU = u; send(['pass']); return; }
   if (!os || !os.length) { S.play('error'); return; }
@@ -1013,6 +1019,7 @@ function fieldClick(h) {
   if (!h) { closeMenu(); return; }
   if (h.u != null) {
     if (pr.type === 'pick') { pickU(h.u); return; }
+    if (D.menu && D.menu.u === h.u) { closeMenu(); S.play('click'); return; }
     const os = D.byU && D.byU.get(h.u);
     if (!os && pr.type === 'respond' && D.tp === 0) { D.pendingU = h.u; send(['pass']); return; }
     if (!os) { showCard(h.u); return; }
