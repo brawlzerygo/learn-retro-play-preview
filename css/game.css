@@ -786,3 +786,9 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 @media (prefers-reduced-motion:reduce){.screen.on,.screen.leaving,.veil,.dlg,.dlist,.hintp,.logp,.amenu,.dial-menu,.czoom,.toast,.mydecks,.msheet{animation:none!important}}
 .mdtabs,.mdtools,.mdfoot{display:none}
 .a2hs{display:none}
+
+/* the deck screen before your deck is chosen: the panel asks for it; Duel waits for both decks */
+.dk-side .dk-pick{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;justify-content:center;padding:40px 50px;background:#121419;border-radius:2px}
+.dk-side .dk-pick h3{font-size:56px;margin:6px 0 10px}
+.dk-side .dk-pick p{font-size:21px;max-width:560px}
+#duelGo.off{opacity:.45;filter:grayscale(.6)}

@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=46';
-import * as S from './sfx.js?v=46';
+import { Table } from './table.js?v=47';
+import * as S from './sfx.js?v=47';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -121,7 +121,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=46');
+const W = new Worker('js/worker.js?v=47');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -135,7 +135,7 @@ const BACK = { settings: 'title', format: 'title', deck: 'format', stats: 'title
 async function goBack() { if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; if (BACK[cur]) show(BACK[cur]); }
 $('#gBack').onclick = () => { S.unlock(); goBack(); };
 $('#mTabs').onclick = async e => { const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === cur) return; S.unlock(); if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; show(b.dataset.tab); };
-function show(s) { if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') renderDecks(); if (s === 'format') renderFormats(); if (s === 'build') { B.howto = undefined; readyP.then(openBuilder); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
+function show(s) { const prevScr = cur; if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') { if (prevScr !== 'deck') { PK = { you: false, cpu: false }; pickingOpp = false; SEL.mtab = 'you'; } renderDecks(); } if (s === 'format') renderFormats(); if (s === 'build') { B.howto = undefined; readyP.then(openBuilder); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
 // browsers keep a page silent until the first click, tap or key press (hovering doesn't count): turn sound on at the very first one, anywhere
 for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, () => S.unlock(), { capture: true, passive: true });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { S.unlock(); show(b.dataset.go); } const h = e.target.closest('[data-href]'); if (h) open(h.dataset.href, '_blank'); });
@@ -183,7 +183,7 @@ function chooseFmt(f) { if (!readyDecks(f).length) { toast('No deck in this form
 $$('.fmt').forEach(x => { x.onclick = () => { S.unlock(); chooseFmt(x.dataset.fmt); }; x.onmouseenter = () => focusFmt(x.dataset.fmt); x.onmouseleave = () => focusFmt(null); });
 const TIERS = { edison: ['Best', 'Competitive', 'Rogue', 'Contender', 'Casual'], goat: ['A', 'B', 'C', 'D', 'T'] };
 const TIERNAME = { A: 'Tier A', B: 'Tier B', C: 'Tier C', D: 'Tier D', T: 'Tournament' };
-let pickingOpp = false;
+let pickingOpp = false, PK = { you: false, cpu: false };
 function keyCards(f, d) { // three cards to show for a deck: its strongest monsters, Extra Deck first
   const ids = [...new Set([...d.extra, ...d.main])]; const rs = ids.map(id => rec(f, id)).filter(r => r && !['spell', 'trap'].includes(r.k));
   rs.sort((a, b) => (+b.atk || 0) - (+a.atk || 0)); const out = rs.slice(0, 3).map(r => r.id); while (out.length < 3 && ids[out.length]) out.push(ids[out.length]); return out;
@@ -203,28 +203,34 @@ async function renderDecks() {
   const sel = pickingOpp ? s.cpu : s.you;
   const why = r => r.problems && r.problems.length ? ' · not legal yet' : r.missing.length ? ` · ${r.missing.length} card${r.missing.length > 1 ? 's' : ''} not playable yet` : '';
   $('#deckList').innerHTML = (list.length ? list : []).map(d => { const r = info.get(d.key); const k = keyCards(f, d)[0];
-    return `<div class="dk ${d.key === sel ? 'sel' : ''} ${pickingOpp ? 'opp' : ''} ${r.ready ? '' : 'off'}" data-deck="${esc(d.key)}"><div class="strip" style="background-image:url(${artUrl(k)})"></div><div><div class="nm cap">${esc(d.name)}</div><div class="pl">${d.main.length} cards${d.extra.length ? ` · ${d.extra.length} in the ${f === 'goat' ? 'Fusion' : 'Extra'} Deck` : ''}${why(r)}</div></div><div class="tags"><span class="tg ${d.tier === 'my' || d.tier === TIERS[f][0] ? 'hot' : ''}">${d.tier === 'my' ? 'Yours' : esc(TIERNAME[d.tier] || d.tier)}</span>${r.ready ? '' : `<span class="tg">${r.problems && r.problems.length ? 'Fix' : 'Soon'}</span>`}</div></div>`; }).join('')
+    return `<div class="dk ${d.key === sel && PK[pickingOpp ? 'cpu' : 'you'] ? 'sel' : ''} ${pickingOpp ? 'opp' : ''} ${r.ready ? '' : 'off'}" data-deck="${esc(d.key)}"><div class="strip" style="background-image:url(${artUrl(k)})"></div><div><div class="nm cap">${esc(d.name)}</div><div class="pl">${d.main.length} cards${d.extra.length ? ` · ${d.extra.length} in the ${f === 'goat' ? 'Fusion' : 'Extra'} Deck` : ''}${why(r)}</div></div><div class="tags"><span class="tg ${d.tier === 'my' || d.tier === TIERS[f][0] ? 'hot' : ''}">${d.tier === 'my' ? 'Yours' : esc(TIERNAME[d.tier] || d.tier)}</span>${r.ready ? '' : `<span class="tg">${r.problems && r.problems.length ? 'Fix' : 'Soon'}</span>`}</div></div>`; }).join('')
     || (SEL.tier === 'my' ? '<div class="mute" style="font-size:20px;padding:20px">No decks of your own yet. Build one in the Deck Builder.</div>' : '');
   $('#deckList').onclick = e => { const el = e.target.closest('[data-deck]'); if (!el) return; const r = info.get(el.dataset.deck);
     if (el.classList.contains('off')) { S.play('error'); toast(r.problems && r.problems.length ? r.problems[0] : 'This deck has cards the engine can\'t play yet: ' + r.missing.slice(0, 4).join(', ') + (r.missing.length > 4 ? '…' : '')); return; }
-    if (pickingOpp) { s.cpu = el.dataset.deck; if (!MOBILE) pickingOpp = false; } else s.you = el.dataset.deck; saveSel(); S.play('click'); renderDecks(); };
+    if (pickingOpp) { s.cpu = el.dataset.deck; PK.cpu = true; if (!MOBILE) pickingOpp = false; }
+    else { s.you = el.dataset.deck; PK.you = true; if (!PK.cpu) { if (MOBILE) SEL.mtab = 'opp'; else pickingOpp = true; } }
+    saveSel(); S.play('click'); renderDecks(); if (pickingOpp) $('#deckList').scrollTop = 0; };
   const you = deckByKey(f, s.you), cpu = deckByKey(f, s.cpu);
   if (!you || !cpu) { $('#deckSide').innerHTML = ''; return; }
   const kc = keyCards(f, you);
   $('#deckSide').innerHTML = `<div class="dk-fan">${kc.map((id, i) => `<div class="card" style="background-image:url(${artUrl(id)});left:${170 + i * 150}px;${i === 1 ? 'top:-4px;z-index:2;box-shadow:0 20px 50px rgba(0,0,0,.8)' : `transform:rotate(${i ? 10 : -10}deg)`}"></div>`).join('')}</div>
     <div class="ph">Your deck · ${you.tier === 'my' ? 'Yours' : esc(TIERNAME[you.tier] || you.tier)} · ${f === 'goat' ? 'Goat' : 'Edison'}</div><h3 class="disp">${esc(you.name)}</h3>
     <p>${you.main.length} cards in the Main Deck${you.extra.length ? `, ${you.extra.length} in the ${f === 'goat' ? 'Fusion' : 'Extra'} Deck` : ''}.${you.credit ? ' List: ' + esc(you.credit) + '.' : ''}</p>
-    <div class="row"><button class="gb sm pri" id="seeList"><svg><use href="#i-list"/></svg>See the full deck list<span class="key">L</span><span class="shine"></span></button><button class="gb sm" id="seeOpp"><svg><use href="#i-list"/></svg>Computer's list<span class="shine"></span></button></div>
-    <div class="row"><span class="lb cap">Opponent</span><div style="display:flex;align-items:center;gap:12px;font-size:22px"><div class="card" style="width:50px;height:73px;background-image:url(${artUrl(keyCards(f, cpu)[0])})"></div><b class="cap">${esc(cpu.name)}</b></div>
-      <button class="gb sm" id="oppPick" style="margin-left:auto"><svg><use href="#i-cards"/></svg>${pickingOpp ? 'Picking…' : 'Change'}<span class="shine"></span></button><button class="gb sm" id="oppRand">Random<span class="shine"></span></button></div>
+    <div class="row"><button class="gb sm pri" id="seeList"><svg><use href="#i-list"/></svg>See the full deck list<span class="key">L</span><span class="shine"></span></button><button class="gb sm" id="seeOpp" ${PK.cpu ? '' : 'disabled'}><svg><use href="#i-list"/></svg>Computer's list<span class="shine"></span></button></div>
+    <div class="row"><span class="lb cap">Opponent</span><div style="display:flex;align-items:center;gap:12px;font-size:22px">${PK.cpu ? `<div class="card" style="width:50px;height:73px;background-image:url(${artUrl(keyCards(f, cpu)[0])})"></div><b class="cap">${esc(cpu.name)}</b>` : `<span class="mute">${pickingOpp ? 'Pick it from the list' : 'Not chosen yet'}</span>`}</div>
+      <button class="gb sm" id="oppPick" style="margin-left:auto"><svg><use href="#i-cards"/></svg>${pickingOpp ? 'Picking…' : PK.cpu ? 'Change' : 'Choose'}<span class="shine"></span></button><button class="gb sm" id="oppRand">Random<span class="shine"></span></button></div>
     <div class="row" style="align-items:flex-start"><span class="lb cap" style="margin-top:14px">Computer</span><div><div class="seg" id="lvl">${LEVELS.map(([k, n]) => `<button class="gb sm ${SEL.level === k ? 'pri' : ''}" data-l="${k}">${n}<span class="shine"></span></button>`).join('')}</div>
       <div class="mute" style="font-size:16px;margin-top:10px;max-width:600px">${esc(LEVELS.find(l => l[0] === SEL.level)[2])}</div></div></div>`;
+  if (!PK.you) $('#deckSide').insertAdjacentHTML('beforeend', `<div class="dk-pick"><div class="ph">Step 1 of 2</div><h3 class="disp">Choose your deck</h3><p>Pick a deck from the list on the left. Then pick the computer's deck, and the computer's level.</p></div>`);
+  const ready = PK.you && PK.cpu; $('#duelGo').classList.toggle('off', !ready);
   if (MOBILE) {
     const thumb = d => `<i style="background-image:url(${artUrl(keyCards(f, d)[0])})"></i>`;
-    $('#mdTabs').innerHTML = `<button class="${pickingOpp ? '' : 'on'}" data-mt="you">${thumb(you)}<span><small>Your deck</small>${esc(you.name)}</span></button><button class="${pickingOpp ? 'on op' : ''}" data-mt="opp">${thumb(cpu)}<span><small>Opponent</small>${esc(cpu.name)}</span></button>`;
+    const tb = (seat, d, label) => PK[seat] ? `${thumb(d)}<span><small>${label}</small>${esc(d.name)}</span>` : `<i class="empty"></i><span><small>${label}</small>Choose</span>`;
+    $('#mdTabs').innerHTML = `<button class="${pickingOpp ? '' : 'on'}" data-mt="you">${tb('you', you, 'Your deck')}</button><button class="${pickingOpp ? 'on op' : ''}" data-mt="opp">${tb('cpu', cpu, 'Opponent')}</button>`;
     $('#mdTabs').onclick = e => { const b = e.target.closest('[data-mt]'); if (!b) return; SEL.mtab = b.dataset.mt; S.play('click'); renderDecks(); $('#deckList').scrollTop = 0; };
     const cur2 = pickingOpp ? cpu : you;
-    $('#mdTools').innerHTML = `<button class="gb sm" id="mdList"><svg><use href="#i-list"/></svg>See ${pickingOpp ? "the computer's" : 'your'} deck list<span class="shine"></span></button>${pickingOpp ? `<button class="gb sm" id="mdRand">Random<span class="shine"></span></button>` : ''}`;
+    const chosen = PK[pickingOpp ? 'cpu' : 'you'];
+    $('#mdTools').innerHTML = `<button class="gb sm" id="mdList" ${chosen ? '' : 'disabled'}><svg><use href="#i-list"/></svg>See ${pickingOpp ? "the computer's" : 'your'} deck list<span class="shine"></span></button>${pickingOpp ? `<button class="gb sm" id="mdRand">Random<span class="shine"></span></button>` : ''}`;
     $('#mdList').onclick = () => deckList(f, cur2, pickingOpp ? "The computer's deck" : 'Your deck');
     if ($('#mdRand')) $('#mdRand').onclick = () => $('#oppRand').click();
     $('#mdFoot').innerHTML = `<div class="lvls">${LEVELS.map(([k, n]) => `<button class="${SEL.level === k ? 'on' : ''}" data-l="${k}">${n}</button>`).join('')}</div>`;
@@ -233,10 +239,10 @@ async function renderDecks() {
   $('#seeList').onclick = () => deckList(f, you, 'Your deck');
   $('#seeOpp').onclick = () => deckList(f, cpu, "The computer's deck");
   $('#oppPick').onclick = () => { pickingOpp = !pickingOpp; S.play('click'); renderDecks(); };
-  $('#oppRand').onclick = () => { const o = ok.filter(n => n !== s.you); s.cpu = o[Math.floor(Math.random() * o.length)] || s.you; pickingOpp = false; saveSel(); S.play('shuffle'); renderDecks(); };
+  $('#oppRand').onclick = () => { const o = ok.filter(n => n !== s.you); s.cpu = o[Math.floor(Math.random() * o.length)] || s.you; pickingOpp = false; PK.cpu = true; if (MOBILE) SEL.mtab = 'opp'; saveSel(); S.play('shuffle'); renderDecks(); };
   $('#lvl').onclick = e => { const b = e.target.closest('[data-l]'); if (b) { SEL.level = b.dataset.l; saveSel(); S.play('click'); renderDecks(); } };
 }
-$('#duelGo').onclick = () => { S.unlock(); startDuel(); };
+$('#duelGo').onclick = () => { S.unlock(); if (!(PK.you && PK.cpu)) { S.play('error'); toast(!PK.you ? 'Choose your deck first.' : "Choose the computer's deck first."); return; } startDuel(); };
 // the whole list of a deck: Main Deck by card type, then the Extra (Fusion) Deck, with counts; hover a card to read it
 function deckList(f, d, title) {
   closeDeckList(); S.play('click');

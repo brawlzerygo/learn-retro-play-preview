@@ -562,3 +562,15 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .a2step>b{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--acc);color:#140a04;font:italic 900 17px 'Barlow Condensed'}
 #stage.m .a2step span{flex:1}
 #stage.m .a2step svg{width:28px;height:28px;flex:none;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#stage.m .mdtabs button i.empty{background:repeating-linear-gradient(45deg,#2a2f37 0 4px,#22262d 4px 8px);border:1px dashed rgba(255,255,255,.25)}
+#stage.m .mdtabs button:not(.on) span{color:#9aa0a8}
+
+/* Add to home screen, in the game's own look (Zack, 2026-11-25: "spruce up the add to home screen button to look cleaner and match our
+   branding"): a slanted Broadcast slab like the other buttons, the icon on an orange tag, the label in the display face */
+#stage.m .a2hs{isolation:isolate;border:0;background:none;height:54px;padding:0 16px 0 10px;gap:12px;border-radius:0}
+#stage.m .a2hs::before{content:"";position:absolute;inset:0;z-index:-1;transform:skewX(-10deg);border-radius:3px;background:linear-gradient(90deg,#20242b,#191c22);box-shadow:inset 0 -3px 0 var(--acc),0 8px 18px rgba(0,0,0,.45)}
+#stage.m .a2hs svg{width:34px;height:34px;padding:6px;border-radius:2px;transform:skewX(-10deg);background:var(--acc);stroke:#140a04;stroke-width:2.2}
+#stage.m .a2hs span{font-size:20px;letter-spacing:.04em}
+#stage.m .a2hs small{font:800 11px 'Barlow Condensed';letter-spacing:.14em;text-transform:uppercase;color:var(--acc-hi);margin-top:2px}
+#stage.m .a2hs::after{content:"";margin-left:auto;width:9px;height:9px;border-top:2.5px solid rgba(255,255,255,.5);border-right:2.5px solid rgba(255,255,255,.5);transform:rotate(45deg)}
+#stage.m .a2hs:active::before{background:#262b33}
