@@ -849,3 +849,11 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 #stage.m .coin .cf i{width:92px;height:92px}
 #stage.m .coin .cring text{font-size:14px}
 .coin .cf i::before{background-size:138% auto;background-position:50% 40%;-webkit-mask:radial-gradient(circle,#000 66%,transparent 76%);mask:radial-gradient(circle,#000 66%,transparent 76%)}
+
+/* flying cards turn over in 3D: two faces on one inner card */
+.flyc{background:none!important;box-shadow:none;perspective:700px}
+.flyc .fin{position:absolute;inset:0;transform-style:preserve-3d}
+.flyc .fin i{position:absolute;inset:0;border-radius:5px;background:center/cover;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 14px 30px rgba(0,0,0,.6)}
+.flyc .fin i.bk{transform:rotateY(180deg)}
+/* the computer's hand: smooth edges on the turned card backs */
+.ohand .card{border-radius:3px;backface-visibility:hidden;-webkit-backface-visibility:hidden;outline:1px solid transparent;background-size:cover;background-position:center;box-shadow:0 3px 8px rgba(0,0,0,.55),0 0 0 .5px rgba(0,0,0,.6);will-change:transform}

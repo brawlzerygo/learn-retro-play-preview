@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=63';
-import * as S from './sfx.js?v=63';
+import { Table } from './table.js?v=64';
+import * as S from './sfx.js?v=64';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -126,7 +126,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=63');
+const W = new Worker('js/worker.js?v=64');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -773,33 +773,38 @@ async function anim(ev) {
 function stageBox(r) { const sr = stage.getBoundingClientRect(); return { x: (r.left - sr.left) / scale, y: (r.top - sr.top) / scale, w: r.width / scale, h: r.height / scale }; }
 function pileBox(sd, kind) { const c = table.pileTop(sd, kind), q = table.project(c), e = table.project(c.clone().setX(c.x + table.CW / 2)); const w = Math.abs(e.x - q.x) * 2; return { cx: q.x, cy: q.y, w }; }
 // a flat card flying over everything: from a box (stage pixels) to a centre point and width, turning by rot, its picture changing halfway
-async function fly2D(b, to, img, o = {}) {
+// flying cards (Zack, 2026-11-25: "make sure the gameplay is extremely smooth when cards are in the hands, being played"): both pictures are
+// loaded before the card moves, so nothing pops in mid-flight, and a card that changes sides turns over in 3D on the way rather than
+// swapping its picture. The flight is one eased arc; a draw first lifts off the top of the Deck.
+const imgReady = new Map();
+function preload(src) {
+  if (!src) return Promise.resolve(); if (imgReady.has(src)) return imgReady.get(src);
+  const pr = new Promise(res => { const im = new Image(); im.onload = im.onerror = () => res(); im.src = src; if (im.decode) im.decode().then(res, res); });
+  imgReady.set(src, pr); return pr;
+}
+async function fly2D(b, to, o = {}) {
+  const a1 = o.from || 'img/back.webp', a2 = o.to || a1, flip = a2 !== a1;
+  await Promise.race([Promise.all([preload(a1), preload(a2)]), sleep(220)]);
   const fly = document.createElement('div'); fly.className = 'flyc';
-  Object.assign(fly.style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px', backgroundImage: `url(${img})` }); $('#layer').appendChild(fly);
-  const dx = to.cx - (b.x + b.w / 2), dy = to.cy - (b.y + b.h / 2), sc = to.w / b.w, rot = o.rot || 0, dur = (o.dur || 420) * SPEED[SET.speed];
-  const a = fly.animate([{ transform: `translate(0,0) scale(1) rotate(0deg)` }, { transform: `translate(${dx * 0.5}px,${dy * 0.5 - (o.arc || 24)}px) scale(${(1 + sc) / 2 * 1.05}) rotate(${rot / 2}deg)`, offset: 0.5 },
-    { transform: `translate(${dx}px,${dy}px) scale(${sc}) rotate(${rot}deg)` }], { duration: dur, easing: 'cubic-bezier(.3,.7,.25,1)', fill: 'forwards' });
-  if (o.img2) setTimeout(() => { fly.style.backgroundImage = `url(${o.img2})`; }, dur * 0.5);
-  await a.finished.catch(() => {}); if (!o.keep) fly.remove(); return fly;
+  fly.innerHTML = `<div class="fin"><i style="background-image:url(${a1})"></i>${flip ? `<i class="bk" style="background-image:url(${a2})"></i>` : ''}</div>`;
+  Object.assign(fly.style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' }); $('#layer').appendChild(fly);
+  const dx = to.cx - (b.x + b.w / 2), dy = to.cy - (b.y + b.h / 2), sc = to.w / b.w, rot = o.rot || 0, dur = (o.dur || 440) * SPEED[SET.speed], arc = o.arc != null ? o.arc : 26;
+  const kf = [{ transform: 'translate(0px,0px) scale(1) rotate(0deg)', offset: 0 }];
+  if (o.lift) kf.push({ transform: `translate(0px,${-o.lift}px) scale(1.06) rotate(0deg)`, offset: 0.22, easing: 'ease-out' });
+  kf.push({ transform: `translate(${dx * 0.5}px,${dy * 0.5 - arc}px) scale(${(1 + sc) / 2 * 1.04}) rotate(${rot / 2}deg)`, offset: o.lift ? 0.6 : 0.5 });
+  kf.push({ transform: `translate(${dx}px,${dy}px) scale(${sc}) rotate(${rot}deg)`, offset: 1 });
+  const an = fly.animate(kf, { duration: dur, easing: 'cubic-bezier(.33,.66,.3,1)', fill: 'forwards' });
+  if (flip) fly.firstChild.animate([{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(0deg)', offset: o.lift ? 0.25 : 0.12 }, { transform: 'rotateY(180deg)', offset: 0.85 }, { transform: 'rotateY(180deg)' }],
+    { duration: dur, easing: 'ease-in-out', fill: 'forwards' });
+  await an.finished.catch(() => {}); if (!o.keep) fly.remove(); return fly;
 }
 async function flyFromHand(r, ev, toSide) {
   const zone = ev.to === 'fz' ? 'fz' : ev.to, up = ev.pos !== 'set', def = ev.to === 'm' && (ev.pos === 'def' || ev.pos === 'set');
-  const sr = stage.getBoundingClientRect(), x0 = (r.left - sr.left) / scale, y0 = (r.top - sr.top) / scale, w0 = r.width / scale, h0 = r.height / scale;
   const c = table.slot(toSide, zone, ev.zi), q = table.project(c), e = table.project(c.clone().setX(c.x + table.CW / 2));
-  const w1 = Math.abs(e.x - q.x) * 2, h1 = w1 * 614 / 421, opp = toSide !== 1;
-  const fly = document.createElement('div'); fly.className = 'flyc';
-  const face = ev.id != null && (up || ev.owner === 0) ? artUrl(ev.id) : 'img/back.webp';
-  Object.assign(fly.style, { left: x0 + 'px', top: y0 + 'px', width: w0 + 'px', height: h0 + 'px', backgroundImage: `url(${ev.owner === 0 && ev.id != null ? artUrl(ev.id) : 'img/back.webp'})` });
-  $('#layer').appendChild(fly);
+  const w1 = Math.abs(e.x - q.x) * 2, opp = toSide !== 1;
+  const start = ev.owner === 0 && ev.id != null ? artUrl(ev.id) : 'img/back.webp', end = up && ev.id != null ? artUrl(ev.id) : 'img/back.webp';
   S.play(up ? 'place' : 'set');
-  const dx = q.x - (x0 + w0 / 2), dy = q.y - (y0 + h0 / 2), sc = w1 / w0, rot = (def ? 90 : 0) + (opp ? 180 : 0);
-  const dur = 560 * SPEED[SET.speed];
-  const a = fly.animate([
-    { transform: 'translate(0,0) scale(1) rotate(0deg)', offset: 0 },
-    { transform: `translate(${dx * 0.5}px,${dy * 0.5 - 30}px) scale(${(1 + sc) / 2 * 1.08}) rotate(${rot / 2}deg)`, offset: 0.5 },
-    { transform: `translate(${dx}px,${dy}px) scale(${sc}) rotate(${rot}deg)`, offset: 1 }], { duration: dur, easing: 'cubic-bezier(.3,.7,.25,1)', fill: 'forwards' });
-  setTimeout(() => { fly.style.backgroundImage = `url(${up ? artUrl(ev.id) : 'img/back.webp'})`; }, dur * 0.5);
-  await a.finished.catch(() => {});
+  const fly = await fly2D(stageBox(r), { cx: q.x, cy: q.y, w: w1 }, { from: start, to: end, rot: (def ? 90 : 0) + (opp ? 180 : 0), dur: 560, arc: 30, keep: true });
   await table.place(ev.u, toSide, zone, ev.zi, { id: ev.id, up, pos: ev.pos, from: c.clone().setY(0.06), fromUp: up, fromRotY: table.pose(toSide, def), dur: 90, lift: 0 });
   fly.remove();
 }
@@ -821,7 +826,7 @@ async function animMove(ev) {
     if (el && p === 0) el.style.visibility = 'hidden'; dropHand(p, ev.u);
     if (r && r.width) {
       const k = pileKind(ev.to), shows = (k === 'gy' || k === 'ban') && ev.id != null;
-      S.play('set'); await fly2D(stageBox(r), pileBox(toSide, k), p === 0 && ev.id != null ? artUrl(ev.id) : 'img/back.webp', { img2: p === 1 && shows ? artUrl(ev.id) : null, rot: toSide === 1 ? 0 : 180, dur: 420 });
+      S.play('set'); const a1 = p === 0 && ev.id != null ? artUrl(ev.id) : 'img/back.webp'; await fly2D(stageBox(r), pileBox(toSide, k), { from: a1, to: shows ? artUrl(ev.id) : a1, rot: toSide === 1 ? 0 : 180, dur: 440 });
       bumpPile(toSide, k, +1, ev.u, ev.id); return;
     }
     from = handPoint(p, ev.u);
@@ -844,9 +849,11 @@ async function animMove(ev) {
       addHand(p, { u: ev.u, id: p === 0 ? ev.id : null });
       const el = p === 0 ? $(`#hand [data-u="${ev.u}"]`) : $$('#ohand .card').pop();
       if (el) { el.style.visibility = 'hidden'; S.play(fast ? 'deal' : 'draw');
-        await fly2D(pileBox(fromSide, pileKind(ev.from)), (() => { const b = stageBox(el.getBoundingClientRect()); return { cx: b.x + b.w / 2, cy: b.y + b.h / 2, w: b.w }; })(), 'img/back.webp',
-          { img2: p === 0 && ev.id != null ? artUrl(ev.id) : null, rot: 0, dur: fast ? 260 : 400, arc: 30 })
-          .then(() => {}); el.style.visibility = ''; }
+        // the draw lifts off the top of the Deck (the pile's top card, at its size), then flies into its own place in the hand
+        const pb = pileBox(fromSide, pileKind(ev.from)), ph = pb.w * 614 / 421, tb = stageBox(el.getBoundingClientRect());
+        await fly2D({ x: pb.cx - pb.w / 2, y: pb.cy - ph / 2, w: pb.w, h: ph }, { cx: tb.x + tb.w / 2, cy: tb.y + tb.h / 2, w: tb.w },
+          { from: 'img/back.webp', to: p === 0 && ev.id != null ? artUrl(ev.id) : 'img/back.webp', rot: fromSide === 1 ? 0 : 0, dur: fast ? 300 : 480, arc: 20, lift: fast ? 8 : 14 });
+        el.style.visibility = ''; }
       if (fast) await waitMs(40);
       return;
     }
@@ -912,9 +919,11 @@ function renderHands(newU) {
   });
   for (const d of old.values()) { d.classList.add('gone'); d.removeAttribute('data-u'); setTimeout(() => d.remove(), 240); }
   $('#hcMe').textContent = n;
-  const on = D.disp.p[1].hand.length, oe = $('#ohand'); oe.innerHTML = '';
+  const on = D.disp.p[1].hand.length, oe = $('#ohand'); /* the computer's hand keeps its cards between updates, so they slide and turn smoothly into their new places instead of being redrawn */
   const os = MOBILE ? Math.min(30, 230 / Math.max(1, on)) : Math.min(92, 520 / Math.max(1, on)), ox = MOBILE ? (LAND ? LG.cx : SW / 2) - (os * (on - 1)) / 2 - 20 : 300 - (os * (on - 1)) / 2 - 48;
-  for (let i = 0; i < on; i++) { const c = document.createElement('div'); c.className = 'card'; c.style.left = (ox + i * os) + 'px'; c.style.transform = `rotate(${(i - (on - 1) / 2) * -3}deg)`; oe.appendChild(c); }
+  while (oe.children.length > on) oe.lastElementChild.remove();
+  while (oe.children.length < on) { const c = document.createElement('div'); c.className = 'card in'; oe.appendChild(c); }
+  [...oe.children].forEach((c, i) => { c.style.left = (ox + i * os) + 'px'; c.style.transform = `rotate(${(i - (on - 1) / 2) * -3}deg) translateZ(0)`; });
   $('#hcOp').textContent = on;
 }
 $('#hand').addEventListener('mouseover', e => { const c = e.target.closest('.hc'); if (c) { const h = D && D.disp.p[0].hand.find(x => x.u === +c.dataset.u); if (h) inspect(h.id); } });
