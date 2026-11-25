@@ -612,3 +612,7 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
 .hc.play::after,.hc.pick::after{content:"";position:absolute;inset:-8px;border-radius:14px;pointer-events:none;z-index:-1;box-shadow:0 0 22px 4px var(--gs);animation:gbreath 2.4s ease-in-out infinite}
 @keyframes gspin{to{--gang:360deg}}
 @keyframes gbreath{0%,100%{opacity:.55}50%{opacity:1}}
+
+/* saved in this browser (Zack, 2026-11-24: "add a disclaimer... saved progress gets deleted when clearing cookies and other site data") */
+#s-title .savenote{position:absolute;left:110px;bottom:132px;width:760px;font:600 15px 'Atkinson Hyperlegible';color:rgba(255,255,255,.7);padding-left:12px;border-left:3px solid var(--acc)}
+.keybar .savenote2{font:600 15px 'Atkinson Hyperlegible';text-transform:none;letter-spacing:0;color:rgba(255,255,255,.65);max-width:620px;text-align:right}
