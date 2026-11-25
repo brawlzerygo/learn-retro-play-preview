@@ -16,9 +16,9 @@
 <meta name="apple-mobile-web-app-title" content="LR Play">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Atkinson+Hyperlegible+Next:wght@500;700;800&family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800;1,900&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/game.css?v=36">
-<link rel="stylesheet" href="css/rewind.css?v=36">
-<link rel="stylesheet" href="css/mobile.css?v=36">
+<link rel="stylesheet" href="css/game.css?v=42">
+<link rel="stylesheet" href="css/rewind.css?v=42">
+<link rel="stylesheet" href="css/mobile.css?v=42">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute">
@@ -53,6 +53,7 @@
 <!-- phones held upright: the game is played sideways (Zack, 2026-11-24: touch + landscape) -->
 <div id="rotate"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><b>Turn your phone upright</b><span>On a phone, Learn Retro Play is played upright.</span></div>
 <div id="stage" data-scr="title">
+  <div id="sabProbe" style="position:absolute;left:0;top:0;width:0;height:var(--sab,10px);visibility:hidden"></div>
 
   <!-- TITLE -->
   <section class="screen on" id="s-title">
@@ -134,8 +135,8 @@
     <div class="hand" id="hand"></div>
     <div class="turnm" id="turnm"><div><b class="disp" id="turnNo">1</b><span class="cap">Turn</span></div></div>
     <div class="dial op" id="dial"><div><div class="p disp" id="phaseTxt">Draw</div><div class="s cap">Phase</div></div></div>
-    <div class="lp op pn" id="lpOp"><div class="em" id="emOp"></div><div><div class="who cap" id="whoOp">Computer</div><div class="num disp" id="lpOpN">8000</div><div class="bar" id="barOp"></div></div><div class="hcnt"><b id="hcOp">0</b>Hand</div></div>
-    <div class="lp me pn" id="lpMe"><div class="em" id="emMe"></div><div><div class="who cap" id="whoMe">You</div><div class="num disp" id="lpMeN">8000</div><div class="bar" id="barMe"></div></div><div class="hcnt"><b id="hcMe">0</b>Hand</div></div>
+    <div class="lp op pn" id="lpOp"><div class="em" id="emOp"></div><div><div class="who cap" id="whoOp">Computer</div><button class="banb" id="banOp" hidden>Banished <b>0</b></button><div class="num disp" id="lpOpN">8000</div><div class="bar" id="barOp"></div></div><div class="hcnt"><b id="hcOp">0</b>Hand</div></div>
+    <div class="lp me pn" id="lpMe"><div class="em" id="emMe"></div><div><div class="who cap" id="whoMe">You</div><button class="banb" id="banMe" hidden>Banished <b>0</b></button><div class="num disp" id="lpMeN">8000</div><div class="bar" id="barMe"></div></div><div class="hcnt"><b id="hcMe">0</b>Hand</div></div>
     <div class="prompt hidden" id="prompt"></div>
     <div class="inspect pn hidden" id="inspect"></div>
     <div class="chainp pn hidden" id="chainp"></div>
@@ -187,7 +188,7 @@
 <script src="data/edison.js"></script>
 <script src="data/goat.js"></script>
 <script src="data/tokens.js"></script>
-<script type="module" src="js/game.js?v=36"></script>
+<script type="module" src="js/game.js?v=42"></script>
 <div style="position:fixed;left:50%;top:0;transform:translateX(-50%);z-index:9999;padding:2px 10px;opacity:.85;background:#ff6a1f;color:#140a04;font:800 13px/1.4 Verdana,sans-serif;letter-spacing:.12em;border-radius:3px;pointer-events:none">PREVIEW</div>
 </body>
 </html>

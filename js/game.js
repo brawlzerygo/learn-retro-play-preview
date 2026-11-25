@@ -1,10 +1,17 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=36';
-import * as S from './sfx.js?v=36';
+import { Table } from './table.js?v=42';
+import * as S from './sfx.js?v=42';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const LEAVES = '.dlg,.veil,.msheet,.dlist,.czoom,.hintp,.logp,.amenu,.dial-menu,.toast,.mydecks';
+{ const rm = Element.prototype.remove;
+  Element.prototype.remove = function () {
+    if (!REDUCED && this.isConnected && !this.dataset.leaving && this.matches && this.matches(LEAVES)) {
+      this.dataset.leaving = '1'; this.removeAttribute('id'); this.classList.add('out'); setTimeout(() => rm.call(this), 170); return; }
+    return rm.call(this); }; }
 const stage = $('#stage');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const sleep = ms => new Promise(r => setTimeout(r, document.hidden ? 0 : ms));
@@ -12,20 +19,44 @@ let scale = 1;
 // touch screens and phones (Zack, 2026-11-24: "Touch + landscape"): .touch drops hover and key prompts, .phone (a touch screen
 // where the stage shrinks below 0.6) scales the duel HUD and card text up from their corners (css/game.css)
 const TAP = () => TOUCH ? 'tap' : 'click'; // on-screen words follow the device
-const TOUCH = /[?&]touch\b/.test(location.search) || matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 && !matchMedia('(pointer: fine)').matches;
+const TOUCH = /[?&](touch|mobile|phone)\b/.test(location.search) || matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 && !matchMedia('(pointer: fine)').matches;
 /* the phone layout (Zack, 2026-11-24: "a specific mobile version/layout... doesnt need to be in landscape... could not affect the web
    experience"): phones get an upright stage 390 points wide and as tall as the screen (#stage.m, css/mobile.css), the upright Card Shop
    render and its camera, and phone screens built from the same game. Computers and tablets keep the 1920x1080 stage. ?mobile tries it. */
-const MOBILE = /[?&]mobile\b/.test(location.search) || (TOUCH && Math.min(screen.width, screen.height) < 520);
+const FORCE_M = /[?&]mobile\b/.test(location.search);
+const PHONE = FORCE_M || /[?&]phone\b/.test(location.search) || (TOUCH && Math.min(screen.width, screen.height) < 520);
+// a phone held upright gets the phone layout; held sideways it gets the landscape layout (the 1920x1080 stage with the touch pass)
+const uprightNow = () => FORCE_M || innerHeight >= innerWidth;
+let MOBILE = PHONE && uprightNow();
 let SW = 1920, SH = 1080;
 const MV = { w: 390, h: 845 };            // the upright render (1080x2340) drawn at the phone's width
-// the board sits between the computer's bar (top ~110) and your row, hand and bar (bottom ~330); on short phones (an SE) it shrinks
-// a little so nothing covers it. In the render at full size the board (with its rim) spans y 215 to 510.
-function mview() { const k = Math.min(1, (SH - 440) / 295), w = Math.round(MV.w * k), h = Math.round(MV.h * k), c = (110 + SH - 330) / 2;
-  return { w, h, ox: Math.round((MV.w - w) / 2), oy: Math.round(Math.min(0, c - 362 * k)), dpr: Math.min(3, (window.devicePixelRatio || 1) * scale) }; }
+// the board on phones (Zack, 2026-11-24: "a bit too much dead space between my hand and the board, lets make the board a bit bigger"):
+// as wide as the phone allows (up to 106% of the render) and sitting just above the row (turn, Hint, phase) over your hand.
+// In the render at full size the board with its rim spans y 215 to 510. The prompt and chain strip sit above it when there is room;
+// on short phones (an SE) the board shrinks to fit under the computer's hand instead.
+const sabPx = () => { const pr = $('#sabProbe'); return pr ? pr.offsetHeight : 10; };
+function mview() {
+  const rowTop = SH - sabPx() - ROW_B - 48, bottom = rowTop - 10;
+  let k = Math.min(1.06, (bottom - 205) / 295); if (k < 0.9) k = Math.min(1.06, (bottom - 112) / 295);
+  const w = Math.round(MV.w * k), h = Math.round(MV.h * k);
+  return { w, h, ox: Math.round((MV.w - w) / 2), oy: Math.round(bottom - 510 * k), dpr: Math.min(3, (window.devicePixelRatio || 1) * scale) }; }
+const ROW_B = 252, HW = 96;   // the row's distance above the safe bottom edge, and a hand card's width (css/mobile.css --row, .hc)
+function switchLayout() {
+  stage.classList.toggle('m', MOBILE); document.documentElement.classList.toggle('m', MOBILE);
+  try {
+    closeSheet(); if (typeof closeCardZoom === 'function') closeCardZoom();
+    if (table) rebuildTable();
+    if (cur === 'build' && B.deck) renderBuilder(); if (cur === 'deck') renderDecks();
+  } catch (e) { /* first call, before the game is set up */ }
+}
+function placeMid() { try { if (!table) return; const p = table.project(new (table.camera.position.constructor)(0, 0, 0)); stage.style.setProperty('--midy', Math.round(p.y) + 'px'); } catch (e) { /* no table yet */ } }
 function fit() {
+  if (PHONE && uprightNow() !== MOBILE) { MOBILE = !MOBILE; switchLayout(); }
+  if (!MOBILE) { stage.style.width = stage.style.height = ''; }
   if (MOBILE) { scale = innerWidth / 390; SW = 390; SH = Math.round(innerHeight / scale); stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
-    const v = mview(); for (const k of ['w', 'h', 'ox', 'oy']) stage.style.setProperty('--g' + k, v[k] + 'px'); try { if (table) table.setView(v); } catch (e) { /* the table isn't made yet */ } }
+    const v = mview(); for (const k of ['w', 'h', 'ox', 'oy']) stage.style.setProperty('--g' + k, v[k] + 'px');
+    // the prompt strip: in the open band between the computer's hand and the board when there is one, else on the center line
+    const top = v.oy + 215 * v.h / MV.h; if (top - 112 >= 52) stage.style.setProperty('--py', Math.round(top - 26) + 'px'); else stage.style.removeProperty('--py'); stage.classList.toggle('mline', top - 112 < 52); try { if (table) { table.setView(v); placeMid(); } } catch (e) { /* the table isn't made yet */ } }
   else scale = Math.min(innerWidth / 1920, innerHeight / 1080);
   stage.style.transform = `translate(-50%,-50%) scale(${scale})`;
   stage.classList.toggle('m', MOBILE); document.documentElement.classList.toggle('m', MOBILE);
@@ -77,7 +108,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=36');
+const W = new Worker('js/worker.js?v=42');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -91,7 +122,7 @@ const BACK = { settings: 'title', format: 'title', deck: 'format', stats: 'title
 async function goBack() { if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; if (BACK[cur]) show(BACK[cur]); }
 $('#gBack').onclick = () => { S.unlock(); goBack(); };
 $('#mTabs').onclick = async e => { const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === cur) return; S.unlock(); if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; show(b.dataset.tab); };
-function show(s) { if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => e.classList.toggle('on', e.id === 's-' + s)); if (s === 'deck') renderDecks(); if (s === 'format') renderFormats(); if (s === 'build') { B.howto = undefined; readyP.then(openBuilder); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
+function show(s) { if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') renderDecks(); if (s === 'format') renderFormats(); if (s === 'build') { B.howto = undefined; readyP.then(openBuilder); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
 // browsers keep a page silent until the first click, tap or key press (hovering doesn't count): turn sound on at the very first one, anywhere
 for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, () => S.unlock(), { capture: true, passive: true });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { S.unlock(); show(b.dataset.go); } const h = e.target.closest('[data-href]'); if (h) open(h.dataset.href, '_blank'); });
@@ -516,9 +547,14 @@ $('#resAgain').onclick = () => startDuel();
    THE DUEL
    ===================================================================================================== */
 let table = null, camData = null, D = null; // D: the duel's client state
+const CAMS = {};
 async function ensureTable() {
   if (table) return;
-  camData = await (await fetch(MOBILE ? 'assets/scenes/shop-m-camera.json' : 'assets/scenes/shop-camera.json')).json();
+  await makeTable();
+}
+async function makeTable() {
+  const key = MOBILE ? 'shop-m' : 'shop';
+  camData = CAMS[key] || (CAMS[key] = await (await fetch(`assets/scenes/${key}-camera.json`)).json());
   table = new Table($('#gl'), camData, { tokenArt: TOKEN_ART, view: MOBILE ? mview() : undefined });
   table.speed = SPEED[SET.speed];
   table.bindPointer($('#gl'), toStage);
@@ -528,7 +564,17 @@ async function ensureTable() {
   // turn medallion and phase dial sit on the board's center line, just outside the mat
   const half = camData.board.BOARD_W / 2 + 0.62, L = table.project(new (table.camera.position.constructor)(-half, 0, 0)), R = table.project(new (table.camera.position.constructor)(half, 0, 0));
   if (!MOBILE) { Object.assign($('#turnm').style, { left: L.x + 'px', top: L.y + 'px' }); Object.assign($('#dial').style, { left: R.x + 'px', top: R.y + 'px' }); }
-  if (MOBILE) mobileDuelInput();
+  if (!MOBILE) { $('#turnm').style.removeProperty('display'); } else { $('#turnm').style.left = $('#turnm').style.top = $('#dial').style.left = $('#dial').style.top = ''; }
+  if (TOUCH) mobileDuelInput();
+  if (MOBILE) placeMid();
+}
+// turning a phone mid-duel: a fresh table (and canvas) for the new layout's camera, then every card, pile and highlight put back
+async function rebuildTable() {
+  const old = table; table = null; old.dispose();
+  const c = document.createElement('canvas'); c.id = 'gl'; $('#gl').replaceWith(c);
+  for (const el of [...badges.values()]) el.remove(); badges.clear(); for (const k in pileEls) { pileEls[k].remove(); delete pileEls[k]; }
+  await makeTable(); table.speed = SPEED[SET.speed];
+  if (D && D.view) { D.piles = {}; reconcile(D.view); renderChain(); if (D.prompt) setPrompt(D.prompt); }
 }
 async function startDuel() {
   const f = SEL.fmt, s = SEL[f];
@@ -699,7 +745,7 @@ function reconcile(v) {
 function renderHands(newU) {
   const h = D.disp.p[0].hand, n = h.length;
   // phones: 86-point cards fanned across the bottom, overlapping more as the hand grows
-  const step = MOBILE ? Math.min(68, (SW - 40 - 86) / Math.max(1, n - 1)) : Math.min(150, 900 / Math.max(1, n)), x0 = MOBILE ? SW / 2 - 43 - (step * (n - 1)) / 2 : 550 - (step * (n - 1)) / 2 - 70;
+  const step = MOBILE ? Math.min(74, (SW - 36 - HW) / Math.max(1, n - 1)) : Math.min(150, 900 / Math.max(1, n)), x0 = MOBILE ? SW / 2 - HW / 2 - (step * (n - 1)) / 2 : 550 - (step * (n - 1)) / 2 - 70;
   const el = $('#hand'); const old = new Map([...el.children].map(c => [+c.dataset.u, c]));
   h.forEach((c, i) => {
     let d = old.get(c.u); if (!d) { d = document.createElement('div'); d.className = 'hc in'; d.dataset.u = c.u; el.appendChild(d); }
@@ -725,7 +771,7 @@ function setLP(p, v, instant) {
   const step = () => { const k = Math.min(1, (performance.now() - t0) / dur); el.textContent = Math.round(from + (v - from) * k); if (k < 1) requestAnimationFrame(step); else { el.textContent = v; setTimeout(() => el.classList.remove('hit', 'heal'), 300); } };
   requestAnimationFrame(step); if (v < from) S.play('lp', { gap: 200 });
 }
-function popNum(p, txt, heal) { const d = document.createElement('div'); d.className = 'pop' + (heal ? ' heal' : ''); d.textContent = txt; Object.assign(d.style, p === 0 ? { left: '300px', top: '880px' } : { left: '1640px', top: '200px' }); $('#layer').appendChild(d); setTimeout(() => d.remove(), 1200); }
+function popNum(p, txt, heal) { const d = document.createElement('div'); d.className = 'pop' + (heal ? ' heal' : ''); d.textContent = txt; Object.assign(d.style, MOBILE ? (p === 0 ? { left: '230px', top: (SH - 150) + 'px' } : { left: '230px', top: '70px' }) : p === 0 ? { left: '300px', top: '880px' } : { left: '1640px', top: '200px' }); $('#layer').appendChild(d); setTimeout(() => d.remove(), 1200); }
 const PH = { draw: 'Draw', standby: 'Standby', main1: 'Main 1', battle: 'Battle', main2: 'Main 2', end: 'End', start: 'Draw' };
 function setPhase(ph) { $('#phaseTxt').textContent = PH[ph] || ph; $('#dial').classList.toggle('op', D.tp !== 0); if (ph !== 'start') S.play('phase', { gap: 300 }); }
 async function banner(txt, sub, op) {
@@ -753,6 +799,7 @@ function buildStats() {
 let pileEls = {};
 function pileCounts() {
   if (!D || !D.piles) return;
+  for (const [pi, s] of [[0, 1], [1, -1]]) { const pl = D.piles[s + ':ban'], n = pl ? pl.n : 0, b = $(pi === 0 ? '#banMe' : '#banOp'); if (b) { b.hidden = !n; b.querySelector('b').textContent = n; } }
   for (const s of [1, -1]) for (const k of ['deck', 'extra', 'gy', 'ban']) {
     const key = s + ':' + k, pl = D.piles[key]; let el = pileEls[key];
     if (!el) { el = document.createElement('div'); el.className = 'ct'; $('#ov').appendChild(el); pileEls[key] = el; }
@@ -784,6 +831,7 @@ $('#gl').addEventListener('mouseleave', () => {});
 
 /* ---------- prompts: what you can do right now ---------- */
 function clearInteract() {
+  if (table) table.prefer = null;
   $$('#hand .hc').forEach(c => c.classList.remove('play', 'pick', 'up')); table && (table.unglowAll(), table.lightZones([]));
   closeMenu(); $('#hand').classList.remove('low'); $('#dial').classList.remove('ready'); D.sel = null; D.zoneMode = null; D.picks = null;
   $$('#layer .dlg, #layer .veil, #layer .respond').forEach(e => e.remove());
@@ -804,12 +852,12 @@ function optsByU(pr) { const m = new Map(); for (const o of pr.opts) if (o.u != 
 function promptIdle(pr) {
   const by = optsByU(pr); D.byU = by;
   const battle = pr.text === 'Battle Phase';
-  $('#prompt').innerHTML = battle ? 'Battle Phase: pick a monster to attack with, or end the Battle Phase on the dial' : `${esc(pr.text)}: play a card, or use the phase dial to move on`;
+  $('#prompt').innerHTML = MOBILE ? (battle ? 'Battle Phase: pick an attacker, or tap Phase to end it' : `${esc(pr.text)}: play a card, or tap Phase to move on`) : battle ? 'Battle Phase: pick a monster to attack with, or end the Battle Phase on the dial' : `${esc(pr.text)}: play a card, or use the phase dial to move on`;
   $$('#hand .hc').forEach(c => c.classList.toggle('play', by.has(+c.dataset.u)));
   for (const u of by.keys()) if (table.has(u)) table.glow(u, battle ? 0xff5030 : 0xff7a30);
   if (pr.opts.some(o => o.kind === 'phase')) $('#dial').classList.add('ready');
   if (D.pendingU != null) { const u = D.pendingU; D.pendingU = null; const os = by.get(u); if (os) { const el = $(`#hand [data-u="${u}"]`); if (el) openMenu(u, os, el); else if (table.has(u)) openMenu(u, os, null, table.cardScreen(u, -1)); } }
-  if (SET.hintLimit !== 'off' && D.turn <= 2 && !D.hintShown) { D.hintShown = true; toast(`Tip: ${TAP()} a glowing card to play it. The dial on the right moves to the next phase.`, 4200); }
+  if (SET.hintLimit !== 'off' && D.turn <= 2 && !D.hintShown) { D.hintShown = true; toast(`Tip: ${TAP()} a glowing card to play it. The ${MOBILE ? 'phase button' : 'dial on the right'} moves to the next phase.`, 4200); }
 }
 function promptRespond(pr) {
   const by = optsByU(pr); D.byU = by;
@@ -832,7 +880,8 @@ function promptPick(pr) {
   const handOnly = pr.opts.every(o => o.zone === 'hand' && o.owner === 0);
   if (onField || handOnly) {
     for (const o of pr.opts) { if (table.has(o.u)) table.glow(o.u, 0x7fd3ff); const h = $(`#hand [data-u="${o.u}"]`); if (h) h.classList.add('pick'); }
-    if (pr.max > 1 || pr.min !== 1) confirmBar(pr);
+    table.prefer = new Set(pr.opts.map(o => o.u));
+    if (pr.max > 1 || pr.min !== 1 || MOBILE) confirmBar(pr);
     return;
   }
   // cards in a Deck or Graveyard: show them laid out to pick from
@@ -851,7 +900,7 @@ function promptPick(pr) {
 function togglePick(k, pr) { if (D.picks.has(k)) D.picks.delete(k); else { if (D.picks.size >= pr.max) { if (pr.max === 1) D.picks.clear(); else return; } D.picks.add(k); } S.play('click'); }
 function confirmBar(pr) {
   const box = document.createElement('div'); box.className = 'pn amenu respond'; Object.assign(box.style, { right: '36px', bottom: '120px', position: 'absolute' });
-  box.innerHTML = `<div class="ph">Chosen: <b id="pickN">0</b></div><button class="gb pri wide" data-ok disabled><svg><use href="#i-check"/></svg>Confirm<span class="key">Enter</span><span class="shine"></span></button>`;
+  box.innerHTML = `<div class="ph">Chosen: <b id="pickN">0</b></div><button class="gb pri wide" data-ok disabled><svg><use href="#i-check"/></svg><span class="cl">${MOBILE && pr.max === 1 ? 'Tap a target' : 'Confirm'}</span><span class="key">Enter</span><span class="shine"></span></button>`;
   box.onclick = e => { const b = e.target.closest('[data-ok]'); if (b && !b.disabled) send([...D.picks]); };
   $('#layer').appendChild(box);
 }
@@ -860,7 +909,9 @@ function pickU(u) {
   togglePick(o.key, pr);
   if (table.has(u)) table.glow(u, D.picks.has(o.key) ? 0xff7a30 : 0x7fd3ff);
   const h = $(`#hand [data-u="${u}"]`); if (h) { h.classList.toggle('play', D.picks.has(o.key)); h.classList.toggle('pick', !D.picks.has(o.key)); }
-  if (pr.max === 1 && pr.min === 1) { send([o.key]); return true; }
+  if (pr.max === 1 && pr.min === 1 && !MOBILE) { send([o.key]); return true; }
+  // phones: a single target waits for Confirm, which names the card, so a mis-tap never resolves anything
+  if (MOBILE && pr.max === 1) { for (const x of pr.opts) if (x.key !== o.key && table.has(x.u)) table.glow(x.u, 0x7fd3ff); const b = $('#layer [data-ok]'); if (b) { const nm = D.picks.size ? (o.label || nameOfU(u)) : ''; b.querySelector('.cl').textContent = nm ? `Confirm: ${nm}` : 'Confirm'; } }
   const n = $('#pickN'); if (n) n.textContent = D.picks.size; const ok = $('#layer [data-ok]'); if (ok) ok.disabled = !(D.picks.size >= pr.min && D.picks.size <= pr.max);
   return true;
 }
@@ -884,17 +935,19 @@ function cardClick(u, el) {
   if (pr.type === 'respond' && os.length === 1) { send([os[0].key]); return; }
   openMenu(u, os, el);
 }
+// a card you can't act on right now: show what it is (your own Set cards included; the engine sends their names to you only)
+function showCard(u) { const id = idAnyU(u); if (id == null) { S.play('error'); return; } if (MOBILE) cardSheet(id); else { inspect(id); S.play('click'); } }
 function fieldClick(h) {
   const pr = D.prompt;
   if (h && h.pile && !D.zoneMode && !(pr && pr.type === 'pick')) { pileView(h.pile.side === 1 ? 0 : 1, h.pile.kind); return; }
-  if (!pr) return;
+  if (!pr) { if (h && h.u != null) showCard(h.u); return; }
   if (D.zoneMode) { if (h && h.zone) placeInZone(h.zone); else cancelZone(); return; }
   if (!h) { closeMenu(); return; }
   if (h.u != null) {
     if (pr.type === 'pick') { pickU(h.u); return; }
     const os = D.byU && D.byU.get(h.u);
     if (!os && pr.type === 'respond' && D.tp === 0) { D.pendingU = h.u; send(['pass']); return; }
-    if (!os) { S.play('error'); return; }
+    if (!os) { showCard(h.u); return; }
     if (pr.type === 'respond' && os.length === 1) { send([os[0].key]); return; }
     const p = table.cardScreen(h.u, -1); openMenu(h.u, os, null, p);
   }
@@ -966,8 +1019,9 @@ $('#tSound').onclick = () => { SET.muted = !SET.muted; S.setMuted(SET.muted); sa
 $('#tLog').onclick = () => {
   const old = $('#logp'); if (old) { old.remove(); return; } S.play('click');
   const p = document.createElement('div'); p.className = 'pn logp'; p.id = 'logp';
-  p.innerHTML = `<div class="ph">Duel log</div><div class="lines">${D.log.map(l => `<div class="${/^— Turn/.test(l) ? 'turn' : ''}">${esc(l)}</div>`).join('')}</div>`;
+  p.innerHTML = `<button class="gb sm ico x" data-x title="Close"><svg><use href="#i-x"/></svg><span class="shine"></span></button><div class="ph">Duel log</div><div class="lines">${D.log.map(l => `<div class="${/^— Turn/.test(l) ? 'turn' : ''}">${esc(l)}</div>`).join('')}</div>`;
   $('#layer').appendChild(p); const ln = p.querySelector('.lines'); ln.scrollTop = ln.scrollHeight;
+  p.querySelector('[data-x]').onclick = () => { p.remove(); S.play('click'); };
 };
 // the duel menu (Zack, 2026-11-24: "a menu/settings/quit option in the duel... adjust settings and quit to main menu during a game. will ask if youre sure")
 function duelMenu() {
@@ -998,6 +1052,7 @@ function duelMenu() {
 }
 function closeDuelMenu() { const a = $('#pauseMenu'), b = $('#pauseVeil'); if (a) { a.remove(); b && b.remove(); S.play('click'); return true; } return false; }
 $('#tMenu').onclick = duelMenu;
+$('#banMe').onclick = () => pileView(0, 'ban'); $('#banOp').onclick = () => pileView(1, 'ban');
 
 /* ---------- phone duel input (the phone layout) ----------
    Hold a card (in your hand, on the field or a pile top) to read it in a sheet that slides up; a tap still plays. */
@@ -1019,13 +1074,14 @@ let mobileBound = false;
 function mobileDuelInput() {
   if (mobileBound) return; mobileBound = true;
   let hold = null, ate = false;
-  const start = (e, idFn) => { if (e.pointerType === 'mouse' && !/[?&]mobile\b/.test(location.search)) return; const x = e.clientX, y = e.clientY;
+  const start = (e, idFn) => { if (!MOBILE || (e.pointerType === 'mouse' && !FORCE_M)) return; const x = e.clientX, y = e.clientY;
     hold = { x, y, t: setTimeout(() => { const id = idFn(); hold = null; if (id != null) { ate = true; if (navigator.vibrate) navigator.vibrate(12); cardSheet(id); } }, 430) }; };
   const cancel = () => { if (hold) clearTimeout(hold.t); hold = null; };
   const moveC = e => { if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) cancel(); };
   $('#hand').addEventListener('pointerdown', e => { const c = e.target.closest('.hc'); if (c) start(e, () => idAnyU(+c.dataset.u)); });
-  $('#gl').addEventListener('pointerdown', e => start(e, () => lastId));  // the table's own pointerdown (bound first) has just set lastId
-  for (const el of [$('#hand'), $('#gl')]) { el.addEventListener('pointermove', moveC); el.addEventListener('pointerup', cancel); el.addEventListener('pointercancel', cancel); el.addEventListener('contextmenu', e => e.preventDefault()); }
+  const duel = $('#s-duel');
+  duel.addEventListener('pointerdown', e => { if (e.target.id === 'gl') start(e, () => lastId); });  // the table's own pointerdown (on the canvas) has just set lastId
+  for (const el of [$('#hand'), duel]) { el.addEventListener('pointermove', moveC); el.addEventListener('pointerup', cancel); el.addEventListener('pointercancel', cancel); el.addEventListener('contextmenu', e => e.preventDefault()); }
   // the click that ends a hold only opened the sheet: it must not also play the card
   addEventListener('click', e => { if (ate) { ate = false; e.stopPropagation(); e.preventDefault(); } }, true);
   // tapping a chain link reads its card
@@ -1038,7 +1094,7 @@ function toast(t, ms = 2600) { const d = document.createElement('div'); d.classN
 /* ---------- hints (Zack, 2026-11-24): the strongest play and why, with a per-duel limit set in Settings ---------- */
 const hintLimit = () => SET.hintLimit === 'unlimited' ? Infinity : SET.hintLimit === 'off' ? 0 : +SET.hintLimit;
 function hintsLeft() { return D ? Math.max(0, hintLimit() - (D.hintsUsed || 0)) : 0; }
-function hintButton() { const b = $('#tHint'); if (!b) return; const n = hintsLeft(); b.innerHTML = `<svg><use href="#i-bulb"/></svg>Hint${hintLimit() === Infinity ? '' : ` <span class="left">${n} left</span>`}<span class="key">H</span><span class="shine"></span>`; b.disabled = hintLimit() === 0 || n === 0; }
+function hintButton() { const b = $('#tHint'); if (!b) return; const n = hintsLeft(); b.innerHTML = `<svg><use href="#i-bulb"/></svg>Hint${hintLimit() === Infinity ? '' : ` <span class="left"><b>${n}</b> left</span>`}<span class="key">H</span><span class="shine"></span>`; b.disabled = hintLimit() === 0 || n === 0; }
 function askHint() {
   if (!D || !D.prompt) return; if (!AUTO) { if (hintLimit() === 0) { toast('Hints are off. Turn them on in Settings.'); return; } if (!hintsLeft()) { toast('No hints left this duel.'); S.play('error'); return; } }
   S.play('click'); W.postMessage({ type: 'hint' }); $('#prompt').innerHTML = 'Thinking about your best play…';

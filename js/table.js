@@ -54,7 +54,7 @@ export class Table {
     this.onHover = () => {}; this.onClick = () => {}; this.onFrame = () => {};
     this.buildZones();
     this.loop = this.loop.bind(this); requestAnimationFrame(this.loop);
-    this.lastFrame = performance.now(); setInterval(() => { const now = performance.now(); if (now - this.lastFrame > 250) this.step(now); }, 100);
+    this.lastFrame = performance.now(); this.tick = setInterval(() => { const now = performance.now(); if (now - this.lastFrame > 250) this.step(now); }, 100);
     document.addEventListener('visibilitychange', () => { if (document.hidden) for (const tw of this.tweens.splice(0)) { tw.fn(1); tw.res(); } });
   }
 
@@ -272,6 +272,13 @@ export class Table {
     const pick = e => {
       const p = toStage(e); this.ndc(p.x, p.y); this.ray.setFromCamera(this.ptr, this.camera);
       const objs = [...[...this.cards.values()].map(c => c.m), ...[...this.piles.values()].map(p => p.m), ...this.zones.filter(z => z.visible)];
+      // while you pick a target, a tap goes to the pickable card whose middle is nearest the finger (within about a card's width),
+      // so a tap near the edge of a card never lands on its neighbour (Zack, 2026-11-24)
+      if (this.prefer && this.prefer.size) {
+        let best = null, bd = Infinity; const lim = 0.7 * Math.abs(this.project(new THREE.Vector3(this.CW, 0, 0)).x - this.project(new THREE.Vector3(0, 0, 0)).x);
+        for (const u of this.prefer) { const c = this.cards.get(u); if (!c) continue; const q = this.project(c.g.position); const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = u; } }
+        if (best != null && bd <= lim) return { u: best };
+      }
       const hit = this.ray.intersectObjects(objs, false)[0]; if (!hit) return null;
       const o = hit.object; if (o.userData.zone) return { zone: o.userData.zone };
       if (o.userData.pile) return { pile: o.userData.pile };
@@ -286,7 +293,9 @@ export class Table {
 
   // tweens advance here; a fallback clock calls it too when the browser stops sending frames (a background tab or window)
   step(now) { for (const tw of [...this.tweens]) { const k = Math.min(1, (now - tw.t0) / tw.dur); tw.fn(tw.e(k)); if (k >= 1) { this.tweens.splice(this.tweens.indexOf(tw), 1); tw.res(); } } }
+  dispose() { this.dead = true; clearInterval(this.tick); this.renderer.dispose(); }
   loop(t) {
+    if (this.dead) return;
     requestAnimationFrame(this.loop);
     const now = performance.now(); this.lastFrame = now;
     this.step(now);

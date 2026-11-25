@@ -693,14 +693,7 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
    shrinks below about 0.6, where the duel HUD, buttons and card text are scaled up from their own corner so they stay
    readable and tappable. The board and the layout stay the same. */
 #rotate{display:none}
-/* phones play upright (the phone layout, css/mobile.css): held sideways, they ask to be turned back */
-@media (orientation:landscape) and (pointer:coarse) and (max-height:520px){
-  #rotate{display:flex;position:fixed;inset:0;z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0b0c10;color:#f4f4f2;font-family:'Atkinson Hyperlegible',sans-serif;text-align:center;padding:30px}
-  #rotate svg{width:84px;height:84px;fill:none;stroke:#ff6a1f;stroke-width:1.6;stroke-linecap:round;animation:rot 2.2s ease-in-out infinite}
-  #rotate b{font:italic 900 34px 'Barlow Condensed';text-transform:uppercase}
-  #rotate span{color:#9aa0a8;font-size:16px}
-  #stage{visibility:hidden}
-}
+/* phones play upright or sideways (Zack, 2026-11-24): #rotate is no longer shown */
 @keyframes rot{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
 html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 #stage.touch{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -761,3 +754,33 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .vrow .arr{display:inline-flex;align-items:center;cursor:pointer}
 .vrow .arr svg{width:26px;height:26px;fill:currentColor;stroke:none}
 .dia{display:inline-block;width:9px;height:9px;background:currentColor;transform:rotate(45deg);margin:0 18px;vertical-align:middle;opacity:.8}
+
+/* the phase button and turn counter are one slanted slab each: no leftover rectangle outline or glow from the old round dial
+   (Zack, 2026-11-24: "the outline is rectangle but inner is diamond and its uneven. the phase button needs to be consistent") */
+.dial.dial,.dial.dial.op,.dial.dial.ready,.turnm.turnm{box-shadow:none;animation:none;background:none;border-radius:0}
+.dial.dial.op::before{border:0}
+.logp .x{position:absolute;right:14px;top:12px;width:40px;height:40px}
+.banb{display:none}
+
+/* motion (Zack, 2026-11-24: "some natural smooth motion between pages and pulling up menus"): screens slide and fade in while the old
+   one fades out; panels, dialogs and menus rise in and drop out; veils fade. Short, eased, and off when the system asks for reduced motion. */
+.screen.on{animation:scrIn .34s cubic-bezier(.2,.8,.2,1)}
+.screen.leaving{display:block;pointer-events:none;animation:scrOut .24s ease forwards;z-index:0}
+#s-duel.on{animation:scrFade .4s ease}
+@keyframes scrIn{from{opacity:0;transform:translateY(18px)}}
+@keyframes scrOut{to{opacity:0;transform:translateY(-10px)}}
+@keyframes scrFade{from{opacity:0}}
+.veil{animation:fadeIn .2s ease}
+.dlg,.dlist,.hintp,.logp,.mydecks{animation:popIn .26s cubic-bezier(.2,.8,.2,1)}
+.amenu,.dial-menu{animation:popIn .2s cubic-bezier(.2,.8,.2,1)}
+.czoom{animation:popIn .22s cubic-bezier(.2,.8,.2,1)}
+.toast{animation:toastIn .26s cubic-bezier(.2,.8,.2,1)}
+@keyframes fadeIn{from{opacity:0}}
+@keyframes popIn{from{opacity:0;transform:translateY(14px) scale(.97)}}
+@keyframes toastIn{from{opacity:0;transform:translateY(-8px)}}
+.out{pointer-events:none!important;animation:popOut .17s ease forwards!important}
+.veil.out{animation:fadeOut .17s ease forwards!important}
+@keyframes popOut{to{opacity:0;transform:translateY(10px) scale(.98)}}
+@keyframes fadeOut{to{opacity:0}}
+.mi,.gb,.vrow,.dk,.fmt{transition:transform .16s cubic-bezier(.2,.8,.2,1),background-color .16s,color .16s,opacity .16s}
+@media (prefers-reduced-motion:reduce){.screen.on,.screen.leaving,.veil,.dlg,.dlist,.hintp,.logp,.amenu,.dial-menu,.czoom,.toast,.mydecks,.msheet{animation:none!important}}

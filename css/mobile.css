@@ -2,7 +2,7 @@
    could not affect the web experience"; mock-ups in mockups/mobile/). Every rule is scoped to #stage.m (or html.m), which only phones get
    (game.js MOBILE), so computers and tablets never see any of it. The stage is 390 points wide and as tall as the screen. */
 html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
-#stage.m{--sat:max(env(safe-area-inset-top,0px),10px);--sab:max(env(safe-area-inset-bottom,0px),10px);--row:calc(var(--sab) + 268px);font-size:16px}
+#stage.m{--sat:max(env(safe-area-inset-top,0px),10px);--sab:max(env(safe-area-inset-bottom,0px),10px);--row:calc(var(--sab) + 252px);font-size:16px}
 #stage.m .key,#stage.m .keybar .kh,#stage.m .ticker,#stage.m .crumbs,#stage.m .rays,#stage.m .slab,#stage.m .slab2,#stage.m .bug,#stage.m .water,#stage.m .lamp,#stage.m .dust,#stage.m #gFull,#stage.m .bkeys{display:none!important}
 #stage.m .gb:hover{transform:none}
 #stage.m .gb{height:48px;font-size:19px;padding:0 18px;gap:10px}
@@ -307,3 +307,53 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m #s-title #mainMenu{order:3}
 #stage.m #s-title .savenote{order:4;margin-top:auto;padding-top:18px}
 #stage.m #s-title .legal{order:5;margin-top:8px;padding-top:0}
+
+/* your bar: a long deck name stops short of your Life Points (Zack, 2026-11-24) */
+#stage.m .lp .who{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:118px}
+/* the Hint button: the bulb, the word and the number left, no wider than its spot in the row */
+#stage.m #tHint{padding:0 10px;gap:5px;font-size:16px;flex:none}
+#stage.m #tHint .left{font-size:0;margin-left:2px}
+#stage.m #tHint .left b{font:900 13px 'Barlow Condensed';background:var(--acc);color:#140a04;padding:1px 6px;border-radius:2px}
+#stage.m .tools{right:136px;overflow:hidden}
+/* bigger hand cards */
+#stage.m .hc{width:96px;height:140px}
+#stage.m .hand{height:200px}
+#stage.m .hc.up{bottom:40px}
+#stage.m .logp .x{right:8px;top:8px}
+#stage.m .lp>div:nth-child(2){min-width:0}
+
+/* ---------- the duel, second pass (Zack, 2026-11-24: "take all these findings/bugs and really optimize the mobile experience as a whole") ----------
+   The prompt is a slim strip on the board's center line (the gap between the two fields), never over a zone or the computer's hand.
+   The chain strip sits where the computer's hand is, only while a chain is open. */
+#stage.m .prompt{top:var(--midy,380px);translate:-50% -50%;min-height:0;height:auto;max-width:372px;padding:4px 12px 4px 14px;font-size:12px;line-height:1.15;letter-spacing:.04em;white-space:normal;display:block;text-align:center;opacity:.96;z-index:7}
+#stage.m .prompt::before{box-shadow:inset 4px 0 0 var(--acc),0 6px 14px rgba(0,0,0,.45);background:rgba(12,14,18,.9)}
+#stage.m .prompt.wait::before{box-shadow:inset 4px 0 0 var(--opp),0 6px 14px rgba(0,0,0,.45)}
+#stage.m .prompt .pcx{font-size:11px;padding:2px 8px;margin-left:6px}
+#stage.m .chainp{top:calc(var(--sat) + 62px);z-index:8;background:none}
+#stage.m .toast{top:calc(var(--midy,380px) - 70px);font-size:14px}
+#stage.m .pop{font-size:34px;z-index:13}
+#stage.m .toast{top:calc(var(--sat) + 116px);font-size:13px;padding:7px 14px;max-width:340px;line-height:1.3}
+#stage.m .prompt{top:var(--py,var(--midy,380px))}
+#stage.m .toast{top:auto;bottom:calc(var(--sab) + 300px)}
+/* short phones: no band above the board, so the prompt is one line on the center line */
+#stage.m.mline .prompt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px;font-size:11px;padding:3px 10px}
+/* banished piles: a button in each player's bar */
+#stage.m .banb{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;margin-top:4px;height:20px;padding:0 7px;border:0;border-radius:2px;background:#2a2f37;color:#cfd3d9;font:800 10px 'Barlow Condensed';letter-spacing:.1em;text-transform:uppercase}
+#stage.m .banb[hidden]{display:none}
+#stage.m .banb b{color:var(--acc-hi);font-size:12px}
+#stage.m .lp .num{margin-top:-30px}
+/* phones: dialogs and menus are sheets, so they slide up from the bottom and back down */
+#stage.m .dlg,#stage.m .pmenu{animation:sheetUp .3s cubic-bezier(.2,.8,.2,1)}
+#stage.m .dlg.out,#stage.m .pmenu.out{animation:sheetDown .2s ease forwards!important}
+#stage.m .msheet.out{animation:sheetDown .2s ease forwards!important}
+#stage.m .dlist{animation:sheetUp .3s cubic-bezier(.2,.8,.2,1)}
+#stage.m .dlist.out{animation:sheetDown .2s ease forwards!important}
+#stage.m .amenu.mrow,#stage.m .dial-menu.mrow,#stage.m .amenu.respond{animation:rowIn .2s cubic-bezier(.2,.8,.2,1)}
+#stage.m .screen.on:not(#s-duel){animation:mScrIn .3s cubic-bezier(.2,.8,.2,1)}
+#stage.m .czoom{animation:sheetUp .26s cubic-bezier(.2,.8,.2,1)}
+#stage.m #s-build.deckview .roster,#stage.m #s-build:not(.deckview) .pool2{animation:fadeIn .2s ease}
+@keyframes sheetUp{from{transform:translateY(100%)}}
+@keyframes sheetDown{to{transform:translateY(100%)}}
+@keyframes rowIn{from{opacity:0;transform:translateY(10px)}}
+@keyframes mScrIn{from{opacity:0;transform:translateX(24px)}}
+#stage.m #s-title.leaving{display:flex}
