@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=47';
-import * as S from './sfx.js?v=47';
+import { Table } from './table.js?v=48';
+import * as S from './sfx.js?v=48';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -121,7 +121,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=47');
+const W = new Worker('js/worker.js?v=48');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -516,18 +516,21 @@ function closeCardZoom() { const z = $('#czoom'); if (z) { z.remove(); return tr
   addEventListener('beforeinstallprompt', e => { e.preventDefault(); evt = e; upd(); });
   addEventListener('appinstalled', () => { localStorage.setItem('lrplay:a2hs', 'done'); upd(); toast('Learn Retro Play is on your home screen.'); });
   upd();
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const ios = /[?&]ios\b/.test(location.search) || /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   b.onclick = async () => {
     S.unlock(); S.play('click');
     if (evt) { evt.prompt(); const r = await evt.userChoice.catch(() => null); evt = null; if (r && r.outcome === 'accepted') { localStorage.setItem('lrplay:a2hs', 'done'); upd(); } return; }
-    const step = (n, icon, html) => `<div class="a2step"><b>${n}</b><span>${html}</span>${icon ? `<svg><use href="#i-${icon}"/></svg>` : ''}</div>`;
+    const canShare = !!navigator.share;
+    const step = (n, icon, html) => `<div class="a2step"><b>${n}</b><span>${html}</span>${icon === 'share' && canShare ? `<button class="a2share" data-share title="Open the share sheet"><svg><use href="#i-share"/></svg><small>Tap</small></button>` : icon ? `<svg><use href="#i-${icon}"/></svg>` : ''}</div>`;
     const how = ios
-      ? step(1, 'share', 'Tap the <b>Share</b> button: at the bottom of the screen in Safari, or by the address bar in Chrome.') + step(2, 'addhome', 'Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.')
+      ? step(1, 'share', canShare ? 'Tap the <b>Share</b> button here (or Safari\u2019s own Share button).' : 'Tap the <b>Share</b> button: at the bottom of the screen in Safari, or by the address bar in Chrome.') + step(2, 'addhome', 'Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.')
       : step(1, 'dots', 'Open your browser’s menu, the three dots by the address bar.') + step(2, 'addhome', 'Tap <b>Install app</b> or <b>Add to Home screen</b>.');
     const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 60;
     const p = document.createElement('div'); p.className = 'pn dlg a2dlg'; p.style.zIndex = 61;
     p.innerHTML = `<h3 class="disp">Add to home screen</h3><div class="sub">Learn Retro Play opens full screen from its own icon, like an app. Free, nothing to download.</div>${how}<div class="btns"><button class="gb pri" data-x>Got it<span class="shine"></span></button></div>`;
     stage.append(v, p); const close = () => { v.remove(); p.remove(); S.play('click'); }; v.onclick = close; p.querySelector('[data-x]').onclick = close;
+    const sh = p.querySelector('[data-share]');
+    if (sh) sh.onclick = () => { S.play('click'); navigator.share({ title: 'Learn Retro Play', text: 'Duel the computer in classic Yu-Gi-Oh! formats.', url: location.href.split('?')[0] }).catch(() => {}); };
   };
 })();
 

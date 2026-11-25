@@ -574,3 +574,11 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .a2hs small{font:800 11px 'Barlow Condensed';letter-spacing:.14em;text-transform:uppercase;color:var(--acc-hi);margin-top:2px}
 #stage.m .a2hs::after{content:"";margin-left:auto;width:9px;height:9px;border-top:2.5px solid rgba(255,255,255,.5);border-right:2.5px solid rgba(255,255,255,.5);transform:rotate(45deg)}
 #stage.m .a2hs:active::before{background:#262b33}
+#stage.m .a2step .a2share{flex:none;display:flex;flex-direction:column;align-items:center;gap:1px;width:56px;height:52px;justify-content:center;border:0;border-radius:3px;background:var(--acc);color:#140a04;box-shadow:0 6px 16px -4px rgba(255,106,31,.8)}
+#stage.m .a2step .a2share svg{width:24px;height:24px;stroke:#140a04;stroke-width:2.2}
+#stage.m .a2step .a2share small{font:800 10px 'Barlow Condensed';letter-spacing:.12em;text-transform:uppercase}
+#stage.m .a2step .a2share:active{transform:scale(.95)}
+/* the home-screen button's small line reads in light grey, clear of the orange underline (Zack, 2026-11-25: "its clashing with the orange") */
+#stage.m .a2hs{height:58px}
+#stage.m .a2hs span{padding-bottom:4px}
+#stage.m .a2hs small{color:rgba(255,255,255,.62);letter-spacing:.1em;margin-top:3px}
