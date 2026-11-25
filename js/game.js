@@ -526,7 +526,7 @@ function closeCardZoom() { const z = $('#czoom'); if (z) { z.remove(); return tr
     const chromeIOS = /CriOS/.test(navigator.userAgent);
     const how = ios
       ? (chromeIOS ? step(1, 'share', 'Tap the <b>Share</b> button next to the address bar.')
-                   : step(1, 'share', 'Tap <b>Share</b> in Safari’s toolbar. On newer iPhones it’s under the <b>…</b> button.'))
+                   : step(1, 'share', 'Tap <b>Share</b> in Safari’s toolbar. On newer iPhones, tap the <svg class="ii"><use href="#i-menu"/></svg> button to the left of the address bar, then <b>Share</b>.'))
         + step(2, 'dots', 'Tap <b>View More</b> and scroll down the list.') + step(3, 'addhome', 'Tap <b>Add to Home Screen</b>, then <b>Add</b>.')
       : step(1, 'dots', 'Open your browser’s menu, the three dots by the address bar.') + step(2, 'addhome', 'Tap <b>Install app</b> or <b>Add to Home screen</b>.');
     const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 60;
