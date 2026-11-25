@@ -890,3 +890,5 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .board .act .bview{display:flex;gap:6px;margin-right:10px}
 .board .cell.name{min-width:230px}.board .act{gap:6px}.board .act .gb.sm{padding:0 11px;font-size:17px}.board .act .gb.sm svg{width:18px;height:18px}
 .board .cell.name{min-width:280px}.board .name input{font-size:46px}
+/* card pictures fill their card exactly (Zack, 2026-11-25: some hand cards showed zoomed in on the phone) */
+.hc,.flyc .fin i,.ohand .card{background-size:100% 100%!important;background-repeat:no-repeat}

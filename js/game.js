@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=81';
-import * as S from './sfx.js?v=81';
+import { Table } from './table.js?v=83';
+import * as S from './sfx.js?v=83';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -67,15 +67,12 @@ function placeMid() { try { if (!table) return; const p = table.project(new (tab
 // (Zack, 2026-11-25: "only on the home screen version, lets extend this so as much space is used as possible"); there the game takes
 // the phone's full screen height. In Safari the window height is right and stays as it is.
 const homeApp = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
-// measured, not guessed: a fixed box pinned to all four edges is exactly the area the app can draw in (screen.height ran past the bottom
-// and cut off the tab bar's labels, Zack, 2026-11-25)
-const phoneHeight = () => {
-  if (!homeApp()) return innerHeight;
-  let pr = document.getElementById('vhProbe'); if (!pr) { pr = document.createElement('div'); pr.id = 'vhProbe'; pr.style.cssText = 'position:fixed;left:0;top:0;bottom:0;width:0;visibility:hidden;pointer-events:none'; document.body.appendChild(pr); }
-  return Math.round(pr.getBoundingClientRect().height) || innerHeight;
-};
+// the home-screen app draws on the whole screen, but iOS sizes the page 59 points short (the status bar's height) and clipped the game there,
+// so the bottom bar was cut off (Zack, 2026-11-25: "bottom is still cut off even in duels"). There the page box is made the full screen
+// height (html.hs in mobile.css) and the game fills it.
+const phoneHeight = () => homeApp() ? Math.max(screen.height, screen.width) : innerHeight;
 function fit() {
-  if (PHONE) { document.documentElement.classList.toggle('sideways', !uprightNow()); document.documentElement.classList.add('m'); if (!uprightNow()) return; }   // sideways: nothing to lay out until it turns back
+  if (PHONE) { document.documentElement.classList.toggle('hs', homeApp()); document.documentElement.classList.toggle('sideways', !uprightNow()); document.documentElement.classList.add('m'); if (!uprightNow()) return; }   // sideways: nothing to lay out until it turns back
   if (!MOBILE) { stage.style.width = stage.style.height = ''; }
   if (MOBILE) { if (LAND) { scale = innerHeight / 390; SH = 390; SW = Math.round(innerWidth / scale); } else { scale = innerWidth / 390; SW = 390; SH = Math.round(phoneHeight() / scale); }
     stage.style.width = SW + 'px'; stage.style.height = SH + 'px'; stage.style.setProperty('--sw', SW + 'px');
@@ -143,7 +140,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=81');
+const W = new Worker('js/worker.js?v=83');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };

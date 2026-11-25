@@ -655,3 +655,6 @@ html.m,html.m body{position:fixed;inset:0;width:100%;height:100%;margin:0}
 #stage.m .blists .lhead{flex-direction:column;align-items:stretch}
 #stage.m .blists .lfmt{order:0}
 #stage.m .blists .lfmt .gb{flex:1}
+/* the home-screen app: iOS lays the page out 59 points shorter than the screen it draws on; the page box takes the full screen */
+html.m.hs,html.m.hs body{position:absolute;left:0;top:0;right:auto;bottom:auto;width:100%;height:calc(100vh + env(safe-area-inset-top,0px));min-height:100lvh}
+html.m.hs #stage.m{position:absolute}
