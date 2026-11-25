@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=25';
-import * as S from './sfx.js?v=25';
+import { Table } from './table.js?v=27';
+import * as S from './sfx.js?v=27';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const stage = $('#stage');
@@ -57,7 +57,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=25');
+const W = new Worker('js/worker.js?v=27');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -70,7 +70,7 @@ window.__lr = { get D() { return D; }, get SEL() { return SEL; }, start: () => s
 const BACK = { settings: 'title', format: 'title', deck: 'format', stats: 'title', build: 'title' };
 async function goBack() { if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; if (BACK[cur]) show(BACK[cur]); }
 $('#gBack').onclick = () => { S.unlock(); goBack(); };
-function show(s) { if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); cur = s; stage.dataset.scr = s; $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => e.classList.toggle('on', e.id === 's-' + s)); if (s === 'deck') renderDecks(); if (s === 'format') renderFormats(); if (s === 'build') readyP.then(openBuilder); if (s === 'stats') renderStats(); if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
+function show(s) { if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => e.classList.toggle('on', e.id === 's-' + s)); if (s === 'deck') renderDecks(); if (s === 'format') renderFormats(); if (s === 'build') readyP.then(openBuilder); if (s === 'stats') renderStats(); if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
 // browsers keep a page silent until the first click, tap or key press (hovering doesn't count): turn sound on at the very first one, anywhere
 for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, () => S.unlock(), { capture: true, passive: true });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { S.unlock(); show(b.dataset.go); } const h = e.target.closest('[data-href]'); if (h) open(h.dataset.href, '_blank'); });
@@ -88,7 +88,7 @@ addEventListener('keydown', e => {
   else if (cur === 'deck') { if (e.key === 'Escape') { if (!closeDeckList()) show('format'); return; } if ($('#dlist')) return; if (e.key === 'Enter') $('#duelGo').click(); if (e.key === 'l' || e.key === 'L') $('#seeList') && $('#seeList').click(); }
   else if (cur === 'settings') { if (e.key === 'Escape') show('title'); if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { setRow = (setRow + (e.key === 'ArrowDown' ? 1 : -1) + SETROWS.length) % SETROWS.length; S.play('hover'); renderSettings(); } if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') changeSetting(setRow, e.key === 'ArrowRight' ? 1 : -1); }
   else if (cur === 'stats') { if (e.key === 'Escape') show('title'); }
-  else if (cur === 'build') { if (e.key === 'Escape') { if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur(); else goBack(); } }
+  else if (cur === 'build') { if (e.key === 'Escape' && closeCardZoom()) return; if (e.key === 'Escape') { if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur(); else goBack(); } }
   else if (cur === 'results') { if (e.key === 'Enter') $('#resAgain').click(); }
   else if (cur === 'duel') duelKey(e);
 });
@@ -274,9 +274,8 @@ function renderPool() {
   $('#bPool').innerHTML = cs.map(c => { const k = inDeck(c.id), lim = LIMIT(c);
     return `<div class="pc ${k >= lim ? 'max' : ''}" data-id="${c.id}"><img class="card" loading="lazy" alt="" src="${artUrl(c.id)}">${c.b ? `<span class="lim ${c.b}">${c.b}</span>` : ''}${k ? `<span class="in">${k}</span>` : ''}</div>`; }).join('') || '<div class="mute" style="grid-column:1/-1;font-size:20px">No cards match.</div>';
   const pool = $('#bPool');
-  pool.onclick = e => { const t = e.target.closest('[data-id]'); if (t) addCard(t.dataset.id); };
+  pool.onclick = e => { const t = e.target.closest('[data-id]'); if (t) cardZoom(t.dataset.id, 'add'); };
   pool.oncontextmenu = e => { e.preventDefault(); const t = e.target.closest('[data-id]'); if (t) removeCard(t.dataset.id); };
-  pool.onmouseover = e => builderPeek(e); pool.onmouseleave = () => $('#bPeek').classList.add('hidden');
 }
 function builderPeek(e) {
   const t = e.target.closest('[data-id]'); const pk = $('#bPeek'); if (!t) return; const r = rec(B.fmt, t.dataset.id); if (!r) return;
@@ -324,16 +323,69 @@ function renderDeckSide() {
   $('#bName').oninput = e => { d.name = e.target.value; B.dirty = true; $('#bSave').textContent = 'Save'; };
   $('#bSave').onclick = saveDeck; $('#bNew').onclick = async () => { if (B.dirty && !(await ask('Start a new deck without saving this one?', 'New deck'))) return; B.deck = newDeck(f); B.dirty = false; S.play('click'); renderBuilder(); };
   $('#bDel').onclick = async () => { const all = MY(); if (!all.some(x => x.id === d.id)) { B.deck = newDeck(f); B.dirty = false; renderBuilder(); return; } if (!(await ask(`Delete "${d.name}"? This can't be undone.`, 'Delete'))) return; saveMY(all.filter(x => x.id !== d.id)); B.deck = null; S.play('destroy'); openBuilder(); };
-  $('#bMine').onclick = () => pickDialog('My decks', MY().filter(x => x.fmt === f), x => { B.deck = JSON.parse(JSON.stringify(x)); B.dirty = false; renderBuilder(); }, 'No saved decks yet.');
+  $('#bMine').onclick = () => myDecksDialog(f);
   $('#bCopy').onclick = () => pickDialog('Start from a deck', FM[f].decks, x => { B.deck = { ...newDeck(f), name: 'My ' + x.name, main: [...x.main], extra: [...x.extra] }; B.dirty = true; renderBuilder(); });
-  const dk = $('#bDeck'); dk.onclick = e => { const t = e.target.closest('[data-id]'); if (t) removeCard(t.dataset.id); };
+  const dk = $('#bDeck'); dk.onclick = e => { const t = e.target.closest('[data-id]'); if (t) cardZoom(t.dataset.id, 'remove'); };
   dk.oncontextmenu = e => { e.preventDefault(); const t = e.target.closest('[data-id]'); if (t) addCard(t.dataset.id); };
-  dk.onmouseover = e => builderPeek(e); dk.onmouseleave = () => $('#bPeek').classList.add('hidden');
+}
+
+/* the Deck Builder's card view (Zack, 2026-11-24: "rather than the card showing up on the right when hovering... left click enlarges the card over
+   the left pane where they can read it, and then have the option to add to deck with another click"): a click on a card in the pool opens it large
+   over the pool with Add to deck; a click on a card in your deck opens it over your deck with Remove from deck. Right-click still adds or removes at once. */
+function cardZoom(id, mode) {
+  closeCardZoom(); const r = rec(B.fmt, id); if (!r) return; S.play('click');
+  const z = document.createElement('div'); z.className = 'pn czoom ' + (mode === 'add' ? 'left' : 'right'); z.id = 'czoom';
+  const paint = () => { const k = inDeck(id), lim = LIMIT(r), full = mode === 'add' ? k >= lim : k <= 0;
+    z.innerHTML = `<img class="zc" alt="" src="${artUrl(id)}"><div class="zi"><h3 class="disp">${esc(r.n)}</h3><div class="meta">${esc(cardMeta(r))}</div>
+      <p>${esc(cardText(B.fmt, r))}</p>
+      <div class="cnt">${lim === 0 ? 'Forbidden under this banlist' : `In your deck: <b>${k}</b> of ${lim}${r.b ? ` (${r.b === 'L' ? 'Limited' : 'Semi-Limited'})` : ''}`}</div>
+      <div class="btns"><button class="gb pri" data-z="go" ${full ? 'disabled' : ''}>${mode === 'add' ? 'Add to deck' : 'Remove from deck'}<span class="shine"></span></button>
+      <button class="gb" data-z="x">Close<span class="key">Esc</span><span class="shine"></span></button></div></div>`; };
+  paint(); $('#s-build').appendChild(z);
+  z.onclick = e => { const b = e.target.closest('[data-z]'); if (!b) return; if (b.dataset.z === 'x') return closeCardZoom(); if (mode === 'add') addCard(id); else removeCard(id); paint(); };
+}
+function closeCardZoom() { const z = $('#czoom'); if (z) { z.remove(); return true; } return false; }
+
+/* My decks (Zack, 2026-11-24: "a rename and delete option"; no scroll bar): open, rename or delete each saved deck in this format */
+function myDecksDialog(f) {
+  S.play('click'); const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 59; const p = document.createElement('div'); p.className = 'pn dlg mydecks'; p.style.zIndex = 60;
+  const paint = () => { const list = MY().filter(x => x.fmt === f);
+    p.innerHTML = `<h3 class="disp">My decks</h3><div class="mdl">${list.length ? list.map(x => `<div class="mdr" data-id="${esc(x.id)}"><button class="gb wide" data-a="open"><span class="lbl">${esc(x.name)}</span><span class="mute">${x.main.length} cards</span><span class="shine"></span></button>
+      <button class="gb sm" data-a="ren">Rename<span class="shine"></span></button><button class="gb sm" data-a="del">Delete<span class="shine"></span></button></div>`).join('') : '<p class="mute">No saved decks yet.</p>'}</div>
+      <div class="btns"><button class="gb" data-a="x">Close<span class="shine"></span></button></div>`; };
+  paint(); stage.append(v, p); const close = () => { v.remove(); p.remove(); };
+  v.onclick = close;
+  p.onclick = async e => { const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a; if (a === 'x') return close();
+    const id = b.closest('[data-id]').dataset.id, all = MY(), d = all.find(x => x.id === id); if (!d) return;
+    if (a === 'open') { if (B.dirty && B.deck && B.deck.id !== id && !(await ask('Open this deck without saving the one you are building?', 'Open'))) return; close(); B.deck = JSON.parse(JSON.stringify(d)); B.dirty = false; S.play('click'); renderBuilder(); }
+    if (a === 'ren') { const n = await askText('Rename this deck', d.name); if (n == null || !n.trim()) return; d.name = n.trim().slice(0, 40); d.updated = Date.now(); saveMY(all); if (B.deck && B.deck.id === id) { B.deck.name = d.name; renderDeckSide(); } S.play('click'); paint(); }
+    if (a === 'del') { if (!(await ask(`Delete "${d.name}"? This can't be undone.`, 'Delete'))) return; saveMY(all.filter(x => x.id !== id)); if (B.deck && B.deck.id === id) { B.deck = newDeck(f); B.dirty = false; renderBuilder(); } S.play('set'); paint(); }
+  };
+}
+function askText(title, value) {
+  return new Promise(res => {
+    const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 69; const p = document.createElement('div'); p.className = 'pn dlg'; p.style.zIndex = 70;
+    p.innerHTML = `<h3 class="disp" style="font-size:28px">${esc(title)}</h3><input class="inp tinp" maxlength="40" value="${esc(value)}"><div class="btns"><button class="gb" data-n>Cancel<span class="shine"></span></button><button class="gb pri" data-y>Save<span class="shine"></span></button></div>`;
+    stage.append(v, p); const inp = p.querySelector('input'); inp.focus(); inp.select();
+    const done = r => { v.remove(); p.remove(); res(r); };
+    v.onclick = () => done(null); inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') done(inp.value); if (e.key === 'Escape') done(null); };
+    p.onclick = e => { if (e.target.closest('[data-y]')) done(inp.value); else if (e.target.closest('[data-n]')) done(null); };
+  });
+}
+
+/* the first save shows where decks live (Zack, 2026-11-24: "a popup notice... where they have to say 'ok' and a 'do not show me this again' checkbox") */
+function saveNotice() {
+  if (localStorage.getItem('lrplay:savenote') === 'off') return;
+  const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 69; const p = document.createElement('div'); p.className = 'pn dlg snote'; p.style.zIndex = 70;
+  p.innerHTML = `<h3 class="disp">Saved in this browser</h3><p>Your decks, stats and settings are saved in this browser on this device. Clearing cookies and site data deletes them, and they don't carry over to another browser or device.</p>
+    <label class="chk"><input type="checkbox" id="snOff"><span></span>Don't show this again</label><div class="btns"><button class="gb pri" data-ok>OK<span class="shine"></span></button></div>`;
+  stage.append(v, p);
+  p.querySelector('[data-ok]').onclick = () => { if (p.querySelector('#snOff').checked) localStorage.setItem('lrplay:savenote', 'off'); v.remove(); p.remove(); S.play('click'); };
 }
 function saveDeck() {
   const d = B.deck; d.name = (d.name || '').trim() || 'My deck'; d.updated = Date.now();
   const all = MY().filter(x => x.id !== d.id); all.unshift(JSON.parse(JSON.stringify(d))); saveMY(all); B.dirty = false; S.play('summon');
-  toast(deckProblems(d.fmt, d).length ? `Saved "${d.name}". Fix the problems listed before dueling with it.` : `Saved "${d.name}". Pick it under My decks before a duel.`); renderDeckSide();
+  toast(deckProblems(d.fmt, d).length ? `Saved "${d.name}". Fix the problems listed before dueling with it.` : `Saved "${d.name}". Pick it under My decks before a duel.`); renderDeckSide(); saveNotice();
 }
 function ask(text, yes = 'Yes', no = 'Cancel') {
   return new Promise(res => {

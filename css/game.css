@@ -616,3 +616,43 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
 /* saved in this browser (Zack, 2026-11-24: "add a disclaimer... saved progress gets deleted when clearing cookies and other site data") */
 #s-title .savenote{position:absolute;left:110px;bottom:132px;width:760px;font:600 15px 'Atkinson Hyperlegible';color:rgba(255,255,255,.7);padding-left:12px;border-left:3px solid var(--acc)}
 .keybar .savenote2{font:600 15px 'Atkinson Hyperlegible';text-transform:none;letter-spacing:0;color:rgba(255,255,255,.65);max-width:620px;text-align:right}
+
+/* the saved-in-this-browser bar, front and center on the Deck Builder and Stats */
+.savebar{position:absolute;left:50%;translate:-50% 0;display:flex;align-items:center;gap:12px;padding:8px 18px;background:rgba(10,12,16,.92);border:1px solid rgba(255,106,31,.55);border-radius:3px;font:600 16px 'Atkinson Hyperlegible';color:rgba(255,255,255,.88);white-space:nowrap;z-index:4;box-shadow:0 8px 22px rgba(0,0,0,.45)}
+.savebar i{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--acc);color:#140a04;font:italic 900 15px 'Barlow Condensed';flex:none}
+.savebar.st{top:204px}
+#stBody{top:262px}
+.savebar.bd{top:158px}
+#s-build .bbar{top:214px}
+#s-build .pool2{top:340px}
+#s-build .roster{top:200px}
+/* the card view over a pane: the card large, its text, and Add or Remove */
+.czoom{position:absolute;top:214px;bottom:70px;width:880px;z-index:25;display:flex;gap:28px;padding:26px 28px;align-items:flex-start}
+.czoom.left{left:40px}.czoom.right{right:24px}
+.czoom .zc{height:100%;max-height:600px;aspect-ratio:421/614;border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.7),0 0 0 2px rgba(255,255,255,.08);flex:none}
+.czoom .zi{flex:1;display:flex;flex-direction:column;min-height:100%;min-width:0}
+.czoom h3{font-size:40px;line-height:1}
+.czoom .meta{font:800 16px 'Barlow Condensed';letter-spacing:.1em;text-transform:uppercase;color:var(--acc-hi);margin-top:8px}
+.czoom p{font-size:17px;line-height:1.5;color:rgba(255,255,255,.9);margin-top:12px;white-space:pre-line;overflow:auto;scrollbar-width:none;max-height:300px}
+.czoom .cnt{margin-top:auto;padding-top:16px;font-size:17px;color:rgba(255,255,255,.75)}
+.czoom .cnt b{color:#fff}
+.czoom .btns{display:flex;gap:12px;margin-top:14px}
+.czoom .gb[disabled]{opacity:.4;pointer-events:none}
+/* My decks: open, rename, delete; scrolls without a scroll bar */
+.mydecks{width:820px}
+.mydecks .mdl{display:flex;flex-direction:column;gap:10px;max-height:600px;overflow-y:auto;scrollbar-width:none}
+.mydecks .mdl::-webkit-scrollbar{display:none}
+.mydecks .mdr{display:flex;gap:10px;align-items:center}
+.mydecks .mdr .gb.wide{flex:1;justify-content:flex-start}
+.mydecks .mdr .gb.wide .mute{margin-left:auto;font-size:15px}
+.tinp{width:100%;height:52px;margin-top:14px;background:rgba(10,12,16,.85);border:1px solid rgba(255,255,255,.15);border-radius:2px;color:#fff;font:600 22px 'Atkinson Hyperlegible';padding:0 14px;outline:none;clip-path:none}
+.tinp:focus{border-color:var(--acc)}
+/* the save notice */
+.snote{width:640px}
+.snote p{font-size:19px;line-height:1.5;color:rgba(255,255,255,.88);margin-top:10px}
+.chk{display:flex;align-items:center;gap:12px;margin-top:20px;font-size:17px;cursor:pointer;user-select:none}
+.chk input{display:none}
+.chk span{width:24px;height:24px;border-radius:3px;border:2px solid rgba(255,255,255,.45);display:grid;place-items:center}
+.chk input:checked+span{background:var(--acc);border-color:var(--acc)}
+.chk input:checked+span::after{content:"";width:6px;height:12px;border:solid #140a04;border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-1px)}
+#stage[data-scr=build] .toast{top:220px}
