@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=71';
-import * as S from './sfx.js?v=71';
+import { Table } from './table.js?v=72';
+import * as S from './sfx.js?v=72';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -132,7 +132,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=71');
+const W = new Worker('js/worker.js?v=72');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -322,6 +322,7 @@ function gyView(pi, kind) {
   draw(); $('#layer').append(v, p); v.onclick = closeDeckList; p.onmouseover = e => peekOver(e, p, D.fmt);
 }
 function peekOver(e, p, f) {
+  if (MOBILE) return;   // phones read a card in its own sheet (a tap); the hover preview would stay behind with no way to close it (Zack, 2026-11-25)
   const t = e.target.closest('[data-id]'); if (!t) return; const r = rec(f, t.dataset.id); if (!r) return; const pk = p.querySelector('#dlPeek'); pk.classList.remove('hidden');
   pk.innerHTML = `<div class="card" style="background-image:url(${artUrl(t.dataset.id)})"></div><h4>${esc(r.n)}</h4><div class="meta">${esc(cardMeta(r))}</div><p>${esc(cardText(f, r))}</p>`;
   const right = e.clientX - stage.getBoundingClientRect().left > stage.getBoundingClientRect().width / 2; pk.style.left = right ? '40px' : ''; pk.style.right = right ? '' : '40px';
