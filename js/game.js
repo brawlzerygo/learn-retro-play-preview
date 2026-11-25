@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=29';
-import * as S from './sfx.js?v=29';
+import { Table } from './table.js?v=30';
+import * as S from './sfx.js?v=30';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const stage = $('#stage');
@@ -57,7 +57,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=29');
+const W = new Worker('js/worker.js?v=30');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -220,6 +220,18 @@ const saveMY = a => localStorage.setItem('lrplay:decks', JSON.stringify(a));
 const isExtraK = r => r && (r.k === 'fusion' || r.k === 'synchro');
 const LIMIT = r => r && r.b === 'F' ? 0 : r && r.b === 'L' ? 1 : r && r.b === 'S' ? 2 : 3;
 // what's wrong with a deck under its format's rules (empty: legal)
+// the empty deck shows how the builder works (Zack, 2026-11-24: "update with the new mechanics... and any other brief useful tutorial type info")
+function howTo(f, xl) {
+  const tip = (h, t) => `<div class="tip"><b>${h}</b><span>${t}</span></div>`;
+  return `<div class="howto"><h4 class="disp">Build your deck</h4>
+    ${tip('Click a card', 'to read it, then Add to deck.')}
+    ${tip('Drag a card', `here to add it. Drag one back to the cards on the left to remove it.`)}
+    ${tip('Right-click', 'adds a card from the left, or removes one from your deck, in one go.')}
+    ${tip('Search and filter', `by name or card text, or show only Monsters, Spells, Traps or ${xl} cards.`)}
+    ${tip('Deck rules', `40 to 60 cards in the Main Deck, up to 15 in the ${xl} Deck, 3 copies at most. Cards marked F, L or S are Forbidden, Limited (1) or Semi-Limited (2) on the ${f === 'goat' ? 'Goat' : 'Edison'} banlist.`)}
+    ${tip('Start from a deck', 'copies one of the prebuilt decks so you can change it.')}
+    ${tip('Save', 'names your deck. It then shows up under My decks when you pick a deck to duel.')}</div>`;
+}
 function deckProblems(f, d) {
   const out = []; const all = [...d.main, ...d.extra]; const n = new Map(); for (const id of all) n.set(id, (n.get(id) || 0) + 1);
   if (d.main.length < 40) out.push(`The Main Deck needs at least 40 cards (it has ${d.main.length}).`);
@@ -318,7 +330,7 @@ function renderDeckSide() {
   const tile = id => `<div class="x" data-id="${id}" draggable="true"><img alt="" draggable="false" src="${artUrl(id)}"></div>`;
   const statLine = probs.length ? `<span style="color:#ff8a7a">${esc(probs[0])}</span>` : `<span style="color:#8dff9e">Legal under the ${f === 'goat' ? 'Goat' : 'Edison'} banlist · ready to duel</span>`;
   $('#bDeck').innerHTML = `<div class="rhead"><div class="lbl">Your deck</div><div class="stat">${statLine}</div></div>
-    <div class="main" style="grid-template-columns:repeat(${fm.cols},${w}px)">${main.length ? main.map(tile).join('') : '<div class="empty">Click cards on the left to add them</div>'}</div>
+    ${main.length ? `<div class="main" style="grid-template-columns:repeat(${fm.cols},${w}px)">${main.map(tile).join('')}</div>` : howTo(f, xl)}
     <div class="extra" style="grid-template-columns:repeat(${fe.cols},${we}px)"><div class="xl">${xl} deck · ${extra.length}</div>${extra.map(tile).join('')}</div>`;
   $('#bName').oninput = e => { d.name = e.target.value; B.dirty = true; $('#bSave').textContent = 'Save'; };
   $('#bSave').onclick = saveDeck; $('#bNew').onclick = async () => { if (B.dirty && !(await ask('Start a new deck without saving this one?', 'New deck'))) return; B.deck = newDeck(f); B.dirty = false; S.play('click'); renderBuilder(); };
