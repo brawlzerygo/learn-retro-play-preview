@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=72';
-import * as S from './sfx.js?v=72';
+import { Table } from './table.js?v=73';
+import * as S from './sfx.js?v=73';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -132,7 +132,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=72');
+const W = new Worker('js/worker.js?v=73');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -377,8 +377,7 @@ function renderLists() {
   const f = B.lfmt || B.fmt, tiers = TIERS[f], el = $('#bListsPanel'); B.ltier = B.ltier || 'all';   // its own format choice, so the deck you are building is left alone
   const decks = FM[f].decks.filter(d => B.ltier === 'all' || d.tier === B.ltier);
   const xl = f === 'goat' ? 'Fusion' : 'Extra';
-  el.innerHTML = `<div class="lhead"><div class="seg ltiers">${['all', ...tiers].map(t => `<button class="gb sm ${B.ltier === t ? 'pri' : ''}" data-lt="${t}">${t === 'all' ? 'All' : (TIERNAME[t] || t)}<span class="shine"></span></button>`).join('')}</div>
-    <div class="seg lfmt">${['goat', 'edison'].map(x => `<button class="gb sm ${x === f ? 'pri' : ''}" data-lf="${x}">${x === 'goat' ? 'Goat' : 'Edison'}<span class="shine"></span></button>`).join('')}</div></div>
+  el.innerHTML = `<div class="lhead"><div class="seg lfmt">${['goat', 'edison'].map(x => `<button class="gb sm ${x === f ? 'pri' : ''}" data-lf="${x}">${x === 'goat' ? 'Goat' : 'Edison'}<span class="shine"></span></button>`).join('')}</div><div class="seg ltiers">${['all', ...tiers].map(t => `<button class="gb sm ${B.ltier === t ? 'pri' : ''}" data-lt="${t}">${t === 'all' ? 'All' : (TIERNAME[t] || t)}<span class="shine"></span></button>`).join('')}</div></div>
     <div class="lgrid">${decks.map((d, i) => { const kc = keyCards(f, d), ok = deckInfo(f, d).ready;
       return `<div class="ldeck ${ok ? '' : 'off'}" data-i="${FM[f].decks.indexOf(d)}"><div class="lfan">${kc.map((id, j) => `<div class="card" style="background-image:url(${artUrl(id)})" data-j="${j}"></div>`).join('')}</div>
         <div class="lmeta"><div class="lname">${esc(d.name)}</div><div class="lsub">${d.main.length} cards${d.extra.length ? ` · ${d.extra.length} ${xl}` : ''}</div></div><span class="tg ${d.tier === tiers[0] ? 'hot' : ''}">${esc(TIERNAME[d.tier] || d.tier)}</span></div>`; }).join('')}</div>`;

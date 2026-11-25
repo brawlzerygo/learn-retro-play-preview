@@ -877,3 +877,7 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .ldeck .tg{position:absolute;right:10px;top:8px;font-size:12px}
 #s-build.listview .blists{top:204px}
 .blists .lgrid{grid-auto-rows:max-content}.ldeck{height:auto;flex:none}.ldeck .lfan{flex:none}#stage.m .ldeck{height:auto}
+/* Deck lists: the Goat/Edison switch on its own row above the tiers, its two buttons sharing the full width (Zack, 2026-11-25) */
+.blists .lhead{flex-direction:column;align-items:stretch;gap:10px}
+.blists .lfmt{display:flex;gap:8px;flex-wrap:nowrap}
+.blists .lfmt .gb{flex:1;justify-content:center}
