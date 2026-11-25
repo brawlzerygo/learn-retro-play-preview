@@ -600,3 +600,5 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .amenu.mrow:has(.gb:nth-child(3):not(.rd)) .gb:not(.rd){flex-basis:44%}
 #stage.m .amenu.mrow .gb:not(.rd),#stage.m .dial-menu.mrow .gb,#stage.m .amenu.respond .gb{flex:1 1 0;min-width:0}
 #stage.m .amenu.mrow:has(.gb:nth-child(4):not(.rd)) .gb:not(.rd),#stage.m .amenu.respond:has(.gb:nth-of-type(4)) .gb{flex:1 1 40%}
+#stage.m .coinwrap,#stage.m .coin,#stage.m .coin.heads,#stage.m .coin.tails{width:150px;height:150px}#stage.m .coin .cf i{width:112px;height:112px}#stage.m .coin .cb img{width:88px;height:88px}
+#stage.m #s-load .coin{width:150px;height:150px}

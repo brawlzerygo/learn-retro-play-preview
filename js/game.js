@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=55';
-import * as S from './sfx.js?v=55';
+import { Table } from './table.js?v=56';
+import * as S from './sfx.js?v=56';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -82,8 +82,9 @@ const toStage = e => { const r = stage.getBoundingClientRect(); return { x: (e.c
 /* ---------- settings ---------- */
 const SET = Object.assign({ vol: 50, speed: 'relaxed', hintLimit: '3', muted: false, theme: 'broadcast' }, JSON.parse(localStorage.getItem('lrplay:set') || '{}'));
 const saveSet = () => localStorage.setItem('lrplay:set', JSON.stringify(SET));
-const SPEED = { relaxed: 1.8, normal: 1, fast: 0.55, instant: 0.04 };
-const BEAT = { relaxed: 900, normal: 450, fast: 160, instant: 0 };   // ms after each computer play
+const SPEED = { relaxed: 1, normal: 1, fast: 0.55, instant: 0.04 };
+const GAP = { relaxed: 1.6, normal: 1, fast: 0.55, instant: 0.04 };
+const BEAT = { relaxed: 1100, normal: 450, fast: 160, instant: 0 };   // ms after each computer play
 if (SET.paceV !== 2) { SET.speed = 'relaxed'; SET.paceV = 2; localStorage.setItem('lrplay:set', JSON.stringify(SET)); }   // once: everyone starts on Relaxed
 S.setVolume(SET.vol / 100); S.setMuted(SET.muted); S.load();
 /* Settings: one row per setting, ↑↓ to choose a row, ←→ to change it (Rewind's layout, Broadcast style) */
@@ -125,7 +126,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=55');
+const W = new Worker('js/worker.js?v=56');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -649,8 +650,8 @@ async function startDuel() {
   S.play('shuffle');
   await ensureTable();
   const first = Math.random() < 0.5 ? 0 : 1;
-  $('#coin').textContent = '?'; $('#coin').style.animation = 'none'; void $('#coin').offsetWidth; $('#coin').style.animation = '';
-  await sleep(1150); $('#coin').textContent = first === 0 ? 'Y' : 'C'; $('#loadTxt').textContent = first === 0 ? 'You go first' : 'The computer goes first'; S.play('turn');
+  const coin = $('#coin'); coin.className = 'coin ' + (first === 0 ? 'heads' : 'tails'); coin.style.animation = 'none'; void coin.offsetWidth; coin.style.animation = '';
+  await sleep(1450); $('#loadTxt').textContent = first === 0 ? 'You go first' : 'The computer goes first'; S.play('turn');
   await sleep(1100);
   // reset the duel
   D = { fmt: f, you: youDeck.name, cpu: cpuDeck.name, youDeck, cpuDeck, first, q: [], busy: false, prompt: null, view: null, disp: null, lp: [8000, 8000], turn: 0, phase: '', tp: first,
@@ -698,7 +699,7 @@ const handPoint = (p, u) => {
   return table.screenToWorld(pt.x, Math.max(pt.y, 12), MOBILE ? 1.1 : 1.5);
 };
 const pileKind = z => ({ deck: 'deck', deckTop: 'deck', extra: 'extra', gy: 'gy', ban: 'ban' }[z]);
-const waitMs = ms => sleep(ms * SPEED[SET.speed]);
+const waitMs = ms => sleep(ms * GAP[SET.speed]);
 
 async function anim(ev) {
   // a new turn or phase gets its banner first
@@ -760,7 +761,7 @@ async function animMove(ev) {
   if (['m', 'st', 'fz'].includes(ev.to)) {
     const up = ev.pos !== 'set';
     S.play(up ? 'place' : 'set');
-    await table.place(ev.u, toSide, ev.to === 'fz' ? 'fz' : ev.to, ev.zi, { id: ev.id, up, pos: ev.pos, from, fromUp: ev.from === 'hand' && p === 0 ? true : up, dur: ev.from === 'hand' ? 640 : 460 });
+    await table.place(ev.u, toSide, ev.to === 'fz' ? 'fz' : ev.to, ev.zi, { id: ev.id, up, pos: ev.pos, from, fromUp: ev.from === 'hand' && p === 0 ? true : up, dur: ev.from === 'hand' ? 520 : 440 });
     return;
   }
   if (ev.to === 'hand') {
