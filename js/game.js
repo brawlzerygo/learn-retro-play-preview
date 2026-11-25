@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=64';
-import * as S from './sfx.js?v=64';
+import { Table } from './table.js?v=65';
+import * as S from './sfx.js?v=65';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -126,7 +126,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=64');
+const W = new Worker('js/worker.js?v=65');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -785,15 +785,17 @@ function preload(src) {
 async function fly2D(b, to, o = {}) {
   const a1 = o.from || 'img/back.webp', a2 = o.to || a1, flip = a2 !== a1;
   await Promise.race([Promise.all([preload(a1), preload(a2)]), sleep(220)]);
+  // the card is drawn at the larger of its two sizes and scaled down from there, so it stays sharp the whole way (never blown up)
+  const W = Math.max(b.w, to.w), H = W * 614 / 421, sx = b.x + b.w / 2, sy = b.y + b.h / 2, s0 = b.w / W, s1 = to.w / W;
   const fly = document.createElement('div'); fly.className = 'flyc';
   fly.innerHTML = `<div class="fin"><i style="background-image:url(${a1})"></i>${flip ? `<i class="bk" style="background-image:url(${a2})"></i>` : ''}</div>`;
-  Object.assign(fly.style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' }); $('#layer').appendChild(fly);
-  const dx = to.cx - (b.x + b.w / 2), dy = to.cy - (b.y + b.h / 2), sc = to.w / b.w, rot = o.rot || 0, dur = (o.dur || 440) * SPEED[SET.speed], arc = o.arc != null ? o.arc : 26;
-  const kf = [{ transform: 'translate(0px,0px) scale(1) rotate(0deg)', offset: 0 }];
-  if (o.lift) kf.push({ transform: `translate(0px,${-o.lift}px) scale(1.06) rotate(0deg)`, offset: 0.22, easing: 'ease-out' });
-  kf.push({ transform: `translate(${dx * 0.5}px,${dy * 0.5 - arc}px) scale(${(1 + sc) / 2 * 1.04}) rotate(${rot / 2}deg)`, offset: o.lift ? 0.6 : 0.5 });
-  kf.push({ transform: `translate(${dx}px,${dy}px) scale(${sc}) rotate(${rot}deg)`, offset: 1 });
-  const an = fly.animate(kf, { duration: dur, easing: 'cubic-bezier(.33,.66,.3,1)', fill: 'forwards' });
+  Object.assign(fly.style, { left: (sx - W / 2) + 'px', top: (sy - H / 2) + 'px', width: W + 'px', height: H + 'px' }); $('#layer').appendChild(fly);
+  const dx = to.cx - sx, dy = to.cy - sy, rot = o.rot || 0, dur = (o.dur || 440) * SPEED[SET.speed], arc = o.arc != null ? o.arc : 26;
+  const kf = [{ transform: `translate(0px,0px) scale(${s0}) rotate(0deg)`, offset: 0 }];
+  if (o.lift) kf.push({ transform: `translate(0px,${-o.lift}px) scale(${s0 * 1.06}) rotate(0deg)`, offset: 0.22, easing: 'ease-out' });
+  kf.push({ transform: `translate(${dx * 0.5}px,${dy * 0.5 - arc}px) scale(${(s0 + s1) / 2 * 1.04}) rotate(${rot / 2}deg)`, offset: o.lift ? 0.6 : 0.5 });
+  kf.push({ transform: `translate(${dx}px,${dy}px) scale(${s1}) rotate(${rot}deg)`, offset: 1 });
+  const an = fly.animate(kf, { duration: dur, easing: o.settle ? 'cubic-bezier(.25,.75,.35,1)' : 'cubic-bezier(.33,.66,.3,1)', fill: 'forwards' });
   if (flip) fly.firstChild.animate([{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(0deg)', offset: o.lift ? 0.25 : 0.12 }, { transform: 'rotateY(180deg)', offset: 0.85 }, { transform: 'rotateY(180deg)' }],
     { duration: dur, easing: 'ease-in-out', fill: 'forwards' });
   await an.finished.catch(() => {}); if (!o.keep) fly.remove(); return fly;
@@ -850,9 +852,13 @@ async function animMove(ev) {
       const el = p === 0 ? $(`#hand [data-u="${ev.u}"]`) : $$('#ohand .card').pop();
       if (el) { el.style.visibility = 'hidden'; S.play(fast ? 'deal' : 'draw');
         // the draw lifts off the top of the Deck (the pile's top card, at its size), then flies into its own place in the hand
+        // it lands exactly where the card will rest: the new hand card skips its own rise-in, and the flight ends at its centre, its true
+        // (unturned) width and its tilt in the fan, so nothing overshoots or pops when the real card takes over (Zack, 2026-11-25)
+        el.classList.remove('in'); el.style.animation = 'none';
         const pb = pileBox(fromSide, pileKind(ev.from)), ph = pb.w * 614 / 421, tb = stageBox(el.getBoundingClientRect());
-        await fly2D({ x: pb.cx - pb.w / 2, y: pb.cy - ph / 2, w: pb.w, h: ph }, { cx: tb.x + tb.w / 2, cy: tb.y + tb.h / 2, w: tb.w },
-          { from: 'img/back.webp', to: p === 0 && ev.id != null ? artUrl(ev.id) : 'img/back.webp', rot: fromSide === 1 ? 0 : 0, dur: fast ? 300 : 480, arc: 20, lift: fast ? 8 : 14 });
+        const tilt = parseFloat((el.style.transform.match(/rotate\((-?[\d.]+)deg\)/) || [0, 0])[1]) || 0;
+        await fly2D({ x: pb.cx - pb.w / 2, y: pb.cy - ph / 2, w: pb.w, h: ph }, { cx: tb.x + tb.w / 2, cy: tb.y + tb.h / 2, w: el.offsetWidth },
+          { from: 'img/back.webp', to: p === 0 && ev.id != null ? artUrl(ev.id) : 'img/back.webp', rot: tilt, dur: fast ? 320 : 520, arc: 16, lift: fast ? 8 : 14, settle: true });
         el.style.visibility = ''; }
       if (fast) await waitMs(40);
       return;
