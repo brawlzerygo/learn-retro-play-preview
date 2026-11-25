@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=74';
-import * as S from './sfx.js?v=74';
+import { Table } from './table.js?v=77';
+import * as S from './sfx.js?v=77';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -137,7 +137,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=74');
+const W = new Worker('js/worker.js?v=77');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -190,7 +190,7 @@ const levelName = k => (LEVELS.find(l => l[0] === k) || LEVELS[1])[1];
 const readyDecks = f => READY ? allDecks(f).filter(d => deckInfo(f, d).ready).map(d => d.key) : [];
 async function renderFormats() {
   await readyP;
-  for (const [f, id] of [['edison', '#edReady'], ['goat', '#gtReady']]) { const n = readyDecks(f).length, all = READY[f].decks.length; const t = $(id); t.textContent = n === all ? `${n} decks ready` : `${n} of ${all} decks ready`; t.className = 'tg ' + (n ? 'hot' : ''); }
+  for (const [f, id] of [['edison', '#edReady'], ['goat', '#gtReady']]) { const n = readyDecks(f).length, all = allDecks(f).length; /* both counts include your own decks */ const t = $(id); t.textContent = n === all ? `${n} decks ready` : `${n} of ${all} decks ready`; t.className = 'tg ' + (n ? 'hot' : ''); }
   focusFmt(null);
 }
 // nothing is preselected: hovering (or arrow keys) highlights a format, clicking it (or Enter) goes to the deck screen
@@ -275,7 +275,7 @@ function deckList(f, d, title, opts = {}) {
     <div class="pn peek hidden" id="dlPeek"></div>`;
   stage.append(v, p);
   v.onclick = closeDeckList; p.querySelector('#dlClose').onclick = closeDeckList; if (opts.copy) p.querySelector('#dlCopy').onclick = () => { closeDeckList(); opts.copy(); };
-  p.onmouseover = e2 => peekOver(e2, p, f);
+  if (!MOBILE) p.addEventListener('click', e2 => peekOver(e2, p, f));
   if (MOBILE) p.querySelector('.body').onclick = e => { const t = e.target.closest('[data-id]'); if (t) cardSheet(t.dataset.id); };
 }
 function closeDeckList() { const a = $('#dlist'), b = $('#dlVeil'); if (a) { a.remove(); b && b.remove(); S.play('click'); return true; } return false; }
@@ -305,7 +305,7 @@ function pileView(pi, kind) {
     <div class="pn peek hidden" id="dlPeek"></div>`;
   $('#layer').append(v, p);
   v.onclick = closeDeckList; p.querySelector('#dlClose').onclick = closeDeckList;
-  p.onmouseover = e => peekOver(e, p, D.fmt);
+  if (!MOBILE) p.addEventListener('click', e => peekOver(e, p, D.fmt));
 }
 function gyView(pi, kind) {
   const P = D.view.p[pi], who = pi === 0 ? 'Your' : "The computer's";
@@ -324,12 +324,14 @@ function gyView(pi, kind) {
     p.querySelector('.gytabs').onclick = e => { const b = e.target.closest('[data-k]'); if (b && b.dataset.k !== kind) { kind = b.dataset.k; S.play('click'); draw(); } };
     if (MOBILE) p.querySelector('.body').onclick = e => { const t = e.target.closest('[data-id]'); if (t) cardSheet(t.dataset.id); };
   };
-  draw(); $('#layer').append(v, p); v.onclick = closeDeckList; p.onmouseover = e => peekOver(e, p, D.fmt);
+  draw(); $('#layer').append(v, p); v.onclick = closeDeckList; if (!MOBILE) p.addEventListener('click', e => peekOver(e, p, D.fmt));
 }
 function peekOver(e, p, f) {
   if (MOBILE) return;   // phones read a card in its own sheet (a tap); the hover preview would stay behind with no way to close it (Zack, 2026-11-25)
-  const t = e.target.closest('[data-id]'); if (!t) return; const r = rec(f, t.dataset.id); if (!r) return; const pk = p.querySelector('#dlPeek'); pk.classList.remove('hidden');
-  pk.innerHTML = `<div class="card" style="background-image:url(${artUrl(t.dataset.id)})"></div><h4>${esc(r.n)}</h4><div class="meta">${esc(cardMeta(r))}</div><p>${esc(cardText(f, r))}</p>`;
+  const pk = p.querySelector('#dlPeek'); if (!pk) return;
+  if (e.target.closest('[data-pkx]') || (!e.target.closest('[data-id]') && !e.target.closest('#dlPeek'))) { pk.classList.add('hidden'); return; }   // its X, or a click away from the cards, closes it
+  const t = e.target.closest('[data-id]'); if (!t || t.closest('#dlPeek')) return; const r = rec(f, t.dataset.id); if (!r) return; pk.classList.remove('hidden'); S.play('click');
+  pk.innerHTML = `<button class="gb sm ico pkx" data-pkx title="Close"><svg><use href="#i-x"/></svg><span class="shine"></span></button><div class="card" style="background-image:url(${artUrl(t.dataset.id)})"></div><h4>${esc(r.n)}</h4><div class="meta">${esc(cardMeta(r))}</div><p>${esc(cardText(f, r))}</p>`;
   const right = e.clientX - stage.getBoundingClientRect().left > stage.getBoundingClientRect().width / 2; pk.style.left = right ? '40px' : ''; pk.style.right = right ? '' : '40px';
 }
 

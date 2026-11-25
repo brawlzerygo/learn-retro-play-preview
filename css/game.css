@@ -881,3 +881,9 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .blists .lhead{flex-direction:column;align-items:stretch;gap:10px}
 .blists .lfmt{display:flex;gap:8px;flex-wrap:nowrap}
 .blists .lfmt .gb{flex:1;justify-content:center}
+.dlist .peek .pkx{position:absolute;right:10px;top:10px;width:40px;height:40px;z-index:2}.dlist .dl,.dlist [data-id]{cursor:pointer}
+/* web: the Goat/Edison switch shares the tier tabs' line, at its right (Zack, 2026-11-25: "too wide on web... on the same line as the
+   tier tabs"); phones keep it full width above the tiers (css/mobile.css) */
+.blists .lhead{flex-direction:row;align-items:center;justify-content:space-between}
+.blists .lfmt{order:2}
+.blists .lfmt .gb{flex:none}
