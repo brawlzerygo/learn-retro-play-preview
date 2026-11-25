@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Preview · Learn Retro Play</title>
+<meta name="description" content="Duel the computer in classic Yu-Gi-Oh! formats: Edison and Goat. Free, from Learn Retro.">
+<link rel="icon" href="assets/icon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Atkinson+Hyperlegible+Next:wght@500;700;800&family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800;1,900&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/game.css?v=14">
+<link rel="stylesheet" href="css/rewind.css?v=14">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></symbol>
+  <symbol id="i-swords" viewBox="0 0 24 24"><path d="M3 3l9 9M3 3v4M3 3h4M21 3l-9 9M21 3v4M21 3h-4M8 16l-3 3M16 16l3 3M6 14l4 4M18 14l-4 4"/></symbol>
+  <symbol id="i-end" viewBox="0 0 24 24"><path d="M5 5l8 7-8 7M17 5v14"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+  <symbol id="i-fast" viewBox="0 0 24 24"><path d="M4 6l7 6-7 6zM13 6l7 6-7 6z"/></symbol>
+  <symbol id="i-log" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="i-set" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="11" rx="1"/><path d="M7 11h10"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-turn" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5l2 2M20 4v5h-5M20 12a8 8 0 0 1-14 5l-2-2M4 20v-5h5"/></symbol>
+  <symbol id="i-pass" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="M20 7v5h-5M20 12a8 8 0 1 1-2.3-5.7L20 9"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7M5 10v10h14V10"/></symbol>
+  <symbol id="i-cards" viewBox="0 0 24 24"><rect x="3" y="6" width="11" height="15" rx="1"/><path d="M8 3h11a1 1 0 0 1 1 1v13"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM17 9a4 4 0 0 1 0 6M19.5 6.5a8 8 0 0 1 0 11"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM17 9l5 6M22 9l-5 6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></symbol>
+</svg>
+<div id="stage">
+
+  <!-- TITLE -->
+  <section class="screen on" id="s-title">
+    <div class="menubg bc"></div><div class="rays"></div>
+    <div class="slab"></div><div class="slab2"></div>
+    <div class="heroes"><div class="card h1" style="background-image:url(img/73580471.webp)"></div><div class="card h2" style="background-image:url(img/72989439.webp)"></div></div>
+    <div class="ttl-logo"><img src="assets/logo.png" alt="">
+      <div><div class="ttl-word">Learn<span>Retro</span></div><div class="ttl-sub">PLAY</div></div></div>
+    <div class="mm bmenu" id="mainMenu">
+      <div class="mi on" data-go="format">Duel</div>
+      <div class="mi" data-go="build">Decks</div>
+      <div class="mi" data-go="stats">Stats</div>
+      <div class="mi lock">Online <span class="soon">coming soon</span></div>
+      <div class="mi" data-go="settings">Settings</div>
+      <div class="mi" data-href="https://learnretro.com/">Lessons</div>
+    </div>
+    <div class="bug">LR <span>PLAY</span></div>
+    <div class="legal">Yu-Gi-Oh! is a trademark of Shueisha and Konami. Card names, text and art are the property of Konami Digital Entertainment, used here for a free, non-commercial fan learning project. Learn Retro is not affiliated with Konami or 4K Media.</div>
+    <div class="ticker"><div class="tk" id="ticker">LEARN RETRO PLAY</div></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="screen" id="s-settings">
+    <div class="menubg bc"></div><div class="rays"></div>
+    <div class="water">Settings</div>
+    <div class="crumbs"><span>Home</span><i></i><span class="on">Settings</span></div>
+    <h2 class="htitle disp">Settings</h2>
+    <div class="vlist" id="setList"></div>
+    <div class="vdesc" id="setDesc"></div>
+    <div class="ticker"><div class="tk">↑↓ Choose a setting &nbsp;◆&nbsp; ←→ Change it</div></div>
+  </section>
+
+  <!-- FORMAT -->
+  <section class="screen" id="s-format">
+    <div class="menubg"></div><div class="lamp"></div>
+    <div class="crumbs cap"><span class="on">Format</span><i></i><span>Decks</span><i></i><span>Duel</span></div>
+    <h2 class="htitle disp">Pick a format</h2>
+    <div class="fmt-row">
+      <div class="fmt" data-fmt="goat"><div class="art" style="background-image:url(img/73915051.webp)"></div><span class="tg hot" id="gtReady">Ready</span>
+        <div class="txt"><h3 class="disp">Goat</h3><p>Yu-Gi-Oh! as of summer 2005. Scapegoat, Chaos and the classic control decks.</p></div></div>
+      <div class="fmt" data-fmt="edison"><div class="art" style="background-image:url(img/44508094.webp)"></div><span class="tg hot" id="edReady">Ready</span>
+        <div class="txt"><h3 class="disp">Edison</h3><p>Yu-Gi-Oh! as of April 2010. Synchro Summons, Blackwings, Frogs and Plants.</p></div></div>
+    </div>
+    <div class="keybar"><div class="kh"><span class="key">←→</span>Pick</div><div class="kh"><span class="key">Enter</span>Choose decks</div><div class="kh"><span class="key">Esc</span>Back</div><div class="sp"></div></div>
+  </section>
+
+  <!-- DECKS -->
+  <section class="screen" id="s-deck">
+    <div class="menubg"></div><div class="lamp"></div>
+    <div class="crumbs cap"><span>Format</span><i></i><span class="on">Decks</span><i></i><span>Duel</span></div>
+    <h2 class="htitle disp" id="deckTitle">Your deck</h2>
+    <div class="dk-wrap"><div class="seg-tabs" id="tierTabs"></div><div class="dk-list" id="deckList"></div></div>
+    <div class="dk-side pn" id="deckSide"></div>
+    <div class="keybar"><div class="kh"><span class="key">↑↓</span>Deck</div><div class="kh"><span class="key">Esc</span>Back</div><div class="sp"></div>
+      <button class="gb pri" id="duelGo"><svg><use href="#i-swords"/></svg>Duel<span class="key">Enter</span><span class="shine"></span></button></div>
+  </section>
+
+  <!-- DECK BUILDER -->
+  <section class="screen" id="s-build">
+    <div class="menubg bc"></div>
+    <div class="board" id="bBoard"></div>
+    <div class="bbar" id="bBar"></div>
+    <div class="pool2" id="bPool"></div>
+    <div class="roster" id="bDeck"></div>
+    <div class="pn bpeek hidden" id="bPeek"></div>
+    <div class="ticker"><div class="tk">Click a card to add it &nbsp;◆&nbsp; Click it in your deck to remove it &nbsp;◆&nbsp; Hover to read</div></div>
+  </section>
+
+  <!-- DUEL -->
+  <section class="screen" id="s-duel">
+    <div id="scene"></div>
+    <canvas id="gl"></canvas>
+    <div id="ov"></div>
+    <div class="ohand" id="ohand"></div>
+    <div class="hand" id="hand"></div>
+    <div class="turnm" id="turnm"><div><b class="disp" id="turnNo">1</b><span class="cap">Turn</span></div></div>
+    <div class="dial op" id="dial"><div><div class="p disp" id="phaseTxt">Draw</div><div class="s cap">Phase</div></div></div>
+    <div class="lp op pn" id="lpOp"><div class="em" id="emOp"></div><div><div class="who cap" id="whoOp">Computer</div><div class="num disp" id="lpOpN">8000</div><div class="bar" id="barOp"></div></div><div class="hcnt"><b id="hcOp">0</b>Hand</div></div>
+    <div class="lp me pn" id="lpMe"><div class="em" id="emMe"></div><div><div class="who cap" id="whoMe">You</div><div class="num disp" id="lpMeN">8000</div><div class="bar" id="barMe"></div></div><div class="hcnt"><b id="hcMe">0</b>Hand</div></div>
+    <div class="prompt hidden" id="prompt"></div>
+    <div class="inspect pn hidden" id="inspect"></div>
+    <div class="chainp pn hidden" id="chainp"></div>
+    <div class="tools">
+      <button class="gb ico" id="tLog" title="Duel log"><svg><use href="#i-log"/></svg><span class="shine"></span></button>
+      <button class="gb ico" id="tSpeed" title="Speed"><svg><use href="#i-fast"/></svg><span class="shine"></span></button>
+      <button class="gb ico" id="tSound" title="Sound"><svg><use href="#i-sound"/></svg><span class="shine"></span></button>
+      <button class="gb ico" id="tMenu" title="Menu"><svg><use href="#i-gear"/></svg><span class="shine"></span></button>
+      <button class="gb" id="tHint"><svg><use href="#i-bulb"/></svg>Hint<span class="key">H</span><span class="shine"></span></button>
+    </div>
+    <div id="layer"></div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="screen" id="s-results">
+    <div class="menubg"></div><div class="lamp"></div><div class="dust"></div>
+    <div class="res-hero" id="resHero"></div>
+    <div class="tiles" id="resTiles"></div>
+    <div class="review pn" id="resReview"></div>
+    <div class="res-btns">
+      <button class="gb pri" id="resAgain"><svg><use href="#i-redo"/></svg>Rematch<span class="key">Enter</span><span class="shine"></span></button>
+      <button class="gb" data-go="deck"><svg><use href="#i-cards"/></svg>Change decks<span class="shine"></span></button>
+      <button class="gb" data-go="title"><svg><use href="#i-home"/></svg>Home<span class="shine"></span></button></div>
+  </section>
+
+  <!-- STATS -->
+  <section class="screen" id="s-stats">
+    <div class="menubg"></div><div class="lamp"></div>
+    <div class="crumbs cap"><span>Home</span><i></i><span class="on">Stats</span></div>
+    <h2 class="htitle disp">Your Stats</h2>
+    <div class="seg sfmt" id="stFmt"></div>
+    <div id="stBody"></div>
+    <div class="keybar"><div class="kh"><span class="key">Esc</span>Back</div><div class="sp"></div></div>
+  </section>
+
+  <button class="gb gback" id="gBack"><svg><use href="#i-back"/></svg>Back<span class="shine"></span></button>
+
+  <div id="crt"></div>
+
+  <!-- LOADING / COIN TOSS -->
+  <section class="screen" id="s-load">
+    <div class="menubg"></div><div class="lamp"></div>
+    <div class="center"><div><div class="coin" id="coin">?</div><div class="disp" style="font-size:64px" id="loadTxt">Shuffling…</div><div class="mute" style="font-size:22px;margin-top:10px" id="loadSub"></div></div></div>
+  </section>
+</div>
+<script src="data/edison.js"></script>
+<script src="data/goat.js"></script>
+<script src="data/tokens.js"></script>
+<script type="module" src="js/game.js?v=14"></script>
+<div style="position:fixed;left:10px;bottom:10px;z-index:9999;padding:4px 10px;background:#ff6a1f;color:#140a04;font:800 13px/1.4 Verdana,sans-serif;letter-spacing:.12em;border-radius:3px;pointer-events:none">PREVIEW</div>
+</body>
+</html>

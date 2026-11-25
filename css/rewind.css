@@ -1,0 +1,153 @@
+/* Learn Retro Play: the Rewind theme (a late-night VHS tape), on the same layout as Broadcast.
+   Zack, 2026-11-24: "let me see what this would look like with the rewind theme... maybe just for testing add a theme picker".
+   Everything here is scoped to #stage.th-rewind; Broadcast (game.css) stays the default. */
+#stage.th-rewind{--ink:#e9fffe;--mute:rgba(233,255,254,.62);--acc:#ff7a33;--acc-hi:#3ce6ff;--acc-lo:#a8441a;--opp:#3ce6ff;--you:#ff7a33;
+  --pnl:rgba(8,5,22,.86);--pnl-edge:rgba(233,255,254,.28);--edge:rgba(233,255,254,.1);--cy:#3ce6ff;--wh:#e9fffe;--ink-dk:#0a0618;background:#06040f}
+
+/* type: VT323 for every game label, Atkinson stays for card text and sentences */
+#stage.th-rewind :is(.disp,.cap,.gb,.mi,.vrow,.crumbs,.ticker,.keybar,.kh,.board .cell .k,.board .cell .v,.board .name input,.savebtn,.lp .num,.lp .who,.lp .hcnt,.lp .hcnt b,
+  .dial .p,.dial .s,.turnm b,.turnm span,.prompt,.ct,.st,.pop,.tile .n,.tile .l,.link .no,.link .t,.tg,.ph,.bug,.ttl-sub,.roster .lbl,.roster .stat,.roster .extra .xl,
+  .inspect h4,.inspect .meta,.hintp .play,.review h4,.dlg h3,.banner .disp,.banner .sub,.key,.dk .nm,.fmt h3,.res-hero .disp,.coin,.vdesc,.empty,.toast){
+  font-family:'VT323',monospace!important;font-style:normal!important;font-weight:400!important;letter-spacing:.04em}
+#stage.th-rewind .rgb,#stage.th-rewind :is(.htitle,.fmt h3,.res-hero .disp,.bmenu .mi.on,.banner .disp,.lp .num){text-shadow:3px 0 rgba(255,40,90,.75),-3px 0 rgba(60,230,255,.75)}
+
+/* the tape: scanlines, vignette, a purple cast, the scene pushed darker and warmer */
+#crt{display:none}
+#stage.th-rewind #crt{display:block;position:absolute;inset:0;z-index:100;pointer-events:none;border-radius:40px;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.26) 0 2px,transparent 2px 4px),radial-gradient(ellipse at 50% 50%,transparent 58%,rgba(0,0,0,.8)),linear-gradient(90deg,rgba(20,0,40,.42),transparent 60%);
+  box-shadow:inset 0 0 160px rgba(0,0,0,.85)}
+#stage.th-rewind[data-scr=duel] #crt{background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 2px,transparent 2px 4px),radial-gradient(ellipse at 50% 50%,transparent 68%,rgba(0,0,0,.7));box-shadow:inset 0 0 120px rgba(0,0,0,.7)}
+#stage.th-rewind :is(.menubg,#scene){filter:brightness(.6) saturate(1.3) hue-rotate(-12deg) contrast(1.1)}
+#stage.th-rewind .rays,#stage.th-rewind .water{display:none}
+@keyframes rwblink{50%{opacity:0}}
+
+/* buttons: outlined white boxes; hover and primary invert */
+#stage.th-rewind .gb{font-size:30px;color:var(--wh)}
+#stage.th-rewind .gb.sm{font-size:25px}
+#stage.th-rewind .gb::before,#stage.th-rewind .gb .shine{transform:none;border-radius:0}
+#stage.th-rewind .gb::before{background:rgba(8,5,22,.7);box-shadow:inset 0 0 0 3px var(--wh)}
+#stage.th-rewind .gb:hover{transform:none}
+#stage.th-rewind .gb:hover::before,#stage.th-rewind .gb.on::before{background:var(--wh);box-shadow:none}
+#stage.th-rewind .gb:hover,#stage.th-rewind .gb.on{color:var(--ink-dk)}
+#stage.th-rewind .gb.pri::before{background:var(--acc);box-shadow:none}
+#stage.th-rewind .gb.pri{color:var(--ink-dk)}
+#stage.th-rewind .gb.pri:hover::before{background:#ff9457}
+#stage.th-rewind .key{border-radius:0;background:transparent;box-shadow:inset 0 0 0 2px currentColor;color:inherit;font-size:18px}
+#stage.th-rewind .tg{transform:none;border-radius:0;background:transparent;color:var(--cy);box-shadow:inset 0 0 0 2px var(--cy);font-size:20px}
+#stage.th-rewind .tg.hot{background:transparent;color:var(--acc);box-shadow:inset 0 0 0 2px var(--acc)}
+
+/* panels: dark tape-box with a thin white frame, no orange bar */
+#stage.th-rewind .pn::before{border-radius:0;background:var(--pnl);box-shadow:inset 0 0 0 3px var(--wh),0 30px 60px rgba(0,0,0,.55)}
+#stage.th-rewind .pn::after{display:none}
+#stage.th-rewind .ph{color:var(--cy)}
+#stage.th-rewind .ph::before{transform:none;background:var(--acc)}
+#stage.th-rewind .crumbs{font-size:26px;color:var(--cy)}
+#stage.th-rewind .crumbs span{color:rgba(60,230,255,.55)}#stage.th-rewind .crumbs span.on{color:var(--wh)}
+#stage.th-rewind .crumbs i{border-color:var(--cy)}
+#stage.th-rewind .htitle{font-size:120px;letter-spacing:.06em}
+#stage.th-rewind .keybar{font-size:24px}
+
+/* the ticker: a VCR status line */
+#stage.th-rewind .ticker{background:rgba(6,4,18,.92);color:var(--cy);box-shadow:inset 0 3px 0 var(--wh);font-size:30px}
+#stage.th-rewind .ticker .live{background:var(--acc);color:var(--ink-dk);font-size:30px}
+
+/* home: no slabs, the menu sits on the tape; the selected line gets a blinking ▶ */
+#stage.th-rewind #s-title .slab{background:linear-gradient(90deg,rgba(6,4,18,.88),rgba(6,4,18,.55) 70%,transparent);clip-path:none;width:1100px}
+#stage.th-rewind #s-title .slab2{display:none}
+#stage.th-rewind .bug{font-size:40px;color:var(--wh)}
+#stage.th-rewind .bug span{color:var(--acc)}
+#stage.th-rewind .ttl-sub{font-size:30px;letter-spacing:.5em;color:var(--wh);text-shadow:3px 0 rgba(255,40,90,.75),-3px 0 rgba(60,230,255,.75)}
+#stage.th-rewind .bmenu .mi{font-size:96px;line-height:1.02;color:rgba(233,255,254,.45);gap:22px}
+#stage.th-rewind .bmenu .mi.on{font-size:96px;color:#fff;transform:none}
+#stage.th-rewind .bmenu .mi::after{content:"▶";width:60px;height:auto;background:none!important;box-shadow:none!important;transform:none;color:transparent;font-size:66px;line-height:1}
+#stage.th-rewind .bmenu .mi.on::after{color:var(--acc);text-shadow:0 0 14px var(--acc);animation:rwblink 1s steps(2) infinite}
+#stage.th-rewind .bmenu .mi .soon{font:400 28px 'VT323',monospace;color:var(--cy);box-shadow:inset 0 0 0 2px var(--cy);padding:0 8px}
+#stage.th-rewind .bmenu .mi.lock{color:rgba(233,255,254,.2)}
+#stage.th-rewind .heroes .card{box-shadow:7px 0 0 rgba(255,40,90,.6),-7px 0 0 rgba(60,230,255,.6),0 40px 90px rgba(0,0,0,.85);border-radius:6px}
+
+/* settings: inverted highlight row, the mock-up exactly */
+#stage.th-rewind .vrow{font-size:56px;color:rgba(233,255,254,.6)}
+#stage.th-rewind .vrow .dots{border-bottom:4px dotted rgba(233,255,254,.25)}
+#stage.th-rewind .vrow.on{background:var(--wh);color:var(--ink-dk)}
+#stage.th-rewind .vrow.on .dots{border-color:rgba(10,6,24,.35)}
+#stage.th-rewind .vrow .val{color:var(--wh)}
+#stage.th-rewind .vrow.on .val,#stage.th-rewind .vrow.on .arr{color:var(--ink-dk)}
+#stage.th-rewind .vrow .blocks i{transform:none;background:rgba(233,255,254,.15)}
+#stage.th-rewind .vrow .blocks i.f{background:var(--acc)}
+#stage.th-rewind .vrow.on .blocks i{background:rgba(10,6,24,.2)}#stage.th-rewind .vrow.on .blocks i.f{background:var(--acc)}
+#stage.th-rewind .vrow .soonv{font-size:30px;color:var(--cy)}
+#stage.th-rewind .vdesc{font-size:34px;color:var(--wh)}
+
+/* format and decks */
+#stage.th-rewind .fmt{clip-path:none}
+#stage.th-rewind .fmt::after{box-shadow:inset 0 0 0 3px rgba(233,255,254,.35)}
+#stage.th-rewind .fmt.sel{box-shadow:7px 0 0 rgba(255,40,90,.55),-7px 0 0 rgba(60,230,255,.55),0 24px 60px rgba(0,0,0,.6)}
+#stage.th-rewind .fmt.sel::after{box-shadow:inset 0 0 0 4px var(--wh)}
+#stage.th-rewind .fmt h3{font-size:150px}
+#stage.th-rewind .dk::before{clip-path:none;box-shadow:inset 0 0 0 2px rgba(233,255,254,.18)}
+#stage.th-rewind .dk:hover::before{box-shadow:inset 0 0 0 2px var(--wh)}
+#stage.th-rewind .dk.sel::before{background:var(--acc)}
+#stage.th-rewind .dk.sel,#stage.th-rewind .dk.sel .pl{color:var(--ink-dk)}
+#stage.th-rewind .dk.sel::after{content:"▶";border:0;transform:none;width:auto;height:auto;margin-top:-20px;color:var(--acc);font:400 40px 'VT323',monospace;animation:rwblink 1s steps(2) infinite}
+#stage.th-rewind .dk .nm{font-size:36px}
+#stage.th-rewind .dk .strip{clip-path:none}
+
+/* deck builder */
+#stage.th-rewind .board{background:rgba(6,4,18,.94);border-bottom:3px solid var(--wh)}
+#stage.th-rewind .board .cell{border-right-color:rgba(233,255,254,.12)}
+#stage.th-rewind .board .cell .k{font-size:24px;color:var(--cy)}
+#stage.th-rewind .board .cell .v{font-size:78px}
+#stage.th-rewind .board .name input{font-size:66px}
+#stage.th-rewind .board .savebtn{font-size:56px;color:var(--ink-dk)}
+#stage.th-rewind .bbar .inp{border-radius:0;border:3px solid var(--wh);background:rgba(8,5,22,.85);font:400 28px 'VT323',monospace}
+#stage.th-rewind .roster{background:rgba(6,4,18,.92);border-left:3px solid var(--wh)}
+#stage.th-rewind .roster .lbl{font-size:52px;color:var(--wh)}
+#stage.th-rewind .roster .stat{font-size:26px}
+#stage.th-rewind .roster .extra .xl{font-size:22px;color:var(--cy)}
+#stage.th-rewind .roster .x:hover img{box-shadow:0 0 0 3px var(--wh)}
+
+/* the duel */
+#stage.th-rewind .lp::before{box-shadow:inset 0 0 0 3px var(--wh),0 30px 60px rgba(0,0,0,.55)}
+#stage.th-rewind .lp.turn::before{box-shadow:inset 0 0 0 3px var(--acc)}
+#stage.th-rewind .lp.op.turn::before{box-shadow:inset 0 0 0 3px var(--cy)}
+#stage.th-rewind .lp .num{font-size:80px}
+#stage.th-rewind .lp .who{font-size:22px;color:var(--cy)}
+#stage.th-rewind .lp .hcnt{font-size:20px}#stage.th-rewind .lp .hcnt b{font-size:38px}
+#stage.th-rewind .lp .bar i{transform:none}
+#stage.th-rewind :is(.dial,.turnm)::before{transform:none;border-radius:0;background:rgba(8,5,22,.9);box-shadow:inset 0 0 0 3px var(--wh),0 14px 30px rgba(0,0,0,.6)}
+#stage.th-rewind .dial::before{box-shadow:inset 0 0 0 3px var(--acc),0 14px 30px rgba(0,0,0,.6)}
+#stage.th-rewind .dial.op::before{box-shadow:inset 0 0 0 3px var(--cy),0 14px 30px rgba(0,0,0,.6)}
+#stage.th-rewind .dial .p{font-size:50px}#stage.th-rewind .turnm b{font-size:60px}
+#stage.th-rewind .dial .s,#stage.th-rewind .turnm span{font-size:20px}
+@keyframes rwready{50%{background:rgba(255,122,51,.28)}}
+#stage.th-rewind .dial.ready::before{animation:rwready 1s steps(2) infinite}
+#stage.th-rewind .prompt{font-size:32px}
+#stage.th-rewind .prompt::before{transform:none;border-radius:0;background:rgba(8,5,22,.92);box-shadow:inset 0 0 0 3px var(--wh)}
+#stage.th-rewind .prompt.wait::before{box-shadow:inset 0 0 0 3px var(--cy)}
+#stage.th-rewind .prompt b{color:var(--acc)}
+#stage.th-rewind .toast{font-size:28px}
+#stage.th-rewind .toast::before{transform:none}
+#stage.th-rewind .ct{transform:none;border-radius:0;background:rgba(8,5,22,.9);color:var(--wh);box-shadow:inset 0 0 0 2px var(--wh);font-size:26px}
+#stage.th-rewind .st{border-radius:0;background:rgba(8,5,22,.92);box-shadow:inset 0 0 0 2px var(--wh);font-size:28px}
+#stage.th-rewind .pop{font-size:110px;color:#ff4a6a;text-shadow:4px 0 rgba(60,230,255,.8),-4px 0 rgba(255,40,90,.8)}
+#stage.th-rewind .banner{background:rgba(6,4,18,.9);box-shadow:inset 0 4px 0 var(--wh),inset 0 -4px 0 var(--wh);clip-path:none}
+#stage.th-rewind .banner .disp{color:#fff;font-size:120px}
+#stage.th-rewind .banner .sub{color:var(--cy);font-size:28px}
+#stage.th-rewind .banner.op{background:rgba(6,4,18,.9);box-shadow:inset 0 4px 0 var(--cy),inset 0 -4px 0 var(--cy)}
+#stage.th-rewind .link .no{font-size:60px}#stage.th-rewind .link .t{font-size:28px}
+#stage.th-rewind .inspect h4{font-size:38px}#stage.th-rewind .inspect .meta{font-size:22px;color:var(--cy)}
+#stage.th-rewind .amenu .gb{font-size:26px}
+#stage.th-rewind .tile .n{font-size:86px}#stage.th-rewind .tile .l{font-size:24px;color:var(--cy)}
+#stage.th-rewind .res-hero .disp{font-size:260px}
+#stage.th-rewind .coin{background:transparent;color:var(--acc);box-shadow:inset 0 0 0 6px var(--wh);border-radius:0;font-size:120px}
+#stage.th-rewind .board .act .gb{font-size:22px;padding:0 14px}
+#stage.th-rewind .vdesc{border-left-color:var(--wh)}
+#stage.th-rewind .vdesc::before{background:var(--wh)}
+#stage.th-rewind .board .savebtn{padding:0 28px}
+#stage.th-rewind .board .act{gap:8px;padding:0 14px}
+
+/* Zack, 2026-11-24: "too dim/dark around the edges... not a fan of the film/grainy look over everything... pixelated lettering but it shouldnt be that way with card art":
+   no scanlines, no vignette, nothing laid over the cards; the scene only a little darker than Broadcast. The pixel type stays on labels only. */
+#stage.th-rewind #crt,#stage.th-rewind[data-scr=duel] #crt{display:none}
+#stage.th-rewind :is(.menubg,#scene){filter:brightness(.82) saturate(1.15) hue-rotate(-8deg)}
+#stage.th-rewind #s-title .slab{background:linear-gradient(90deg,rgba(6,4,18,.8),rgba(6,4,18,.45) 70%,transparent)}
