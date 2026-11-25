@@ -6,10 +6,11 @@ function ac() { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioCo
 export function setVolume(v) { vol = v; }
 export function setMuted(m) { muted = m; }
 export function isMuted() { return muted; }
-// the game's Broadcast sound set, made for it with ElevenLabs (tools/make_sfx.mjs, the b_ sounds): [file, playback rate, gain].
-const MAP = { click: ['b_select', 1, .7], nav: ['b_screen', 1, .6], hover: ['b_tick', 1, .35], deal: ['b_draw', 1.1, .55], draw: ['b_draw', 1, .8], place: ['b_place', 1, .9], set: ['b_set', 1, .85], flip: ['b_flip', 1, .8],
-  summon: ['b_summon', 1, .85], synchro: ['b_synchro', 1, .95], activate: ['b_activate', 1, .8], chain: ['b_chain', 1, .85], resolve: ['b_flip', 1.15, .5],
-  attack: ['b_attack', 1, .9], hit: ['b_hit', 1, .9], destroy: ['b_destroy', 1, .85], lp: ['b_lp', 1, .55], turn: ['b_turn', 1, .75], phase: ['b_phase', 1, .55], win: ['b_win', 1, .8], lose: ['b_lose', 1, .7], shuffle: ['b_draw', .85, .5], error: ['b_tick', .6, .5] };
+// Tabletop set for the duel (Zack, 2026-11-24, picked from four styles: real card sounds with a light touch of magic; tools/make_sfx_samples.mjs, the t_ files);
+// menus, LP, phase, hits and the win/lose stingers keep the Broadcast b_ sounds. [file, playback rate, gain]
+const MAP = { click: ['b_select', 1, .7], nav: ['b_screen', 1, .6], hover: ['b_tick', 1, .35], deal: ['t_draw', 1.1, .55], draw: ['t_draw', 1, .8], place: ['t_place', 1, .9], set: ['t_place', .92, .85], flip: ['b_flip', 1, .8],
+  summon: ['t_summon', 1, .9], synchro: ['t_summon', .88, 1], activate: ['t_activate', 1, .85], chain: ['t_activate', 1.08, .75], resolve: ['b_flip', 1.15, .5],
+  attack: ['t_attack', 1, .9], hit: ['b_hit', 1, .8], destroy: ['t_destroy', 1, .9], lp: ['b_lp', 1, .55], turn: ['t_turn', 1, .8], phase: ['b_phase', 1, .55], win: ['b_win', 1, .8], lose: ['b_lose', 1, .7], shuffle: ['t_draw', .85, .5], error: ['b_tick', .6, .5] };
 export async function load() {
   const files = [...new Set(Object.values(MAP).map(m => m[0]))];
   await Promise.all(files.map(async f => {
