@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=44';
-import * as S from './sfx.js?v=44';
+import { Table } from './table.js?v=46';
+import * as S from './sfx.js?v=46';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -121,7 +121,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=44');
+const W = new Worker('js/worker.js?v=46');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -193,6 +193,7 @@ async function renderDecks() {
   const f = SEL.fmt, decks = allDecks(f), info = new Map(decks.map(d => [d.key, deckInfo(f, d)]));
   const ok = decks.filter(d => info.get(d.key).ready).map(d => d.key); const s = SEL[f];
   if (!ok.includes(s.you)) s.you = ok.find(k => !k.startsWith('my:')) || ok[0]; if (!ok.includes(s.cpu)) s.cpu = ok.filter(k => !k.startsWith('my:'))[1] || ok[0];
+  if (MOBILE) pickingOpp = SEL.mtab === 'opp';
   $('#deckTitle').textContent = pickingOpp ? "Computer's deck" : 'Your deck';
   const tabs = ['all', 'my', ...TIERS[f]];
   $('#tierTabs').innerHTML = tabs.map(t => `<button class="gb sm ${SEL.tier === t ? 'on' : ''}" data-tier="${t}">${t === 'all' ? 'All' : t === 'my' ? 'My decks' : (TIERNAME[t] || t)}<span class="shine"></span></button>`).join('');
@@ -206,7 +207,7 @@ async function renderDecks() {
     || (SEL.tier === 'my' ? '<div class="mute" style="font-size:20px;padding:20px">No decks of your own yet. Build one in the Deck Builder.</div>' : '');
   $('#deckList').onclick = e => { const el = e.target.closest('[data-deck]'); if (!el) return; const r = info.get(el.dataset.deck);
     if (el.classList.contains('off')) { S.play('error'); toast(r.problems && r.problems.length ? r.problems[0] : 'This deck has cards the engine can\'t play yet: ' + r.missing.slice(0, 4).join(', ') + (r.missing.length > 4 ? '…' : '')); return; }
-    if (pickingOpp) { s.cpu = el.dataset.deck; pickingOpp = false; } else s.you = el.dataset.deck; saveSel(); S.play('click'); renderDecks(); };
+    if (pickingOpp) { s.cpu = el.dataset.deck; if (!MOBILE) pickingOpp = false; } else s.you = el.dataset.deck; saveSel(); S.play('click'); renderDecks(); };
   const you = deckByKey(f, s.you), cpu = deckByKey(f, s.cpu);
   if (!you || !cpu) { $('#deckSide').innerHTML = ''; return; }
   const kc = keyCards(f, you);
@@ -218,6 +219,17 @@ async function renderDecks() {
       <button class="gb sm" id="oppPick" style="margin-left:auto"><svg><use href="#i-cards"/></svg>${pickingOpp ? 'Picking…' : 'Change'}<span class="shine"></span></button><button class="gb sm" id="oppRand">Random<span class="shine"></span></button></div>
     <div class="row" style="align-items:flex-start"><span class="lb cap" style="margin-top:14px">Computer</span><div><div class="seg" id="lvl">${LEVELS.map(([k, n]) => `<button class="gb sm ${SEL.level === k ? 'pri' : ''}" data-l="${k}">${n}<span class="shine"></span></button>`).join('')}</div>
       <div class="mute" style="font-size:16px;margin-top:10px;max-width:600px">${esc(LEVELS.find(l => l[0] === SEL.level)[2])}</div></div></div>`;
+  if (MOBILE) {
+    const thumb = d => `<i style="background-image:url(${artUrl(keyCards(f, d)[0])})"></i>`;
+    $('#mdTabs').innerHTML = `<button class="${pickingOpp ? '' : 'on'}" data-mt="you">${thumb(you)}<span><small>Your deck</small>${esc(you.name)}</span></button><button class="${pickingOpp ? 'on op' : ''}" data-mt="opp">${thumb(cpu)}<span><small>Opponent</small>${esc(cpu.name)}</span></button>`;
+    $('#mdTabs').onclick = e => { const b = e.target.closest('[data-mt]'); if (!b) return; SEL.mtab = b.dataset.mt; S.play('click'); renderDecks(); $('#deckList').scrollTop = 0; };
+    const cur2 = pickingOpp ? cpu : you;
+    $('#mdTools').innerHTML = `<button class="gb sm" id="mdList"><svg><use href="#i-list"/></svg>See ${pickingOpp ? "the computer's" : 'your'} deck list<span class="shine"></span></button>${pickingOpp ? `<button class="gb sm" id="mdRand">Random<span class="shine"></span></button>` : ''}`;
+    $('#mdList').onclick = () => deckList(f, cur2, pickingOpp ? "The computer's deck" : 'Your deck');
+    if ($('#mdRand')) $('#mdRand').onclick = () => $('#oppRand').click();
+    $('#mdFoot').innerHTML = `<div class="lvls">${LEVELS.map(([k, n]) => `<button class="${SEL.level === k ? 'on' : ''}" data-l="${k}">${n}</button>`).join('')}</div>`;
+    $('#mdFoot').onclick = e => { const b = e.target.closest('[data-l]'); if (b) { SEL.level = b.dataset.l; saveSel(); S.play('click'); renderDecks(); } };
+  }
   $('#seeList').onclick = () => deckList(f, you, 'Your deck');
   $('#seeOpp').onclick = () => deckList(f, cpu, "The computer's deck");
   $('#oppPick').onclick = () => { pickingOpp = !pickingOpp; S.play('click'); renderDecks(); };
@@ -486,6 +498,31 @@ function closeCardZoom() { const z = $('#czoom'); if (z) { z.remove(); return tr
   }
   // a long press would also bring up the browser's own menu or a right-click: neither belongs here
   for (const el of [pool, deck]) el.addEventListener('contextmenu', e => { if (TOUCH) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+})();
+
+/* Add to home screen, phones only (Zack, 2026-11-25: "on mobile only is it possible to add a one click 'add to home screen' button?").
+   Android's Chrome hands us an install prompt (beforeinstallprompt), so one tap installs; iPhones allow no website to do that, so the
+   same button shows the two steps (Share, then Add to Home Screen). Hidden once the game is opened from the home screen. */
+(function addToHome() {
+  const b = $('#a2hs'); let evt = null;
+  const installed = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+  const upd = () => { b.hidden = !PHONE || installed() || localStorage.getItem('lrplay:a2hs') === 'done'; };
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); evt = e; upd(); });
+  addEventListener('appinstalled', () => { localStorage.setItem('lrplay:a2hs', 'done'); upd(); toast('Learn Retro Play is on your home screen.'); });
+  upd();
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  b.onclick = async () => {
+    S.unlock(); S.play('click');
+    if (evt) { evt.prompt(); const r = await evt.userChoice.catch(() => null); evt = null; if (r && r.outcome === 'accepted') { localStorage.setItem('lrplay:a2hs', 'done'); upd(); } return; }
+    const step = (n, icon, html) => `<div class="a2step"><b>${n}</b><span>${html}</span>${icon ? `<svg><use href="#i-${icon}"/></svg>` : ''}</div>`;
+    const how = ios
+      ? step(1, 'share', 'Tap the <b>Share</b> button: at the bottom of the screen in Safari, or by the address bar in Chrome.') + step(2, 'addhome', 'Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.')
+      : step(1, 'dots', 'Open your browser’s menu, the three dots by the address bar.') + step(2, 'addhome', 'Tap <b>Install app</b> or <b>Add to Home screen</b>.');
+    const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 60;
+    const p = document.createElement('div'); p.className = 'pn dlg a2dlg'; p.style.zIndex = 61;
+    p.innerHTML = `<h3 class="disp">Add to home screen</h3><div class="sub">Learn Retro Play opens full screen from its own icon, like an app. Free, nothing to download.</div>${how}<div class="btns"><button class="gb pri" data-x>Got it<span class="shine"></span></button></div>`;
+    stage.append(v, p); const close = () => { v.remove(); p.remove(); S.play('click'); }; v.onclick = close; p.querySelector('[data-x]').onclick = close;
+  };
 })();
 
 /* full screen on touch screens that allow it (Android); on an iPhone, Add to Home Screen opens the game full screen */

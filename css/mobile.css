@@ -497,3 +497,68 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.ml .gback{width:44px;padding:0;justify-content:center;font-size:0}
 #stage.ml .htitle{padding-left:68px}
 #stage.ml .dk-fan{margin-bottom:-46px}
+
+/* ---------- the deck picker on phones (Zack, 2026-11-25: "more intuitive on mobile... an alternating tab for your deck and opponents
+   deck instead of scroll down, and the list of decks needs to be contained so you cant swipe to either side") ----------
+   One screen that never scrolls sideways: the Your deck / Opponent tabs, the tier chips (wrapped, not a sideways strip), the deck list
+   (the only part that scrolls, up and down), the deck-list button, then the computer level and Duel at the bottom. */
+#stage.m #s-deck.on,#stage.m #s-deck.leaving{display:flex!important;flex-direction:column;overflow:hidden!important;touch-action:pan-y;padding-bottom:0}
+#stage.m #s-deck .htitle{flex:none;font-size:30px;padding:calc(var(--sat) + 10px) 20px 8px 70px}
+#stage.m #s-deck .dk-side{display:none}
+#stage.m .mdtabs{display:flex;flex:none;gap:8px;padding:0 14px 10px}
+#stage.m .mdtabs button{flex:1;min-width:0;display:flex;align-items:center;gap:8px;height:58px;padding:0 10px;border:0;border-radius:3px;background:#1d2127;color:#cfd3d9;text-align:left;box-shadow:inset 0 -3px 0 rgba(255,255,255,.06)}
+#stage.m .mdtabs button i{flex:none;width:30px;height:44px;border-radius:2px;background:center/cover}
+#stage.m .mdtabs button span{min-width:0;font:italic 900 16px 'Barlow Condensed';text-transform:uppercase;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#stage.m .mdtabs button small{display:block;font:800 10px 'Barlow Condensed';font-style:normal;letter-spacing:.14em;color:#9aa0a8}
+#stage.m .mdtabs button.on{background:#262b33;box-shadow:inset 0 -3px 0 var(--acc),0 0 0 1px rgba(255,106,31,.5);color:#fff}
+#stage.m .mdtabs button.on.op{box-shadow:inset 0 -3px 0 var(--opp),0 0 0 1px rgba(79,155,224,.55)}
+#stage.m .mdtabs button.on small{color:var(--acc-hi)}
+#stage.m .mdtabs button.on.op small{color:#9cc4ea}
+#stage.m #s-deck .dk-wrap{flex:1;min-height:0;display:flex;flex-direction:column;padding:0 14px;gap:8px}
+#stage.m #s-deck .seg-tabs{flex:none;flex-wrap:wrap;overflow:visible;gap:5px;padding:0}
+#stage.m #s-deck .seg-tabs .gb{height:30px;font-size:13px;padding:0 9px}
+#stage.m #s-deck .dk-list{flex:1;min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y;padding:2px 2px 8px;scrollbar-width:none}
+#stage.m #s-deck .dk{width:100%;min-width:0;transform:none!important}
+#stage.m #s-deck .dk>div:nth-child(2){min-width:0;flex:1}
+#stage.m #s-deck .dk .nm,#stage.m #s-deck .dk .pl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#stage.m .mdtools{display:flex;flex:none;gap:8px}
+#stage.m .mdtools .gb{flex:1;justify-content:center}
+#stage.m .mdtools #mdRand{flex:none}
+#stage.m .mdfoot{display:block;flex:none;padding:10px 14px 0}
+#stage.m .mdfoot .lvls{display:flex;gap:4px}
+#stage.m .mdfoot .lvls button{flex:1;min-width:0;height:34px;border:0;border-radius:2px;background:#1d2127;color:#cfd3d9;font:800 12px 'Barlow Condensed';letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#stage.m .mdfoot .lvls button.on{background:var(--opp);color:#06121d}
+#stage.m #s-deck .keybar{position:relative!important;flex:none;padding:10px 14px calc(var(--sab) + 8px);background:none}
+/* sideways: the tabs and tools beside the list */
+#stage.ml #s-deck.on,#stage.ml #s-deck.leaving{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);grid-template-rows:auto 1fr auto;column-gap:14px;padding:0 var(--sar) 0 var(--sal)}
+#stage.ml #s-deck .htitle{grid-column:1;grid-row:1;padding:8px 0 6px 58px;font-size:26px}
+#stage.ml .mdtabs{grid-column:1;grid-row:2;flex-direction:column;padding:0;align-self:start}
+#stage.ml #s-deck .dk-wrap{grid-column:2;grid-row:1/3;padding:8px 0 0}
+#stage.ml .mdfoot{grid-column:1;grid-row:3;padding:0 0 6px}
+#stage.ml #s-deck .keybar{grid-column:2;grid-row:3;width:auto;padding:6px 0 calc(var(--sab) + 4px)}
+#stage.ml #duelGo{height:48px;font-size:24px}
+#stage.m .mdtabs,#stage.m .mdfoot,#stage.m .mdtools{position:relative;z-index:2}
+/* the Deck Builder's card view: a solid dark background all the way down, so scrolled text never sits on the cards behind
+   (Zack, 2026-11-25: "the background is transparent so it clashes... needs to have a consistent black background") */
+#stage.m .czoom{background:#0e0f13;box-shadow:0 0 0 100vmax rgba(5,6,8,.6)}
+#stage.m .czoom::before,#stage.m .czoom::after{display:none}
+#stage.m:not(.ml) #s-deck .htitle{padding-left:112px}
+/* sideways deck picker: tabs, level and Duel in the left column, the list (and its button) filling the right */
+#stage.ml #s-deck.on,#stage.ml #s-deck.leaving{grid-template-rows:auto auto 1fr auto auto}
+#stage.ml #s-deck .dk-wrap{grid-row:1/6;min-height:0;overflow:hidden;padding-bottom:calc(var(--sab) + 6px)}
+#stage.ml .mdfoot{grid-row:4;padding:0 0 8px}
+#stage.ml #s-deck .keybar{grid-column:1;grid-row:5}
+#stage.ml .mdtabs button{height:54px}
+#stage.ml #s-deck.on,#stage.ml #s-deck.leaving{grid-template-rows:auto auto minmax(0,1fr) auto auto}#stage.ml #s-deck .dk-wrap{height:100%}
+
+/* Add to home screen (phones only) */
+#stage.m .a2hs{display:flex;align-items:center;gap:12px;position:relative;order:3;margin-top:12px;width:100%;height:56px;padding:0 14px;border:1px dashed rgba(255,106,31,.55);border-radius:4px;background:rgba(255,106,31,.08);color:#fff;text-align:left}
+#stage.m .a2hs[hidden]{display:none}
+#stage.m .a2hs svg{width:26px;height:26px;flex:none;fill:none;stroke:var(--acc);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#stage.m .a2hs span{font:italic 900 19px 'Barlow Condensed';text-transform:uppercase;letter-spacing:.03em;line-height:1.05}
+#stage.m .a2hs small{display:block;font:500 12px 'Atkinson Hyperlegible';font-style:normal;text-transform:none;letter-spacing:0;color:#9aa0a8}
+#stage.ml #s-title .a2hs{grid-column:1;grid-row:3;align-self:start;height:46px}
+#stage.m .a2step{display:flex;align-items:center;gap:12px;margin-top:12px;font-size:15px;line-height:1.4}
+#stage.m .a2step>b{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--acc);color:#140a04;font:italic 900 17px 'Barlow Condensed'}
+#stage.m .a2step span{flex:1}
+#stage.m .a2step svg{width:28px;height:28px;flex:none;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}

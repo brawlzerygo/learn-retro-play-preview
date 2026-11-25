@@ -784,3 +784,5 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 @keyframes fadeOut{to{opacity:0}}
 .mi,.gb,.vrow,.dk,.fmt{transition:transform .16s cubic-bezier(.2,.8,.2,1),background-color .16s,color .16s,opacity .16s}
 @media (prefers-reduced-motion:reduce){.screen.on,.screen.leaving,.veil,.dlg,.dlist,.hintp,.logp,.amenu,.dial-menu,.czoom,.toast,.mydecks,.msheet{animation:none!important}}
+.mdtabs,.mdtools,.mdfoot{display:none}
+.a2hs{display:none}
