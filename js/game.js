@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=121';
-import * as S from './sfx.js?v=121';
+import { Table } from './table.js?v=122';
+import * as S from './sfx.js?v=122';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -143,7 +143,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=121');
+const W = new Worker('js/worker.js?v=122');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -1777,7 +1777,7 @@ function packSlots(pt) { return (pt && pt.slots) || PACK_SLOTS; }
 function makePack(pk, type) {
   const T = draftTiers(pk), f = DPOOLS[pk].fmt, pt = packTypes(pk).find(t => t.k === type) || null, out = [], slots = packSlots(pt);
   // the trade-offs of strength (Zack, 2026-11-25: "clear tradeoffs"): strong packs have fewer cards, only a few guaranteed good cards, and a lower
-  // Ultra Rare rate per foil (everyday 1 in 6; Spell/Trap and Beater 1 in 8; Staples 1 in 12 with 2 foils; Holo 1 in 20 with 3), so none out-pulls an everyday pack's Ultra chance
+  // Ultra Rare rate per foil (standard 1 in 6; Spell/Trap and Beater 1 in 8; Staples 1 in 12 with 2 foils; Holo 1 in 20 with 3), so none out-pulls a standard pack's Ultra chance
   const ur = (pt && pt.ur) || 1 / 6;
   slots.forEach((sl, i) => { const t = sl === 'F' ? (Math.random() < ur ? 'UR' : 'SR') : sl;
     let c = [...T.main[t], ...T.extra[t]].filter(id => !out.includes(id));
@@ -1797,11 +1797,11 @@ function boxTypes(pk) {
   // a random box draws packs one at a time and never past a pack's cap, so a box keeps the same limits as your own mix
   const capped = pool => { const n = {}, out = []; while (out.length < SEALED_PACKS) { const ok = pool.filter(t => (n[t.k] || 0) < PACK_CAP[t.str || 0]); const t = ok[Math.floor(Math.random() * ok.length)]; n[t.k] = (n[t.k] || 0) + 1; out.push(t.k); } return out; };
   const rand = () => capped(types.filter(t => !t.str));
-  // a tuned recipe (data/box-mix.js): its packs, its Core packs, the rest random everyday packs
+  // a tuned recipe (data/box-mix.js): its packs, its Core packs, the rest random standard packs
   const everyday = types.filter(t => !t.str).map(t => t.k), tuned = r => r ? () => { const out = []; for (const [k, n] of Object.entries(r[0])) if (has(k)) for (let i = 0; i < n; i++) out.push(k); for (let i = 0; i < r[1]; i++) out.push('core'); while (out.length < SEALED_PACKS) out.push(everyday[Math.floor(Math.random() * everyday.length)]); return out.slice(0, SEALED_PACKS); } : null;
   const MIX = (self.BOX_MIX || {})[pk] || {};
   return [
-    { k: 'box', name: 'Booster box', blurb: `Specialty: variety. ${SEALED_PACKS} random everyday packs.`, art: (types[1] || types[0]).art, col: '#ff6a1f', packs: rand },
+    { k: 'box', name: 'Booster box', blurb: `Specialty: variety. ${SEALED_PACKS} random standard packs.`, art: (types[1] || types[0]).art, col: '#ff6a1f', packs: rand },
     { k: 'starter', name: 'Starter box', blurb: 'Specialty: a working deck every time. Spell/Trap, Removal and Boss packs, so every key role is covered.', art: (types.find(t => t.k === 'beat') || types[0]).art, col: '#47c47a', packs: tuned(MIX.starter) || (() => fill([...pick('core', 'core', 'core', 'core', 'beat', 'beat', 'st', 'st', 'removal', 'boss')])) },
     { k: 'champ', name: 'Champion box', blurb: 'Specialty: top-end power. Staples and a Holo pack, fewer cards in all.', art: (types.find(t => t.k === 'boss') || types[0]).art, col: '#f2c94c', packs: tuned(MIX.champ) || (() => fill([...pick('staple', 'staple', 'holo', 'removal', 'removal', 'boss', 'boss', 'core', 'core', 'core')])) },
     { k: 'mystery', name: 'Mystery box', blurb: `Specialty: the gamble. Any packs, strong ones included, unseen until opened. Same power on average, bigger swings.`, art: null, col: '#7a7f88', packs: () => capped(types), mystery: true },
@@ -1934,11 +1934,11 @@ function boxFace(P, b) {
 // the box, its specialty, exactly what is inside, and Open this box. Close, Esc or Back returns to the pack page with nothing started.
 function boxContents(pk, b) {
   const types = packTypes(pk), nm = k => { const t = types.find(x => x.k === k); return !t ? k : t.k === 'core' ? 'Core pack' : `${t.name}${t.sub === 'Core pack' ? ' core' : ''} pack`; };
-  if (b.k === 'box') return [[`Random everyday packs (Core, themes, Boss, Removal)`, SEALED_PACKS]];
+  if (b.k === 'box') return [[`Random standard packs (Core, themes, Boss, Removal)`, SEALED_PACKS]];
   if (b.k === 'mystery') return [[`Packs of any kind, strong ones included, each hidden until you open it`, SEALED_PACKS]];
   const r = b.k === 'starter' ? (self.BOX_MIX || {})[pk]?.starter : b.k === 'champ' ? (self.BOX_MIX || {})[pk]?.champ : ((self.BOX_MIX || {})[pk]?.theme || {})[b.k.slice(3)];
   const out = []; let n = 0;
-  if (r) { for (const [k, c] of Object.entries(r[0])) if (types.some(t => t.k === k)) { out.push([nm(k), c]); n += c; } if (r[1]) { out.push(['Core pack', r[1]]); n += r[1]; } if (n < SEALED_PACKS) out.push(['Random everyday packs', SEALED_PACKS - n]); return out; }
+  if (r) { for (const [k, c] of Object.entries(r[0])) if (types.some(t => t.k === k)) { out.push([nm(k), c]); n += c; } if (r[1]) { out.push(['Core pack', r[1]]); n += r[1]; } if (n < SEALED_PACKS) out.push(['Random standard packs', SEALED_PACKS - n]); return out; }
   const cnt = {}; for (const k of b.packs()) cnt[k] = (cnt[k] || 0) + 1; return Object.entries(cnt).map(([k, c]) => [nm(k), c]);
 }
 function openBoxPreview(pk, b, onOpen) {
