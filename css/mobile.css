@@ -868,3 +868,8 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .stbox{overflow-x:auto}
 
 #stage .gbackbar[hidden]{display:none!important}
+
+#stage.m .wip{position:absolute;left:10px;right:10px;top:auto;bottom:calc(var(--sab) + 66px);transform:none;width:auto;max-width:none;white-space:normal;align-items:flex-start;gap:10px;padding:9px 8px 9px 10px;border-radius:14px;font-size:13px;line-height:1.35}
+#stage.m .wip b{font-size:12px;padding:3px 8px;margin-top:1px}
+#stage.m .wipx{width:28px;height:28px}
+#stage.m .wipx svg{width:14px;height:14px}
