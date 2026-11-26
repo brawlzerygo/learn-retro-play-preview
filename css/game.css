@@ -1178,3 +1178,18 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 .mcell .mpack .cfp::after{animation:none;display:none}.mcell:hover .mpack .cfp::after{display:block;animation:cfShine 1.4s ease-in-out 1}
 .mcell .mbox .bx-front::after{animation:none;display:none}
 #s-sealed[data-step=pick] .keybar .k123{display:none}
+/* pack page section titles (Zack, 2026-11-25: bigger) */
+.ph.big{font:italic 900 46px 'Barlow Condensed';letter-spacing:.01em;color:var(--ink);text-transform:uppercase;display:flex;align-items:baseline;gap:18px;margin:8px 0 6px}
+.ph.big::before{display:none}.ph.big span{font:600 17px 'Atkinson Hyperlegible';letter-spacing:0;text-transform:none;color:var(--mute)}
+/* a box up close */
+.czoom.boxzoom{left:50%;right:auto;transform:translateX(-50%);width:1180px;top:170px;bottom:auto;align-items:center;gap:40px;padding:34px 38px}
+.boxzoom .bzart{flex:none;display:grid;place-items:center;width:540px;height:400px}
+.mbox.big{width:calc(466px * 1.1);height:calc(326px * 1.1)}.mbox.big .cfb{--k:1.1}
+.boxzoom .zi{min-height:0}
+.boxzoom h3{font-size:52px}
+.boxzoom .bzspec{font-size:20px;color:var(--ink);margin-top:10px}
+.boxzoom .bzlist{margin-top:16px;display:flex;flex-direction:column;gap:6px}
+.boxzoom .bzlist .lb{font:800 14px 'Barlow Condensed';letter-spacing:.14em;text-transform:uppercase;color:var(--acc-hi);margin-bottom:2px}
+.boxzoom .bzrow{display:flex;gap:12px;font-size:18px;align-items:baseline}.boxzoom .bzrow b{font:italic 900 24px 'Barlow Condensed';color:var(--ink);min-width:36px}
+.boxzoom .bznote{font-size:15px;color:var(--mute);margin-top:14px}
+.czoom.boxzoom{box-shadow:0 0 0 200vmax rgba(6,7,9,.72),0 30px 80px rgba(0,0,0,.7)}.czoom.boxzoom::before{background:#15171b}

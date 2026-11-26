@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=119';
-import * as S from './sfx.js?v=119';
+import { Table } from './table.js?v=121';
+import * as S from './sfx.js?v=121';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -143,7 +143,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=119');
+const W = new Worker('js/worker.js?v=121');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -1930,6 +1930,30 @@ function boxFace(P, b) {
       <div class="bx-lid"></div><div class="cf-logo">Learn<b>Retro</b></div><div class="bx-label">${esc(b.name).replace(/ box$/, '<br>box')}</div>
       <div class="cf-plate"><h3>${esc(P.name)}</h3><div>${cards}</div></div><div class="cf-burst">10<br>packs</div></div></div>`;
 }
+// a box up close (Zack, 2026-11-25: "if you click on it, it enlarges it and gives you a description, and then an addtl option to pick 'select'"):
+// the box, its specialty, exactly what is inside, and Open this box. Close, Esc or Back returns to the pack page with nothing started.
+function boxContents(pk, b) {
+  const types = packTypes(pk), nm = k => { const t = types.find(x => x.k === k); return !t ? k : t.k === 'core' ? 'Core pack' : `${t.name}${t.sub === 'Core pack' ? ' core' : ''} pack`; };
+  if (b.k === 'box') return [[`Random everyday packs (Core, themes, Boss, Removal)`, SEALED_PACKS]];
+  if (b.k === 'mystery') return [[`Packs of any kind, strong ones included, each hidden until you open it`, SEALED_PACKS]];
+  const r = b.k === 'starter' ? (self.BOX_MIX || {})[pk]?.starter : b.k === 'champ' ? (self.BOX_MIX || {})[pk]?.champ : ((self.BOX_MIX || {})[pk]?.theme || {})[b.k.slice(3)];
+  const out = []; let n = 0;
+  if (r) { for (const [k, c] of Object.entries(r[0])) if (types.some(t => t.k === k)) { out.push([nm(k), c]); n += c; } if (r[1]) { out.push(['Core pack', r[1]]); n += r[1]; } if (n < SEALED_PACKS) out.push(['Random everyday packs', SEALED_PACKS - n]); return out; }
+  const cnt = {}; for (const k of b.packs()) cnt[k] = (cnt[k] || 0) + 1; return Object.entries(cnt).map(([k, c]) => [nm(k), c]);
+}
+function openBoxPreview(pk, b, onOpen) {
+  closeCardZoom(); const P = DPOOLS[pk], types = packTypes(pk), list = boxContents(pk, b); S.play('click');
+  const cards = b.mystery ? null : (() => { let s = 0; const N = 20; for (let i = 0; i < N; i++) s += b.packs().reduce((a, k) => a + packSlots(types.find(t => t.k === k) || types[0]).length, 0); return Math.round(s / N); })();
+  const z = document.createElement('div'); z.className = 'pn czoom boxzoom'; z.id = 'czoom';
+  const [spec, ...rest] = b.blurb.split('. ');
+  z.innerHTML = `<div class="bzart"><div class="mbox big">${boxFace(P, { ...b, cards })}</div></div><div class="zi"><div class="meta">${esc(P.name)} · ${SEALED_PACKS} packs${cards ? ` · about ${cards} cards` : ''}</div><h3 class="disp">${esc(b.name)}</h3>
+    <p class="bzspec">${esc(spec)}.</p>${rest.length ? `<p>${esc(rest.join('. '))}</p>` : ''}
+    <div class="bzlist"><div class="lb">Inside the box</div>${list.map(([n, c]) => `<div class="bzrow"><b>${c}×</b><span>${esc(n)}</span></div>`).join('')}</div>
+    <p class="bznote">Every box is balanced to the same power as the Booster box; each one leans a different way.</p>
+    <div class="btns"><button class="gb pri" data-z="go">Open this box<span class="shine"></span></button><button class="gb" data-z="x">Close<span class="key">Esc</span><span class="shine"></span></button></div></div>`;
+  $('.screen.on').appendChild(z);
+  z.onclick = e => { const k = e.target.closest('[data-z]'); if (!k) return; if (k.dataset.z === 'x') return closeCardZoom(); closeCardZoom(); onOpen(); };
+}
 // after choosing a pool (Zack, 2026-11-25: "the pack and booster arts should be on the sealed format page"): the real Classic Foil packs, each with
 // its counter, then the boxes; your own mix is up to 10 packs (strong packs capped). An unfinished run in this pool shows its Continue card on top.
 let sMix = null;
@@ -1948,9 +1972,9 @@ function renderPackPick(pk) {
   const boxCell = b => { const n = boxCards(b); return `<div class="mcell box" data-box="${esc(b.k)}"><div class="mbox">${boxFace(P, { ...b, cards: n })}</div><p>${esc(b.blurb)}</p></div>`; };
   const x = SD(), cont = x && x.pool === pk ? contCard(P, '', !x.boxOpen ? `${x.box || 'Box'}, not opened yet` : x.opened < SEALED_PACKS ? `Pack ${x.opened + 1} of ${SEALED_PACKS}` : 'Packs open, deck in progress', 'Sealed') : '';
   $('#sealBody').innerHTML = `<div class="tscroll">${cont}<p class="dintro">Open a box, or mix your own ${SEALED_PACKS} packs. Strong packs have fewer cards and a limit per mix.</p>
-      <div class="dgrp"><div class="ph">Your mix · tap a pack to add it</div><div class="mgrid packs">${types.map(packCell).join('')}</div></div>
-      <div class="dgrp"><div class="ph">Boxes</div><div class="mgrid boxes">${boxes.filter(b => !b.k.startsWith('tb:')).map(boxCell).join('')}</div></div>
-      <div class="dgrp"><div class="ph">Theme boxes</div><div class="mgrid boxes">${boxes.filter(b => b.k.startsWith('tb:')).map(boxCell).join('')}</div></div></div>
+      <div class="dgrp"><div class="ph big">Packs<span>Mix your own ${SEALED_PACKS}: tap a pack to add it</span></div><div class="mgrid packs">${types.map(packCell).join('')}</div></div>
+      <div class="dgrp"><div class="ph big">Booster boxes<span>Tap a box to see what's inside</span></div><div class="mgrid boxes">${boxes.filter(b => !b.k.startsWith('tb:')).map(boxCell).join('')}</div></div>
+      <div class="dgrp"><div class="ph big">Theme boxes<span>Built around one theme, balanced to the same power</span></div><div class="mgrid boxes">${boxes.filter(b => b.k.startsWith('tb:')).map(boxCell).join('')}</div></div></div>
     <div class="mixbar"><div class="mx-n"><b>${t}</b> of ${SEALED_PACKS} packs · ${cards()} cards</div><div class="dprog">${Array.from({ length: SEALED_PACKS }, (_, i) => `<i class="${i < t ? 'f' : ''}"></i>`).join('')}</div>
       <button class="gb" id="mixClear" ${t ? '' : 'disabled'}>Clear<span class="shine"></span></button><button class="gb pri" id="mixGo" ${t === SEALED_PACKS ? '' : 'disabled'}>${t === SEALED_PACKS ? 'Open your packs' : `Pick ${SEALED_PACKS - t} more`}<span class="shine"></span></button></div>`;
   const redraw = () => { const sc = $('#sealBody .tscroll'), top = sc ? sc.scrollTop : 0, wy = scrollY; renderPackPick(pk); const s2 = $('#sealBody .tscroll'); if (s2) s2.scrollTop = top; scrollTo(0, wy); };
@@ -1958,7 +1982,7 @@ function renderPackPick(pk) {
   $('#sealBody').onclick = async e => {
     if (e.target.closest('[data-cont]')) { sMenu = false; sPick = false; S.play('click'); return renderSealed(true); }
     if (e.target.closest('[data-cont-toss]')) return sealedRestart();
-    const b = e.target.closest('[data-box]'); if (b) { if (!(await newRun())) return; S.play('shuffle'); startSealed(pk, b.dataset.box); sMix = null; sMenu = false; sPick = false; return renderSealed(true); }
+    const b = e.target.closest('[data-box]'); if (b) { const bx = boxes.find(q => q.k === b.dataset.box); return openBoxPreview(pk, bx, async () => { if (!(await newRun())) return; S.play('shuffle'); startSealed(pk, bx.k); sMix = null; sMenu = false; sPick = false; renderSealed(true); }); }
     const inc = e.target.closest('[data-inc]'), dec = e.target.closest('[data-dec]'), cell = e.target.closest('[data-pack]');
     const k = inc ? inc.dataset.inc : dec ? dec.dataset.dec : cell ? cell.dataset.pack : null;
     if (k) { const pt = types.find(q => q.k === k), n = sMix.n[k] || 0;
