@@ -866,3 +866,5 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .sttab th{white-space:normal;line-height:1.2;vertical-align:bottom}
 #stage.m .sttab td:first-child{white-space:normal;word-break:break-word}
 #stage.m .stbox{overflow-x:auto}
+
+#stage .gbackbar[hidden]{display:none!important}
