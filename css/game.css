@@ -1004,3 +1004,5 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .fmt .art{transition:transform .5s cubic-bezier(.2,.8,.2,1)}
 .fmt .tg:not(.hot){background:rgba(10,11,13,.8);color:#e7e9ec}
 .draft .dgrp .fmt .tg,.moderow .fmt .tg,.draft .rndrow .fmt .tg{top:16px;left:30px}
+/* pool tiles: the Format / Learn Retro mix / Learn Retro pool pill sits top right (Zack, 2026-11-25) */
+.draft .dgrp .fmt .tg{left:auto;right:30px}
