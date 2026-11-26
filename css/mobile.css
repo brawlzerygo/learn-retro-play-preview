@@ -757,3 +757,18 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .wheelwrap{right:auto;left:50%;top:auto;bottom:10px;margin:0 0 0 -160px;width:320px;height:320px}
 #stage.m .wheel span em{font-size:12px;width:110px;margin-top:50px;top:16px}
 #stage.m .wheel span em{top:12px;width:auto;margin:0;max-height:105px;font-size:12px}
+/* the roll on phones (PWA): Graceful Dice and the bubble on top, the arena, then the wheel */
+#stage.m .rollstage,#stage.m .rollstage.wheeling{display:flex;flex-direction:column;min-height:0;gap:12px;padding-top:56px}
+#stage.m .gdwrap{flex-direction:row;gap:12px;align-self:stretch}
+#stage.m .gdwrap .gdice{width:84px;height:84px}
+#stage.m .gdsay{font-size:16px;max-width:none;flex:1}#stage.m .gdsay::before{left:-10px;top:50%;margin:-10px 0 0;border:10px solid transparent;border-left:0;border-right-color:#fff}
+#stage.m .arena{height:230px;align-self:stretch}
+#stage.m .rollstage.wheeling .arena{height:150px}
+#stage.m .die3d{width:76px;height:76px;--h:38px;left:20px;bottom:40px}#stage.m .dshadow{width:76px;left:20px;bottom:26px}
+#stage.m .cube .cf{border-radius:12px}#stage.m .cube .die-face{inset:9px}#stage.m .cube .die-face i{width:12px;height:12px}
+#stage.m .rollmsg{top:0;font-size:22px}#stage.m .rollmsg b{width:42px;height:42px;font-size:30px}#stage.m .rollmsg.big span{font-size:28px}
+#stage.m .wheelwrap{width:300px;height:300px;--wr:150px;margin:20px auto 30px}
+#stage.m .wheelwrap .wheel span em{font-size:12px;max-height:100px;top:12px}
+#stage.m .wflap{top:-22px;width:28px;height:40px;margin-left:-14px}
+#stage.m .rollrow{position:sticky;bottom:calc(var(--sab) + 10px);z-index:8}#stage.m .rollrow .gb{flex:1;justify-content:center}
+#stage.m .gdwrap .gdice{left:auto;top:auto;margin:0;position:relative}#stage.m .wheelwrap{position:relative;left:auto;right:auto;top:auto;bottom:auto;margin:24px auto 30px;align-self:center}

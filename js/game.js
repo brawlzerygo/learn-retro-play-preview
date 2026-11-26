@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=126';
-import * as S from './sfx.js?v=126';
+import { Table } from './table.js?v=129';
+import * as S from './sfx.js?v=129';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -143,7 +143,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=126');
+const W = new Worker('js/worker.js?v=129');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -1998,44 +1998,102 @@ function renderPackPick(pk) {
 // testing only (?test in the address): the pack code, for the balance simulation in the browser console
 if (new URLSearchParams(location.search).has('test')) readyP.then(() => { self.__lr = { makePack, packTypes, boxTypes, draftTiers, DPOOLS, rec, PACK_CAP, packSlots, renderSealed }; });
 
-/* ---------- FULLY RANDOM ROLL (Zack, 2026-11-25: "graceful dice dropping a die and it bouncing around and landing on what you get, spinning a wheel") ----------
-   Graceful Dice throws a die: 1-2 One Type, 3-4 One Attribute, 5 a Jank pile, 6 Total chaos (no theme). Then a prize wheel of that category's themes
-   spins and lands on yours. Skip, Esc or reduced motion jump to the result. */
+/* ---------- FULLY RANDOM ROLL (Zack, 2026-11-25: "graceful dice dropping a die...spinning a wheel"; then "make it feel more interactive") ----------
+   1. Tap the die in Graceful Dice's hand (or Roll): it's thrown, tumbles in 3D, bounces with its shadow and settles on 1 to 6:
+      1-2 One Type, 3-4 One Attribute, 5 a Jank pile, 6 Total chaos (no theme).
+   2. Flick or drag the wheel of that category's themes (or Spin): it spins frame by frame, its flapper clicking each slice, and lands on yours.
+   3. Confetti, the theme slams in, and See your deck. Skip, Esc or reduced motion go straight to the deck. ?roll=1..6 forces the roll (recordings). */
 const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
 const dieFace = n => `<div class="die-face">${Array.from({ length: 9 }, (_, i) => `<i class="${PIPS[n].includes(i) ? 'on' : ''}"></i>`).join('')}</div>`;
+// the cube's face for each number, and the turn that brings it to the front
+const CUBE = { 1: 'rotateY(0deg)', 6: 'rotateY(180deg)', 3: 'rotateY(90deg)', 4: 'rotateY(-90deg)', 2: 'rotateX(90deg)', 5: 'rotateX(-90deg)' };
+const SHOW = { 1: [0, 0], 6: [0, 180], 3: [0, -90], 4: [0, 90], 2: [-90, 0], 5: [90, 0] };
+const ease = t => 1 - Math.pow(1 - t, 3);
+function confetti(host, n = 26) { const cols = ['#ff6a1f', '#ffd23f', '#47c47a', '#3a9ee8', '#9b5de5', '#fff']; for (let i = 0; i < n; i++) { const c = document.createElement('i'); c.className = 'cfti'; const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 180;
+  c.style.cssText = `--x:${Math.cos(a) * d}px;--y:${Math.sin(a) * d - 80}px;--r:${Math.random() * 720 - 360}deg;background:${cols[i % cols.length]};animation-delay:${Math.random() * 80}ms`; host.appendChild(c); setTimeout(() => c.remove(), 1600); } }
 function rollFullyRandom(f) {
-  const forced = +new URLSearchParams(location.search).get('roll');   // recording only (tools/record.mjs): ?roll=1 to 6
+  const forced = +new URLSearchParams(location.search).get('roll');
   const el = $('#rndBody'), themes = RND.themes, roll = forced >= 1 && forced <= 6 ? forced : 1 + Math.floor(Math.random() * 6);
   const cat = roll <= 2 ? ['One Type', themes.filter(t => t.k.startsWith('t:'))] : roll <= 4 ? ['One Attribute', themes.filter(t => t.k.startsWith('a:'))] : roll === 5 ? ['Jank pile', themes.filter(t => ['normal', 'low', 'deep'].includes(t.k))] : ['Total chaos', []];
   const pick = cat[1].length ? cat[1][Math.floor(Math.random() * cat[1].length)] : null;
-  let done = false; const timers = [];
+  let done = false, raf = 0; const timers = [];
   const later = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
-  const finish = () => { if (done) return; done = true; timers.forEach(clearTimeout); RND.deck = buildRandom(f, pick); RND.deck.rolled = { roll, cat: cat[0] }; renderRandom(true); };
-  const gd = (FM.goat.cards.find(c => c.n === 'Graceful Dice') || {}).id;
-  $('#rndTitle').textContent = 'Rolling...';
-  el.innerHTML = `<div class="rollstage"><div class="gdice" ${gd ? `style="background-image:url(${artSrc(gd)})"` : ''}></div><div class="die" id="die">${dieFace(1)}</div>
-    <div class="rollmsg" id="rollMsg"><span>Graceful Dice is rolling for your deck</span></div><div class="wheelwrap" id="wheel" hidden></div></div>
-    <div class="row"><button class="gb" id="rSkip">Skip<span class="shine"></span></button></div>`;
-  el.onclick = e => { if (e.target.closest('#rSkip')) finish(); };
+  const finish = () => { if (done) return; done = true; timers.forEach(clearTimeout); cancelAnimationFrame(raf); RND.deck = buildRandom(f, pick); RND.deck.rolled = { roll, cat: cat[0] }; renderRandom(true); };
   if (REDUCED) return finish();
-  // the throw: the die tumbles in, bouncing, its face flickering until it lands
-  const die = $('#die'); die.classList.add('throw'); S.play('shuffle');
-  let face = 1; const flick = setInterval(() => { face = 1 + (face % 6); die.innerHTML = dieFace(face); }, 90); timers.push(flick);
-  [420, 820, 1120, 1330].forEach((t, i) => later(() => S.play('place', { gap: 30 }), t));
-  later(() => { clearInterval(flick); die.innerHTML = dieFace(roll); die.classList.add('landed'); S.play('summon');
-    $('#rollMsg').innerHTML = `<b>${roll}</b><span>${cat[0]}${pick ? '' : '!'}</span>`; }, 1500);
-  if (!pick) { later(() => { $('#rollMsg').innerHTML = `<b>6</b><span>Total chaos: any card, anything goes</span>`; $('#rollMsg').classList.add('big'); S.play('synchro'); }, 2100); later(finish, 3600); return; }
-  // the wheel: every theme of the category as a slice; it spins about 5 turns and eases onto yours
-  later(() => {
-    const opts = cat[1], n = opts.length, i = opts.indexOf(pick), seg = 360 / n, w = $('#wheel'); w.hidden = false;
-    const cols = ['#ff6a1f', '#2f6fb0', '#7b4fc9', '#2fa38c', '#d9483b', '#c99a2f'];
-    w.innerHTML = `<div class="wptr"></div><div class="wheel" id="wh" style="background:conic-gradient(${opts.map((o, j) => `${cols[j % cols.length]} ${j * seg}deg ${(j + 1) * seg}deg`).join(',')})">
-      ${opts.map((o, j) => `<span style="transform:rotate(${j * seg + seg / 2}deg)"><em>${esc(o.name.replace(/ only$/, ''))}</em></span>`).join('')}<i class="hub"></i></div>`;
-    const wh = $('#wh'), target = 360 * 5 + (360 - (i * seg + seg / 2)), dur = 4200;
-    requestAnimationFrame(() => { wh.style.transition = `transform ${dur}ms cubic-bezier(.12,.6,.12,1)`; wh.style.transform = `rotate(${target}deg)`; });
-    // ticks slow down with the wheel
-    let tt = 0; for (let k = 0; k < 34; k++) { tt += 40 + k * k * 2.6; if (tt > dur - 150) break; later(() => S.play('hover', { gap: 20 }), tt); }
-    later(() => { w.classList.add('won'); S.play('synchro'); $('#rollMsg').innerHTML = `<b>${roll}</b><span>${esc(pick.name)}</span>`; $('#rollMsg').classList.add('big'); }, dur + 100);
-    later(finish, dur + 1700);
-  }, 2200);
+  const gd = (FM.goat.cards.find(c => c.n === 'Graceful Dice') || {}).id;
+  $('#rndTitle').textContent = 'Roll for your deck';
+  el.innerHTML = `<div class="rollstage" id="rollStage">
+      <div class="gdwrap"><div class="gdice" ${gd ? `style="background-image:url(${artSrc(gd)})"` : ''}></div><div class="gdsay" id="gdSay">Tap the die to roll!</div></div>
+      <div class="arena" id="arena"><div class="dshadow" id="dShadow"></div><div class="die3d" id="die"><div class="cube" id="cube">${[1, 2, 3, 4, 5, 6].map(n => `<div class="cf" style="transform:${CUBE[n]} translateZ(var(--h))">${dieFace(n)}</div>`).join('')}</div></div></div>
+      <div class="rollmsg" id="rollMsg"></div>
+      <div class="wheelwrap" id="wheel" hidden></div></div>
+    <div class="row rollrow"><button class="gb pri" id="rGo">Roll the die<span class="shine"></span></button><button class="gb" id="rSkip">Skip<span class="shine"></span></button></div>`;
+  const die = $('#die'), cube = $('#cube'), shadow = $('#dShadow'), arena = $('#arena'), say = $('#gdSay'), go = $('#rGo');
+  // the die waits in Graceful Dice's hand, bobbing, until it's thrown
+  die.classList.add('ready');
+  let stage = 'die';
+  const throwDie = () => {
+    if (stage !== 'die') return; stage = 'rolling'; die.classList.remove('ready'); go.disabled = true; say.textContent = 'Here it goes...'; S.play('shuffle');
+    const W = arena.clientWidth, x0 = 0, x1 = W * 0.62, T = 1900, t0 = performance.now(), bounces = [0.36, 0.62, 0.8, 0.92];
+    const [ex, ey] = SHOW[roll], rx0 = 30, ry0 = -40, rxT = ex + 360 * 3, ryT = ey + 360 * 4;
+    let lastB = -1;
+    const step = now => {
+      const k = Math.min(1, (now - t0) / T), x = x0 + (x1 - x0) * ease(k);
+      // height: an arc into the first landing, then smaller hops
+      let h = 0, seg = bounces.findIndex(b => k < b); if (seg < 0) seg = bounces.length;
+      const a = seg === 0 ? 0 : bounces[seg - 1], b = seg < bounces.length ? bounces[seg] : 1, amp = [190, 90, 40, 14, 0][seg];
+      h = amp * Math.sin(Math.PI * Math.min(1, (k - a) / (b - a)));
+      if (seg !== lastB && seg > 0 && seg <= bounces.length) { lastB = seg; S.play('place', { gap: 30 }); die.classList.remove('squash'); void die.offsetWidth; die.classList.add('squash'); }
+      const r = ease(k); cube.style.transform = `rotateX(${rx0 + (rxT - rx0) * r}deg) rotateY(${ry0 + (ryT - ry0) * r}deg)`;
+      die.style.transform = `translate(${x}px, ${-h}px)`; shadow.style.transform = `translate(${x}px,0) scale(${1 - h / 320})`; shadow.style.opacity = String(0.55 - h / 600);
+      if (k < 1) raf = requestAnimationFrame(step); else {
+        // pin the landed die by percent, so it stays in view when the arena narrows for the wheel
+        const pct = `calc(${((40 + x1) / W) * 100}% - 0px)`; die.style.transform = 'none'; die.style.left = pct; shadow.style.transform = 'none'; shadow.style.left = pct; landed(); }
+    };
+    raf = requestAnimationFrame(step);
+  };
+  const landed = () => {
+    die.classList.add('landed'); S.play('summon');
+    const m = $('#rollMsg'); m.innerHTML = `<b>${roll}</b><span>${cat[0]}${pick ? '' : '!'}</span>`; m.classList.add('slam');
+    if (!pick) { stage = 'end'; say.textContent = 'Total chaos!'; later(() => { m.innerHTML = `<b>6</b><span>Total chaos: anything goes</span>`; m.classList.remove('slam'); void m.offsetWidth; m.classList.add('slam', 'big'); confetti($('#rollStage')); S.play('synchro'); go.disabled = false; go.innerHTML = 'See your deck<span class="shine"></span>'; stage = 'deck'; }, 900); return; }
+    say.textContent = `${cat[0]}! Now spin the wheel.`;
+    later(showWheel, 700);
+  };
+  // the wheel: drawn as slices; spun frame by frame so it always visibly turns, its flapper kicking each slice
+  let ang = 0;
+  const showWheel = () => {
+    const opts = cat[1], n = opts.length, seg = 360 / n, w = $('#wheel'), cols = ['#ff6a1f', '#2f6fb0', '#7b4fc9', '#2fa38c', '#d9483b', '#c99a2f'];
+    w.hidden = false; w.classList.add('in'); $('#rollStage').classList.add('wheeling');
+    w.innerHTML = `<div class="wflap" id="wFlap"></div><div class="wrim">${Array.from({ length: 24 }, (_, j) => `<i style="transform:rotate(${j * 15}deg) translateY(calc(var(--wr) * -1 - 2px))"></i>`).join('')}</div>
+      <div class="wheel" id="wh" style="background:conic-gradient(${opts.map((o, j) => `${cols[j % cols.length]} ${j * seg}deg ${(j + 1) * seg}deg`).join(',')})">
+      ${opts.map((o, j) => `<span style="transform:rotate(${j * seg + seg / 2}deg)"><em>${esc(o.name.replace(/ only$/, ''))}</em></span>`).join('')}<i class="hub">LR</i></div>
+      <div class="whint" id="wHint">Flick the wheel or press Spin</div>`;
+    stage = 'wheel'; go.disabled = false; go.innerHTML = 'Spin!<span class="shine"></span>'; S.play('nav');
+    const wh = $('#wh'), flap = $('#wFlap'), i = opts.indexOf(pick);
+    const spin = power => {   // power 0.6 to 1.6 from the flick: a stronger flick spins longer
+      if (stage !== 'wheel') return; stage = 'spinning'; go.disabled = true; $('#wHint').textContent = ''; w.classList.add('spinning');
+      const turns = Math.round(4 + 3 * power), target = ang + 360 * turns + ((360 - (i * seg + seg / 2)) - ((ang % 360) + 360) % 360 + 360) % 360, from = ang, T = 3400 + 1600 * power, t0 = performance.now();
+      let lastSeg = Math.floor(((360 - (ang % 360)) % 360) / seg);
+      const step = now => { const k = Math.min(1, (now - t0) / T), e = 1 - Math.pow(1 - k, 4); ang = from + (target - from) * e; wh.style.transform = `rotate(${ang}deg)`;
+        const s = Math.floor((((360 - (ang % 360)) % 360) + 360) % 360 / seg); if (s !== lastSeg) { lastSeg = s; S.play('hover', { gap: 15 }); flap.classList.remove('kick'); void flap.offsetWidth; flap.classList.add('kick'); }
+        if (k < 1) raf = requestAnimationFrame(step); else won(); };
+      raf = requestAnimationFrame(step); S.play('shuffle');
+    };
+    // drag or flick the wheel itself
+    let drag = null;
+    wh.onpointerdown = e => { if (stage !== 'wheel') return; drag = { y: e.clientY, x: e.clientX, t: performance.now(), a: ang }; wh.setPointerCapture(e.pointerId); };
+    wh.onpointermove = e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; ang = drag.a + (dx - dy) * 0.4; wh.style.transform = `rotate(${ang}deg)`; };
+    wh.onpointerup = e => { if (!drag) return; const dt = Math.max(16, performance.now() - drag.t), dist = Math.hypot(e.clientX - drag.x, e.clientY - drag.y), v = dist / dt; drag = null;
+      spin(Math.max(0.6, Math.min(1.6, v * 1.2))); };
+    spinFn = () => spin(1);
+  };
+  let spinFn = null;
+  const won = () => {
+    stage = 'deck'; const w = $('#wheel'); w.classList.remove('spinning'); w.classList.add('won'); S.play('synchro'); confetti($('#rollStage'));
+    const m = $('#rollMsg'); m.innerHTML = `<b>${roll}</b><span>${esc(pick.name)}</span>`; m.classList.remove('slam'); void m.offsetWidth; m.classList.add('slam', 'big');
+    say.textContent = `${pick.name}! Let's see your deck.`; go.disabled = false; go.innerHTML = 'See your deck<span class="shine"></span>';
+  };
+  die.onclick = throwDie;
+  go.onclick = () => { if (stage === 'die') throwDie(); else if (stage === 'wheel' && spinFn) spinFn(); else if (stage === 'deck') { S.play('shuffle'); finish(); } };
+  $('#rSkip').onclick = finish;
 }
