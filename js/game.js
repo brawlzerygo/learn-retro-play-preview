@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=122';
-import * as S from './sfx.js?v=122';
+import { Table } from './table.js?v=126';
+import * as S from './sfx.js?v=126';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -143,7 +143,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=122');
+const W = new Worker('js/worker.js?v=126');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -1703,20 +1703,20 @@ function renderRandom(anim) {
         <div class="fmt-row drow">${[['goat', 'Goat', 73915051, 'Summer 2005 cards and banlist.'], ['edison', 'Edison', 44508094, 'April 2010 cards and banlist. Synchros in the Extra Deck.']].map(([k, n, a, b], i) => `<div class="fmt" data-go2="${k}">${tileBg(a)}<span class="tg hot">${i + 1}</span><div class="txt"><h3 class="disp">${n}</h3><p>${b}</p></div></div>`).join('')}</div>`;
       el.onclick = e => { const t = e.target.closest('[data-go2]'); if (!t) return; S.play('click'); RND = { f: t.dataset.go2, themes: rollThemes(t.dataset.go2), deck: null }; renderRandom(true); }; return; }
     if (!RND.deck) { $('#rndTitle').textContent = 'Pick a deck';
-      const opts = [{ k: 'random', name: 'Fully random', blurb: 'Any playable cards, 16 to 20 monsters. Anything can happen.', art: (FM.goat.cards.find(c => c.n === 'Graceful Dice') || { id: 70781052 }).id }, ...RND.themes];
+      const opts = [{ k: 'random', name: 'Fully random', blurb: 'Graceful Dice rolls for your deck, then the wheel spins for its theme. Anything can happen.', art: (FM.goat.cards.find(c => c.n === 'Graceful Dice') || { id: 70781052 }).id }, ...RND.themes];
       const grp = [['Random', opts.slice(0, 1)], ['Jank piles', opts.filter(t => ['normal', 'low', 'deep'].includes(t.k))], ['One Type', opts.filter(t => t.k.startsWith('t:'))], ['One Attribute', opts.filter(t => t.k.startsWith('a:'))]].filter(g => g[1].length);
       const tile = (t, i) => `<div class="fmt ${anim && !REDUCED ? 'dopt in' : ''}" style="animation-delay:${Math.min(i, 8) * 40}ms" data-go2="${esc(t.k)}">${tileBg(t.art)}<span class="tg ${t.k === 'random' ? 'hot' : ''}">${t.k === 'random' ? 'Random' : 'Jank'}</span><div class="txt"><h3 class="disp">${esc(t.name)}</h3><p>${esc(t.blurb)}</p></div></div>`;
       el.innerHTML = `<div class="dsub"><span class="dpool">${f === 'goat' ? 'Goat' : 'Edison'} · every jank theme</span></div>
         <div class="tscroll">${grp.map(([g, ts]) => `<div class="dgrp"><div class="ph">${g}</div><div class="fmt-row drow rndrow">${ts.map(tile).join('')}</div></div>`).join('')}</div>`;
       el.onclick = e => { const t = e.target.closest('[data-go2]');
-        if (t) { const th = RND.themes.find(x => x.k === t.dataset.go2) || null; RND.deck = buildRandom(f, th); S.play('shuffle'); renderRandom(true); return; }
+        if (t) { if (t.dataset.go2 === 'random') return rollFullyRandom(f); const th = RND.themes.find(x => x.k === t.dataset.go2) || null; RND.deck = buildRandom(f, th); S.play('shuffle'); renderRandom(true); return; }
       };
       return; }
     const x = RND.deck, d = { name: '', main: x.main, extra: x.extra }, kc = keyCards(f, d), xl = f === 'goat' ? 'Fusion' : 'Extra', mons = x.main.filter(id => isMon(rec(f, id))).length;
     const kind = x.theme ? 'Jank' : 'Random', name = x.theme ? `Jank: ${x.theme}` : `Random ${f === 'goat' ? 'Goat' : 'Edison'} deck`;
     $('#rndTitle').textContent = 'Your deck';
     el.innerHTML = `<div class="ddone"><div class="dk-fan">${kc.map((id, i) => `<div class="card" style="background-image:url(${artUrl(id)})" data-j="${i}"></div>`).join('')}</div>
-      <div class="dinfo"><div class="ph">${esc(x.theme || 'Fully random')} · ${f === 'goat' ? 'Goat' : 'Edison'} · 40 Main · ${x.extra.length} ${xl}</div>
+      <div class="dinfo"><div class="ph">${x.rolled ? `Rolled a ${x.rolled.roll} · ${esc(x.rolled.cat)} · ` : ''}${esc(x.theme || 'Fully random')} · ${f === 'goat' ? 'Goat' : 'Edison'} · 40 Main · ${x.extra.length} ${xl}</div>
         <p>${mons} monsters and ${40 - mons} Spells and Traps, every copy limit kept. Duel it as it is, or save it to My decks first.</p>
         <label class="dname"><span class="lb cap">Deck name</span><input id="dName" maxlength="40" value="${esc(name)}"></label>
         <div class="row"><button class="gb pri" id="rDuel" data-go2="duel"><svg><use href="#i-swords"/></svg>Duel with it<span class="shine"></span></button><button class="gb" id="rSave" data-go2="save">Save<span class="shine"></span></button>
@@ -1726,7 +1726,7 @@ function renderRandom(anim) {
     const save = () => { if (x.saved) return x.saved; const id = Date.now().toString(36), nm = ($('#dName').value || name).trim().slice(0, 40); const a = MY(); a.unshift({ id, fmt: f, name: nm, main: [...x.main], extra: [...x.extra], kind }); saveMY(a); S.play('summon'); return (x.saved = 'my:' + id); };   // once saved, Duel uses the same copy
     $('#rSave').onclick = () => { save(); toast('Saved to My decks.'); };
     $('#rDuel').onclick = () => { const key = save(); RND.deck = null; SEL.fmt = f; show('deck'); SEL[f].you = key; PK.you = true; if (MOBILE) SEL.mtab = 'opp'; else pickingOpp = true; saveSel(); renderDecks(); };
-    $('#rAgain').onclick = () => { RND.deck = buildRandom(f, RND.themes.find(t => t.name === x.theme) || null); S.play('shuffle'); renderRandom(true); };
+    $('#rAgain').onclick = () => { if (x.rolled) { RND.deck = null; return rollFullyRandom(f); } RND.deck = buildRandom(f, RND.themes.find(t => t.name === x.theme) || null); S.play('shuffle'); renderRandom(true); };
     $('#rList').onclick = () => deckList(f, { ...d, name: $('#dName').value || name }, x.theme ? 'Jank deck' : 'Random deck');
     $('#rBack').onclick = () => { RND.deck = null; renderRandom(true); };
   });
@@ -1996,4 +1996,46 @@ function renderPackPick(pk) {
   };
 }
 // testing only (?test in the address): the pack code, for the balance simulation in the browser console
-if (new URLSearchParams(location.search).has('test')) readyP.then(() => { self.__lr = { makePack, packTypes, boxTypes, draftTiers, DPOOLS, rec, PACK_CAP, packSlots }; });
+if (new URLSearchParams(location.search).has('test')) readyP.then(() => { self.__lr = { makePack, packTypes, boxTypes, draftTiers, DPOOLS, rec, PACK_CAP, packSlots, renderSealed }; });
+
+/* ---------- FULLY RANDOM ROLL (Zack, 2026-11-25: "graceful dice dropping a die and it bouncing around and landing on what you get, spinning a wheel") ----------
+   Graceful Dice throws a die: 1-2 One Type, 3-4 One Attribute, 5 a Jank pile, 6 Total chaos (no theme). Then a prize wheel of that category's themes
+   spins and lands on yours. Skip, Esc or reduced motion jump to the result. */
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+const dieFace = n => `<div class="die-face">${Array.from({ length: 9 }, (_, i) => `<i class="${PIPS[n].includes(i) ? 'on' : ''}"></i>`).join('')}</div>`;
+function rollFullyRandom(f) {
+  const forced = +new URLSearchParams(location.search).get('roll');   // recording only (tools/record.mjs): ?roll=1 to 6
+  const el = $('#rndBody'), themes = RND.themes, roll = forced >= 1 && forced <= 6 ? forced : 1 + Math.floor(Math.random() * 6);
+  const cat = roll <= 2 ? ['One Type', themes.filter(t => t.k.startsWith('t:'))] : roll <= 4 ? ['One Attribute', themes.filter(t => t.k.startsWith('a:'))] : roll === 5 ? ['Jank pile', themes.filter(t => ['normal', 'low', 'deep'].includes(t.k))] : ['Total chaos', []];
+  const pick = cat[1].length ? cat[1][Math.floor(Math.random() * cat[1].length)] : null;
+  let done = false; const timers = [];
+  const later = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
+  const finish = () => { if (done) return; done = true; timers.forEach(clearTimeout); RND.deck = buildRandom(f, pick); RND.deck.rolled = { roll, cat: cat[0] }; renderRandom(true); };
+  const gd = (FM.goat.cards.find(c => c.n === 'Graceful Dice') || {}).id;
+  $('#rndTitle').textContent = 'Rolling...';
+  el.innerHTML = `<div class="rollstage"><div class="gdice" ${gd ? `style="background-image:url(${artSrc(gd)})"` : ''}></div><div class="die" id="die">${dieFace(1)}</div>
+    <div class="rollmsg" id="rollMsg"><span>Graceful Dice is rolling for your deck</span></div><div class="wheelwrap" id="wheel" hidden></div></div>
+    <div class="row"><button class="gb" id="rSkip">Skip<span class="shine"></span></button></div>`;
+  el.onclick = e => { if (e.target.closest('#rSkip')) finish(); };
+  if (REDUCED) return finish();
+  // the throw: the die tumbles in, bouncing, its face flickering until it lands
+  const die = $('#die'); die.classList.add('throw'); S.play('shuffle');
+  let face = 1; const flick = setInterval(() => { face = 1 + (face % 6); die.innerHTML = dieFace(face); }, 90); timers.push(flick);
+  [420, 820, 1120, 1330].forEach((t, i) => later(() => S.play('place', { gap: 30 }), t));
+  later(() => { clearInterval(flick); die.innerHTML = dieFace(roll); die.classList.add('landed'); S.play('summon');
+    $('#rollMsg').innerHTML = `<b>${roll}</b><span>${cat[0]}${pick ? '' : '!'}</span>`; }, 1500);
+  if (!pick) { later(() => { $('#rollMsg').innerHTML = `<b>6</b><span>Total chaos: any card, anything goes</span>`; $('#rollMsg').classList.add('big'); S.play('synchro'); }, 2100); later(finish, 3600); return; }
+  // the wheel: every theme of the category as a slice; it spins about 5 turns and eases onto yours
+  later(() => {
+    const opts = cat[1], n = opts.length, i = opts.indexOf(pick), seg = 360 / n, w = $('#wheel'); w.hidden = false;
+    const cols = ['#ff6a1f', '#2f6fb0', '#7b4fc9', '#2fa38c', '#d9483b', '#c99a2f'];
+    w.innerHTML = `<div class="wptr"></div><div class="wheel" id="wh" style="background:conic-gradient(${opts.map((o, j) => `${cols[j % cols.length]} ${j * seg}deg ${(j + 1) * seg}deg`).join(',')})">
+      ${opts.map((o, j) => `<span style="transform:rotate(${j * seg + seg / 2}deg)"><em>${esc(o.name.replace(/ only$/, ''))}</em></span>`).join('')}<i class="hub"></i></div>`;
+    const wh = $('#wh'), target = 360 * 5 + (360 - (i * seg + seg / 2)), dur = 4200;
+    requestAnimationFrame(() => { wh.style.transition = `transform ${dur}ms cubic-bezier(.12,.6,.12,1)`; wh.style.transform = `rotate(${target}deg)`; });
+    // ticks slow down with the wheel
+    let tt = 0; for (let k = 0; k < 34; k++) { tt += 40 + k * k * 2.6; if (tt > dur - 150) break; later(() => S.play('hover', { gap: 20 }), tt); }
+    later(() => { w.classList.add('won'); S.play('synchro'); $('#rollMsg').innerHTML = `<b>${roll}</b><span>${esc(pick.name)}</span>`; $('#rollMsg').classList.add('big'); }, dur + 100);
+    later(finish, dur + 1700);
+  }, 2200);
+}

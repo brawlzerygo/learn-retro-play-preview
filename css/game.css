@@ -1193,3 +1193,27 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 .boxzoom .bzrow{display:flex;gap:12px;font-size:18px;align-items:baseline}.boxzoom .bzrow b{font:italic 900 24px 'Barlow Condensed';color:var(--ink);min-width:36px}
 .boxzoom .bznote{font-size:15px;color:var(--mute);margin-top:14px}
 .czoom.boxzoom{box-shadow:0 0 0 200vmax rgba(6,7,9,.72),0 30px 80px rgba(0,0,0,.7)}.czoom.boxzoom::before{background:#15171b}
+/* Fully random: Graceful Dice throws a die, then a prize wheel spins (Zack, 2026-11-25) */
+.rollstage{position:relative;flex:1;min-height:520px;display:flex;align-items:center;justify-content:center;gap:60px}
+.gdice{position:absolute;left:4%;top:50%;width:220px;height:220px;margin-top:-110px;border-radius:50%;background:center/cover;box-shadow:0 0 0 4px #fff,0 0 0 8px var(--acc),0 20px 50px rgba(0,0,0,.6);animation:gdIn .5s cubic-bezier(.2,.8,.2,1) both}
+@keyframes gdIn{from{transform:translateX(-60px) scale(.8);opacity:0}}
+.die{position:absolute;left:22%;top:50%;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:22px;background:linear-gradient(145deg,#fff,#dfe2e8);box-shadow:inset 0 -6px 0 rgba(0,0,0,.12),0 18px 30px rgba(0,0,0,.55);z-index:3}
+.die-face{position:absolute;inset:16px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);place-items:center}
+.die-face i{width:20px;height:20px;border-radius:50%}.die-face i.on{background:radial-gradient(circle at 35% 30%,#4a4f57,#111)}
+.die.throw{animation:dieThrow 1.5s cubic-bezier(.3,.6,.4,1) forwards}
+@keyframes dieThrow{0%{transform:translate(0,-120px) rotate(0)}22%{transform:translate(220px,40px) rotate(260deg)}36%{transform:translate(330px,-60px) rotate(400deg)}
+  52%{transform:translate(430px,40px) rotate(560deg)}64%{transform:translate(490px,-14px) rotate(640deg)}76%{transform:translate(530px,40px) rotate(700deg)}88%{transform:translate(550px,34px) rotate(712deg)}100%{transform:translate(560px,40px) rotate(720deg)}}
+.die.landed{box-shadow:inset 0 -6px 0 rgba(0,0,0,.12),0 0 0 4px var(--acc),0 0 40px rgba(255,106,31,.8),0 18px 30px rgba(0,0,0,.55)}
+.rollmsg{position:absolute;left:50%;top:40px;transform:translateX(-50%);display:flex;align-items:center;gap:16px;font:italic 900 34px 'Barlow Condensed';text-transform:uppercase;color:var(--ink);white-space:nowrap;z-index:4}
+.rollmsg b{display:grid;place-items:center;width:62px;height:62px;border-radius:12px;background:var(--acc);color:#140a04;font-size:44px}
+.rollmsg span{color:var(--mute)}.rollmsg.big span{color:#fff;font-size:44px;text-shadow:0 0 24px rgba(255,106,31,.6)}
+.wheelwrap{position:absolute;right:6%;top:50%;width:520px;height:520px;margin-top:-240px;animation:gdIn .4s cubic-bezier(.2,.8,.2,1) both}
+.wheel{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 8px #e9e9ee,0 0 0 12px #7a808a,0 24px 60px rgba(0,0,0,.7);overflow:hidden}
+.wheel span{position:absolute;left:50%;top:0;width:0;height:50%;transform-origin:50% 100%}
+.wheel span em{position:absolute;left:0;top:26px;transform:translateX(-50%) rotate(90deg);transform-origin:50% 50%;font:italic 900 19px 'Barlow Condensed';text-transform:uppercase;color:#fff;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.6);display:block;width:180px;text-align:left;margin-top:90px;margin-left:0}
+.wheel .hub{position:absolute;left:50%;top:50%;width:70px;height:70px;margin:-35px 0 0 -35px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#9aa0aa);box-shadow:0 4px 10px rgba(0,0,0,.5)}
+.wptr{position:absolute;left:50%;top:-22px;margin-left:-20px;z-index:2;width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;border-top:44px solid #ffd23f;filter:drop-shadow(0 3px 4px rgba(0,0,0,.6))}
+.wheelwrap.won .wheel{box-shadow:0 0 0 8px #ffd23f,0 0 0 12px #7a808a,0 0 70px rgba(255,210,63,.8),0 24px 60px rgba(0,0,0,.7)}
+#rndBody > .row #rSkip{margin-left:auto}
+/* wheel labels run along each slice's radius, from the rim inward */
+.wheel span em{top:22px;left:0;width:auto;margin:0;transform:translateX(-50%);writing-mode:vertical-rl;text-align:left;max-height:180px;overflow:hidden}

@@ -747,3 +747,13 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .czoom.boxzoom{position:fixed;left:0;right:0;width:auto;transform:none;top:calc(var(--sat) + 60px);bottom:calc(var(--sab) + 10px);flex-direction:column;overflow-y:auto;padding:16px;gap:10px}
 #stage.m .boxzoom .bzart{width:100%;height:auto}#stage.m .mbox.big{width:calc(466px * .66);height:calc(326px * .66)}#stage.m .mbox.big .cfb{--k:.66}
 #stage.m .boxzoom h3{font-size:32px}#stage.m .boxzoom .bzspec{font-size:16px}#stage.m .boxzoom .bzrow{font-size:15px}
+/* the roll on phones: Graceful Dice and the die above, the wheel below */
+#stage.m .rollstage{min-height:600px;flex-direction:column}
+#stage.m .gdice{left:16px;top:70px;margin:0;width:110px;height:110px}
+#stage.m .die{left:46px;top:150px;width:76px;height:76px;margin:0;border-radius:14px}#stage.m .die-face{inset:10px}#stage.m .die-face i{width:12px;height:12px}
+@keyframes dieThrowM{0%{transform:translate(0,-60px) rotate(0)}30%{transform:translate(120px,20px) rotate(260deg)}50%{transform:translate(170px,-30px) rotate(420deg)}70%{transform:translate(200px,20px) rotate(600deg)}100%{transform:translate(215px,20px) rotate(720deg)}}
+#stage.m .die.throw{animation-name:dieThrowM}
+#stage.m .rollmsg{top:10px;font-size:20px}#stage.m .rollmsg b{width:40px;height:40px;font-size:28px}#stage.m .rollmsg.big span{font-size:24px}
+#stage.m .wheelwrap{right:auto;left:50%;top:auto;bottom:10px;margin:0 0 0 -160px;width:320px;height:320px}
+#stage.m .wheel span em{font-size:12px;width:110px;margin-top:50px;top:16px}
+#stage.m .wheel span em{top:12px;width:auto;margin:0;max-height:105px;font-size:12px}
