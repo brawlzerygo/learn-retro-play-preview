@@ -735,3 +735,6 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .pstr{left:8px;top:auto;bottom:44px;font-size:9px;padding:2px 5px}
 #stage.m .mixbar{position:sticky;bottom:calc(var(--sab) + 10px);z-index:6;flex-wrap:wrap;gap:8px;padding:10px}
 #stage.m .mixbar .dprog{order:3;flex-basis:100%}#stage.m .mixbar .gb{flex:1;justify-content:center}#stage.m .mixbar .mx-n{font-size:14px;flex-basis:100%}
+/* Classic Foil on phones (PWA): the same design, scaled */
+#stage.m .pack{--k:.85;width:calc(260px * var(--k));height:calc(420px * var(--k))}
+#stage.m .bbox{--k:.66;width:calc(466px * var(--k));height:calc(326px * var(--k));margin:10px 0}

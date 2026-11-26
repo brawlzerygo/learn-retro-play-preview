@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=112';
-import * as S from './sfx.js?v=112';
+import { Table } from './table.js?v=116';
+import * as S from './sfx.js?v=116';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -143,7 +143,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=112');
+const W = new Worker('js/worker.js?v=116');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -1903,19 +1903,25 @@ function contCard(P, theme, where, mode) {
 }
 
 // pack and box art: our own Learn Retro designs, colored by the pack's theme, Type or Attribute (no Konami pack art)
-function packCode(P, pt) { return 'LR-' + (P.name.match(/\b[A-Z]/g) || ['X']).join('').slice(0, 3) + (pt && pt.k !== 'core' ? '-' + pt.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() : ''); }
+function packCode(P, pt) { return 'LR-' + (/\s/.test(P.name) ? (P.name.match(/\b[A-Z]/g) || ['X']).join('').slice(0, 3) : P.name.slice(0, 4).toUpperCase()) + (pt && pt.k !== 'core' ? '-' + pt.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() : ''); }
 const artSrc = id => TILE_ART.has(+id) ? `assets/art/${id}.webp` : artUrl(id);
+// Classic Foil packs and boxes (Zack, 2026-11-25: "i love classic foil"): our own 2002-style booster, a silver foil wrapper with a band in the
+// pack's color, crimped ends, the art in a chrome frame, a name plate and a starburst for the card count. Drawn at 260x420 (pack) and 420x280
+// (box front) and scaled to fit (--k), so the web and the PWA share one design.
 function packHTML(P, pt, anim, n) {
-  return `<div class="pack ${anim && !REDUCED ? 'in' : ''} ${pt.art ? '' : 'mystery'}" id="sPack" style="--pc:${pt.col}"><div class="pk-holo"></div><div class="pk-crimp"></div><div class="pk-crimp b"></div>
-    <div class="pk-logo">Learn<b>Retro</b></div><div class="pk-art" ${pt.art ? `style="background-image:url(${artSrc(pt.art)})"` : ''}>${pt.art ? '' : '<b>?</b>'}</div>
-    <div class="pk-name disp">${esc(pt.k === 'core' ? P.name : pt.name)}</div><div class="pk-sub">${esc(pt.k === 'core' ? 'Booster pack' : pt.sub)}</div>
-    <div class="pk-foot"><span>${pt.art ? packCode(P, pt) : 'LR-????'}</span><span>${n ? n + ' cards' : '? cards'}</span></div></div>`;
+  const kind = pt.k === 'core' ? 'Core pack' : pt.sub, name = pt.k === 'core' ? P.name : pt.name;
+  return `<div class="pack ${anim && !REDUCED ? 'in' : ''}" id="sPack"><div class="cfp" style="--pc:${pt.col}"><div class="cf-brush"></div><div class="cf-band"></div><div class="cf-crimp t"></div><div class="cf-tear">Tear here</div><div class="cf-logo">Learn<b>Retro</b></div>
+    <div class="cf-win">${pt.art ? `<div class="art" style="background-image:url(${artSrc(pt.art)})"></div>` : '<div class="art mys">?</div>'}<i class="rv tl"></i><i class="rv tr"></i><i class="rv bl"></i><i class="rv br"></i></div><div class="cf-seal">LR</div>
+    <div class="cf-burst">${n || '?'}<br>cards</div><div class="cf-plate"><h3>${esc(name)}</h3><div>${esc(kind)} · ${esc(P.name)}</div></div>
+    <div class="cf-foot"><span>${pt.art ? packCode(P, pt) : 'LR-????'}</span><span>${esc(P.name)}</span></div><div class="cf-crimp b"></div></div></div>`;
 }
 function boxHTML(P, anim, b) {
   b = b || { name: 'Booster box', art: P.art, col: '#ff6a1f' };
-  return `<div class="bbox ${anim && !REDUCED ? 'in' : ''} ${b.art ? '' : 'mystery'}" id="sBox" style="--pc:${b.col}"><div class="bx-top"></div><div class="bx-side"></div>
-    <div class="bx-front"><div class="bx-art" ${b.art ? `style="background-image:url(${artSrc(b.art)})"` : ''}></div><div class="bx-shade"></div><div class="pk-logo">Learn<b>Retro</b></div>
-      <div class="bx-name disp">${esc(P.name)}</div><div class="bx-sub">${esc(b.name)} · ${SEALED_PACKS} packs</div></div></div>`;
+  const cards = b.cards ? `${SEALED_PACKS} packs · ${b.cards} cards` : `${SEALED_PACKS} packs`;
+  return `<div class="bbox ${anim && !REDUCED ? 'in' : ''}" id="sBox"><div class="cfb" style="--pc:${b.col}"><div class="bx-shadow"></div><div class="bx-top"><i></i><b>Learn<em>Retro</em></b></div><div class="bx-side"><span>Booster box · ${SEALED_PACKS} packs</span></div>
+    <div class="bx-front"><div class="cf-brush"></div><div class="cf-band"></div><div class="cf-win">${b.art ? `<div class="art" style="background-image:url(${artSrc(b.art)})"></div>` : '<div class="art mys">?</div>'}<i class="rv tl"></i><i class="rv tr"></i><i class="rv bl"></i><i class="rv br"></i></div><div class="cf-seal">LR</div>
+      <div class="bx-lid"></div><div class="cf-logo">Learn<b>Retro</b></div><div class="bx-label">${esc(b.name).replace(/ box$/, '<br>box')}</div>
+      <div class="cf-plate"><h3>${esc(P.name)}</h3><div>${cards}</div></div><div class="cf-burst">10<br>packs</div></div></div></div>`;
 }
 // after choosing a pool: a box, or your own mix of up to 10 packs (strong packs capped)
 let sMix = null;
