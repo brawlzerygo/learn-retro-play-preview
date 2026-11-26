@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=109';
-import * as S from './sfx.js?v=109';
+import { Table } from './table.js?v=112';
+import * as S from './sfx.js?v=112';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -143,7 +143,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=109');
+const W = new Worker('js/worker.js?v=112');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -1792,12 +1792,15 @@ function boxTypes(pk) {
   // a random box draws packs one at a time and never past a pack's cap, so a box keeps the same limits as your own mix
   const capped = pool => { const n = {}, out = []; while (out.length < SEALED_PACKS) { const ok = pool.filter(t => (n[t.k] || 0) < PACK_CAP[t.str || 0]); const t = ok[Math.floor(Math.random() * ok.length)]; n[t.k] = (n[t.k] || 0) + 1; out.push(t.k); } return out; };
   const rand = () => capped(types.filter(t => !t.str));
+  // a tuned recipe (data/box-mix.js): its packs, its Core packs, the rest random everyday packs
+  const everyday = types.filter(t => !t.str).map(t => t.k), tuned = r => r ? () => { const out = []; for (const [k, n] of Object.entries(r[0])) if (has(k)) for (let i = 0; i < n; i++) out.push(k); for (let i = 0; i < r[1]; i++) out.push('core'); while (out.length < SEALED_PACKS) out.push(everyday[Math.floor(Math.random() * everyday.length)]); return out.slice(0, SEALED_PACKS); } : null;
+  const MIX = (self.BOX_MIX || {})[pk] || {};
   return [
-    { k: 'box', name: 'Booster box', blurb: `${SEALED_PACKS} random packs from the pool's everyday packs.`, art: (types[1] || types[0]).art, col: '#ff6a1f', packs: rand },
-    { k: 'starter', name: 'Starter box', blurb: 'Balanced to build a working deck: Core, Beater, Spell/Trap, Removal and Boss packs.', art: (types.find(t => t.k === 'beat') || types[0]).art, col: '#47c47a', packs: () => fill([...pick('core', 'core', 'core', 'core', 'beat', 'beat', 'st', 'st', 'removal', 'boss')]) },
-    { k: 'champ', name: 'Champion box', blurb: 'Hard-hitting: Staples, a Holo pack, Removal and Boss packs.', art: (types.find(t => t.k === 'boss') || types[0]).art, col: '#f2c94c', packs: () => fill([...pick('staple', 'staple', 'holo', 'removal', 'removal', 'boss', 'boss', 'core', 'core', 'core')]) },
-    { k: 'mystery', name: 'Mystery box', blurb: `${SEALED_PACKS} packs of any kind, strong ones included. You see each one only as you open it.`, art: null, col: '#7a7f88', packs: () => capped(types), mystery: true },
-    ...themed.map(t => ({ k: 'tb:' + t.k, name: t.name + ' box', blurb: `Mostly ${t.name} packs, with a Core and a Spell/Trap pack.`, art: t.art, col: t.col, packs: () => fill([...Array(8).fill(t.k), ...pick('core', 'st')]) })),
+    { k: 'box', name: 'Booster box', blurb: `Specialty: variety. ${SEALED_PACKS} random everyday packs.`, art: (types[1] || types[0]).art, col: '#ff6a1f', packs: rand },
+    { k: 'starter', name: 'Starter box', blurb: 'Specialty: a working deck every time. Spell/Trap, Removal and Boss packs, so every key role is covered.', art: (types.find(t => t.k === 'beat') || types[0]).art, col: '#47c47a', packs: tuned(MIX.starter) || (() => fill([...pick('core', 'core', 'core', 'core', 'beat', 'beat', 'st', 'st', 'removal', 'boss')])) },
+    { k: 'champ', name: 'Champion box', blurb: 'Specialty: top-end power. Staples and a Holo pack, fewer cards in all.', art: (types.find(t => t.k === 'boss') || types[0]).art, col: '#f2c94c', packs: tuned(MIX.champ) || (() => fill([...pick('staple', 'staple', 'holo', 'removal', 'removal', 'boss', 'boss', 'core', 'core', 'core')])) },
+    { k: 'mystery', name: 'Mystery box', blurb: `Specialty: the gamble. Any packs, strong ones included, unseen until opened. Same power on average, bigger swings.`, art: null, col: '#7a7f88', packs: () => capped(types), mystery: true },
+    ...themed.map(t => ({ k: 'tb:' + t.k, name: t.name + ' box', blurb: `Specialty: ${t.name} synergy. Mostly ${t.name} packs, balanced to the same power as every box.`, art: t.art, col: t.col, packs: tuned((MIX.theme || {})[t.k]) || (() => fill([...Array(8).fill(t.k), ...pick('core', 'st')])) })),
   ];
 }
 // a run: a box, or a mix of packs you picked (up to 10)
@@ -1851,8 +1854,13 @@ function renderSealed(anim) {
           <div class="pullrow" id="sPull"></div></div>
         <div class="row prow"><button class="gb pri" id="sOpen" data-go2="open">Open pack<span class="key">1</span><span class="shine"></span></button><button class="gb" id="sAll" data-go2="all">Open all<span class="key">2</span><span class="shine"></span></button></div>`;
       const open = () => { const ids = x.packs[x.opened], pk = $('#sPack'), row = $('#sPull'); $('#sOpen').disabled = $('#sAll').disabled = true; S.play('shuffle'); pk.classList.add('rip');
-        setTimeout(() => { pk.style.display = 'none'; row.innerHTML = ids.map((id, i) => `<div class="pull r-${T.tier.get(String(id)) || 'C'}" style="--d:${i * (REDUCED ? 0 : 110)}ms"><div class="fc"><div class="bk"></div><div class="fr" style="background-image:url(${artUrl(id)})"></div></div><span class="tg r-${T.tier.get(String(id)) || 'C'}">${RARNAME[T.tier.get(String(id)) || 'C']}</span></div>`).join('');
-          ids.forEach((id, i) => setTimeout(() => S.play(i === ids.length - 1 && (T.tier.get(String(id)) || 'C') !== 'C' ? 'summon' : 'flip', { gap: 40 }), i * 110 + 200));
+        // the reveal (Zack, 2026-11-25): Commons and Rares flip quickly; a Super Rare slows down, shakes and turns; an Ultra Rare is slower still,
+        // shakes harder, turns and pops with a flash, a ring and sparkles. Each card waits for the one before it to finish.
+        setTimeout(() => { pk.style.display = 'none'; let t = 0; const plan = ids.map(id => { const tr = T.tier.get(String(id)) || 'C', dur = REDUCED ? 0 : tr === 'UR' ? 2600 : tr === 'SR' ? 1500 : 550, d = t; t += REDUCED ? 0 : tr === 'UR' ? 2750 : tr === 'SR' ? 1650 : 110; return { id, tr, d, dur }; });
+          row.innerHTML = plan.map(p => `<div class="pull r-${p.tr} ${p.tr === 'UR' ? 'rv-ur' : p.tr === 'SR' ? 'rv-sr' : ''}" style="--d:${p.d}ms;--dur:${p.dur}ms"><div class="fc"><div class="bk"></div><div class="fr" style="background-image:url(${artUrl(p.id)})"></div></div>${p.tr === 'UR' ? '<i class="burst"></i><i class="ring"></i>' : ''}<span class="tg r-${p.tr}">${RARNAME[p.tr]}</span></div>`).join('');
+          for (const p of plan) { if (p.tr === 'UR') { setTimeout(() => S.play('chain', { gap: 40 }), p.d + 300); setTimeout(() => S.play('synchro'), p.d + p.dur * 0.78); }
+            else if (p.tr === 'SR') { setTimeout(() => S.play('activate', { gap: 40 }), p.d + 200); setTimeout(() => S.play('summon'), p.d + p.dur * 0.75); }
+            else setTimeout(() => S.play('flip', { gap: 40 }), p.d + 200); }
           if (x.mystery && $('#sPackName')) $('#sPackName').textContent = `${P.name} sealed · it was ${pt0.k === 'core' ? 'a Core pack' : 'a ' + pt0.name + ' ' + pt0.sub.toLowerCase()}`; x.opened++; saveSD(x);
           $('.prow').innerHTML = x.opened < SEALED_PACKS ? `<button class="gb pri" data-go2="next">Next pack<span class="key">1</span><span class="shine"></span></button><button class="gb" data-go2="all">Open the rest<span class="key">2</span><span class="shine"></span></button>` : `<button class="gb pri" data-go2="pulls">See your pulls<span class="key">1</span><span class="shine"></span></button>`;
         }, REDUCED ? 0 : 420); };

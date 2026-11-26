@@ -1071,3 +1071,26 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .pack.mystery .pk-art{display:flex;align-items:center;justify-content:center;background:repeating-linear-gradient(45deg,#2a2d33 0 14px,#22252a 14px 28px)}
 .pack.mystery .pk-art b{font:italic 900 150px 'Barlow Condensed';color:rgba(255,255,255,.75)}
 .bx-front{box-shadow:0 0 0 2px var(--pc,#ff6a1f),0 30px 70px rgba(0,0,0,.8),0 0 70px -14px var(--pc,#ff6a1f)}
+/* rare reveals (Zack, 2026-11-25): Super Rare slows down, shakes and turns; Ultra Rare slower, shakes harder, turns and pops */
+.pull.rv-sr .fc{animation:pRevSR var(--dur) var(--d) cubic-bezier(.4,0,.2,1) both}
+.pull.rv-sr .fr{animation:pFace var(--dur) var(--d) step-end both;animation-name:pFaceSR}
+@keyframes pRevSR{0%{transform:translateY(-30px);opacity:0;filter:none}12%{transform:none;opacity:1}
+  20%{transform:rotate(-2deg);filter:drop-shadow(0 0 6px #a27ae8)}28%{transform:rotate(2.5deg)}36%{transform:rotate(-3deg)}44%{transform:rotate(3deg);filter:drop-shadow(0 0 16px #a27ae8)}52%{transform:rotate(-2deg)}
+  58%{transform:scale(1.04)}75%{transform:scaleX(0) scale(1.04)}90%{transform:scale(1.08);filter:drop-shadow(0 0 22px #a27ae8)}100%{transform:none;filter:drop-shadow(0 0 10px rgba(162,122,232,.7))}}
+@keyframes pFaceSR{0%{opacity:0}75%{opacity:1}100%{opacity:1}}
+.pull.rv-ur .fc{animation:pRevUR var(--dur) var(--d) cubic-bezier(.4,0,.2,1) both}
+.pull.rv-ur .fr{animation:pFaceUR var(--dur) var(--d) step-end both}
+@keyframes pRevUR{0%{transform:translateY(-40px);opacity:0}8%{transform:none;opacity:1}
+  14%{transform:rotate(-2deg) scale(1.01);filter:drop-shadow(0 0 6px #ffc24a)}20%{transform:rotate(3deg) scale(1.02)}26%{transform:rotate(-4deg) scale(1.03)}32%{transform:rotate(4deg) scale(1.04);filter:drop-shadow(0 0 16px #ffc24a)}
+  38%{transform:rotate(-5deg) scale(1.05)}44%{transform:rotate(5deg) scale(1.06)}50%{transform:rotate(-5deg) scale(1.07);filter:drop-shadow(0 0 26px #ffb02a)}56%{transform:rotate(4deg) scale(1.08)}
+  62%{transform:scale(1.08)}78%{transform:scaleX(0) scale(1.08)}84%{transform:scale(1.22);filter:drop-shadow(0 0 40px #ffd27a) brightness(1.5)}92%{transform:scale(.97)}100%{transform:none;filter:drop-shadow(0 0 14px rgba(255,194,74,.8))}}
+@keyframes pFaceUR{0%{opacity:0}78%{opacity:1}100%{opacity:1}}
+.pull.rv-sr .tg,.pull.rv-ur .tg{animation-delay:calc(var(--d) + var(--dur))}
+/* the Ultra pop: a ring rolls out and sparkles burst at the moment it turns face-up */
+.pull .ring,.pull .burst{position:absolute;left:50%;top:50%;pointer-events:none;z-index:3}
+.pull .ring{width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:3px solid #ffd27a;opacity:0;animation:pRing .7s calc(var(--d) + var(--dur) * .78) ease-out both}
+@keyframes pRing{0%{opacity:0;transform:scale(.4)}1%{opacity:1;transform:scale(.4)}100%{opacity:0;transform:scale(7)}}
+.pull .burst{width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;opacity:0;
+  box-shadow:0 -90px #ffe7a0,64px -64px #ffc24a,90px 0 #fff3c4,64px 64px #ffc24a,0 90px #ffe7a0,-64px 64px #ffc24a,-90px 0 #fff3c4,-64px -64px #ffc24a,30px -110px #fff,-30px 110px #fff,110px 30px #fff,-110px -30px #fff;
+  animation:pBurst .8s calc(var(--d) + var(--dur) * .78) ease-out both}
+@keyframes pBurst{0%{opacity:0;transform:scale(.2)}1%{opacity:1;transform:scale(.2)}70%{opacity:1}100%{opacity:0;transform:scale(1.5)}}
