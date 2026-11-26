@@ -811,7 +811,7 @@ html.m.hs #stage.m{position:absolute}
 #stage.m #s-sealed .tscroll{padding-bottom:20px}
 /* a solid strip behind Back, so scrolled content never runs under the button (Zack, 2026-11-26: "back button overlaps") */
 #stage.m:has(#gBack.on) .gbackbar{display:block;position:absolute;left:0;right:0;top:0;height:calc(var(--sat) + 52px);z-index:39;pointer-events:none;background:linear-gradient(rgba(9,10,13,.97) 78%,rgba(9,10,13,0))}
-#stage.m[data-scr=build] .gbackbar,#stage.m[data-scr=stats] .gbackbar,#stage.m[data-scr=settings] .gbackbar,#stage.m[data-scr=duel] .gbackbar{display:none}
+#stage.m:is([data-scr=build],[data-scr=stats],[data-scr=settings],[data-scr=duel]):has(#gBack.on) .gbackbar{display:none}
 #stage.m .restart{z-index:41}
 /* phones: pulls deal out of the torn pack (--fx/--fy, set by dealPulls) and fit above the buttons; rare glows are a separate layer that fades,
    never an animated filter (filters repaint every frame on phones and made the reveals stutter) */
