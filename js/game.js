@@ -1,8 +1,9 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=133';
-import * as S from './sfx.js?v=133';
+import { Table } from './table.js?v=143';
+import * as S from './sfx.js?v=143';
+import * as FX from './fx.js?v=143';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -143,7 +144,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=133');
+const W = new Worker('js/worker.js?v=143');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -166,10 +167,13 @@ function subBack() {
   if (cur === 'random' && RND.f) { if (RND.deck) RND.deck = null; else RND = { f: null }; renderRandom(true); return true; }
   return false;
 }
-async function goBack() { if (subBack()) { S.play('nav'); return; } if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; if (BACK[cur]) show(BACK[cur]); }
+// leaving a draft or sealed run in progress asks first and then drops it, so no run gets pinned to a menu (Zack, 2026-11-26)
+function liveRun() { return cur === 'draft' && !dMenu && DR() ? 'draft' : cur === 'sealed' && !sMenu && SD() ? 'sealed' : null; }
+async function leaveRun() { const k = liveRun(); if (!k) return true; if (!(await ask('Leave? Your progress will be lost.', 'Leave'))) return false; const pool = (k === 'draft' ? DR() : SD()).pool; if (k === 'draft') { saveDR(null); dSel = null; } else { saveSD(null); B.sealed = null; B.deck = null; } return pool; }
+async function goBack() { const k = liveRun(), left = await leaveRun(); if (!left) return; if (typeof left === 'string') { S.play('nav'); if (k === 'draft') { dMenu = true; if (DPOOLS[left].jank) backToJank(left); else if (DPOOLS[left].classic) renderThemePick(left); else { dPick = false; renderDraft(true); } } else { sMenu = true; renderPackPick(left); } return; } if (subBack()) { S.play('nav'); return; } if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; if (BACK[cur]) show(BACK[cur]); }
 $('#gBack').onclick = () => { S.unlock(); goBack(); };
-$('#mTabs').onclick = async e => { const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === cur) return; S.unlock(); if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; show(b.dataset.tab); };
-function show(s) { if (s !== 'random' && typeof rollStop === 'function') rollStop(); const prevScr = cur; if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') { if (prevScr !== 'deck') { PK = { you: false, cpu: false }; pickingOpp = false; SEL.mtab = 'you'; } renderDecks(); } if (s === 'format') renderFormats(); if (s === 'mode') renderModes(); if (s === 'random') { RND = { f: null }; renderRandom(true); } if (s === 'build') { if (!B.enterSealed && B.sealed) { B.sealed = null; B.deck = null; } BACK.build = B.sealed ? 'sealed' : 'title'; $('#gBack').classList.add('on'); B.enterSealed = false; B.howto = undefined; readyP.then(openBuilder); } if (s === 'sealed') { sMenu = !(prevScr === 'build' && B.sealed); renderSealed(true); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'draft') { dSel = null; dMenu = true; renderDraft(true); } if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
+$('#mTabs').onclick = async e => { const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === cur) return; S.unlock(); if (!(await leaveRun())) return; if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; show(b.dataset.tab); };
+function show(s) { if (s !== 'random' && typeof rollStop === 'function') rollStop(); const prevScr = cur; if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') { if (prevScr !== 'deck') { PK = { you: false, cpu: false }; pickingOpp = false; SEL.mtab = 'you'; } renderDecks(); } if (s === 'format') renderFormats(); if (s === 'mode') renderModes(); if (s === 'random') { RND = { f: null }; renderRandom(true); } if (s === 'build') { if (!B.enterSealed && B.sealed) { B.sealed = null; B.deck = null; } BACK.build = B.sealed ? 'sealed' : 'title'; $('#gBack').classList.add('on'); B.enterSealed = false; B.howto = undefined; readyP.then(openBuilder); } if (s === 'sealed') { sMenu = !(prevScr === 'build' && B.sealed); if (sMenu && SD()) saveSD(null); renderSealed(true); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'draft') { dSel = null; dMenu = true; if (DR()) saveDR(null); renderDraft(true); } if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
 // browsers keep a page silent until the first click, tap or key press (hovering doesn't count): turn sound on at the very first one, anywhere
 for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, () => S.unlock(), { capture: true, passive: true });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { S.unlock(); show(b.dataset.go); } const h = e.target.closest('[data-href]'); if (h) open(h.dataset.href, '_blank'); });
@@ -726,6 +730,7 @@ async function makeTable() {
   table.onHover = h => { $('#gl').classList.toggle('point', !!(h && (h.u != null || h.pile || h.zone))); if (!D) return; if (h && h.u != null) inspectU(h.u); else if (h && h.pile) hoverPile(h.pile); };
   table.onClick = h => { if (D) fieldClick(h); if (TOUCH && !h) $('#inspect').classList.add('hidden'); };
   table.onFrame = frameOverlay;
+  FX.init({ table, layer: $('#layer'), artUrl, rec, MOBILE, REDUCED, fmt: () => D ? D.fmt : SEL.fmt, sleep: ms => waitMs(ms) });
   // turn medallion and phase dial sit on the board's center line, just outside the mat
   const half = camData.board.BOARD_W / 2 + 0.62, L = table.project(new (table.camera.position.constructor)(-half, 0, 0)), R = table.project(new (table.camera.position.constructor)(half, 0, 0));
   if (!MOBILE) { Object.assign($('#turnm').style, { left: L.x + 'px', top: L.y + 'px' }); Object.assign($('#dial').style, { left: R.x + 'px', top: R.y + 'px' }); }
@@ -747,7 +752,11 @@ async function startDuel() {
   show('load'); $('#loadTxt').textContent = 'Shuffling…'; $('#loadSub').textContent = `${youDeck.name} vs ${cpuDeck.name} · ${f === 'goat' ? 'Goat' : 'Edison'} · ${levelName(SEL.level)}`;
   S.play('shuffle');
   await ensureTable();
-  const first = Math.random() < 0.5 ? 0 : 1;
+  // ?demo (recordings of the duel's look, tools/record.mjs): you go first from a set-up Goat board, so a clip shows summons, attacks and a destroy at once
+  const DEMO = f === 'goat' && new URLSearchParams(location.search).has('demo') ? [
+    { hand: ['Black Luster Soldier - Envoy of the Beginning', 'Jinzo', 'Mystical Space Typhoon', 'Sinister Serpent'], m: ['Sangan'], gy: ['Shining Angel', 'Mystic Tomato'], turn: 2 },
+    { m: ['Airknight Parshath', { n: 'Spirit Reaper', pos: 'def' }], st: [{ n: 'Sakuretsu Armor', pos: 'set' }], hand: ['Scapegoat', 'Book of Moon'] }] : null;
+  const first = DEMO ? 0 : Math.random() < 0.5 ? 0 : 1;
   const coin = $('#coin'); coin.className = 'coin ' + (first === 0 ? 'heads' : 'tails'); coin.style.animation = 'none'; void coin.offsetWidth; coin.style.animation = '';
   await sleep(1450); $('#loadTxt').textContent = first === 0 ? 'You go first' : 'The computer goes first'; S.play('turn');
   await sleep(1100);
@@ -766,7 +775,7 @@ async function startDuel() {
   D.hintsUsed = 0; hintButton();
   setPrompt(null);
   show('duel');
-  W.postMessage({ type: 'start', format: f, you: { name: youDeck.name, main: youDeck.main, extra: youDeck.extra }, cpu: { name: cpuDeck.name, main: cpuDeck.main, extra: cpuDeck.extra }, level: SEL.level, seed: Math.floor(Math.random() * 2 ** 31), first, lite: MOBILE });
+  W.postMessage({ type: 'start', format: f, you: { name: youDeck.name, main: youDeck.main, extra: youDeck.extra }, cpu: { name: cpuDeck.name, main: cpuDeck.main, extra: cpuDeck.extra }, level: SEL.level, board: DEMO, seed: Math.floor(Math.random() * 2 ** 31), first, lite: MOBILE });
 }
 
 /* ---------- updates from the host, one at a time ---------- */
@@ -809,6 +818,7 @@ async function anim(ev) {
     for (const u of ev.us) { const p = table.where(u); if (!p) continue; const big = ['synchro', 'fusion', 'ritual'].includes(ev.how);
       table.burst(p, big ? 0xffd080 : 0xff9a50, big ? 1.5 : 1); if (big) table.pillar(p); S.play(big ? 'synchro' : 'summon'); }
     D.stats.summons += ev.p === 0 ? 1 : 0; if (ev.p === 0 && ev.how === 'synchro') D.stats.synchro++;
+    if (FX.on()) { for (const u of ev.us) await FX.summon(u, (table.cards.get(u) || {}).id, ev.how, ev.p); return; }
     return waitMs(ev.how === 'synchro' || ev.how === 'fusion' ? 520 : 260);
   }
   if (t === 'flip') { S.play('flip'); return table.flip(ev.u, ev.id, true); }
@@ -820,19 +830,20 @@ async function anim(ev) {
     D.stats.lastAtk = ev.a; S.play('attack');
     const to = ev.t != null && table.where(ev.t) ? table.where(ev.t) : table.screenToWorld(960, ev.p === 0 ? 90 : 1000, 0.3);
     if (ev.t != null) table.ringOn(ev.t, ev.p === 0 ? 0xff7a30 : 0x7fb8ff);
-    await table.lunge(ev.a, to); table.ringsOff(); return;
+    if (FX.on()) { await FX.attackStart(ev.a, ev.t, ev.p); setTimeout(() => FX.attackHit(ev.a, ev.t, ev.p, ev.t == null), (240 + 170) * (table.speed || 1)); }
+    await table.lunge(ev.a, to); table.ringsOff(); FX.attackEnd(); return;
   }
   if (t === 'damage') {
     const before = D.lp[ev.p]; setLP(ev.p, ev.lp); S.play('hit'); const pl = ev.p === 0 ? $('#lpMe') : $('#lpOp');
     pl.classList.remove('shake'); void pl.offsetWidth; pl.classList.add('shake');
-    popNum(ev.p, '-' + ev.n);
+    popNum(ev.p, '-' + ev.n); FX.damage(ev.p, ev.n, pl);
     if (ev.p === 1) { D.stats.dealt += ev.n; D.stats.biggest = Math.max(D.stats.biggest, ev.n); if (ev.battle && D.stats.lastAtk != null) D.stats.mvp.set(D.stats.lastAtk, (D.stats.mvp.get(D.stats.lastAtk) || 0) + ev.n); }
     if (before - ev.lp >= 1000) table.shakeCam(0.06);
     return waitMs(420);
   }
   if (t === 'chain') {
     if (ev.p === 0) D.stats.chains++;
-    D.chain.push(ev); renderChain(); S.play(ev.link > 1 ? 'chain' : 'activate');
+    D.chain.push(ev); renderChain(); S.play(ev.link > 1 ? 'chain' : 'activate'); FX.activate(ev.u, ev.id, ev.p, ev.link);
     const c = table.cards.get(ev.u); if (c && !c.up) await table.flip(ev.u, ev.id, true);
     else if (c) table.burst(c.g.position, 0xffc070, 0.7);
     for (const tu of ev.targets || []) table.ringOn(tu, ev.p === 0 ? 0xff7a30 : 0x7fb8ff);
@@ -913,7 +924,7 @@ async function animMove(ev) {
   }
   else if (ev.from === 'hand') { from = handPoint(p, ev.u); dropHand(p, ev.u); }
   else if (pileKind(ev.from)) { from = table.pileTop(fromSide, pileKind(ev.from)); bumpPile(fromSide, pileKind(ev.from), -1, ev.u); }
-  if (ev.destroyed && table.has(ev.u)) { S.play('destroy'); await table.shatter(ev.u); if (ev.owner === 1) D.stats.destroyed++; }
+  if (ev.destroyed && table.has(ev.u)) { S.play('destroy'); if (await FX.shatter(ev.u)) from = null; else await table.shatter(ev.u); if (ev.owner === 1) D.stats.destroyed++; }   // FX: the pieces fall; the card appears in the pile
   // where it goes
   if (['m', 'st', 'fz'].includes(ev.to)) {
     const up = ev.pos !== 'set';
@@ -1029,7 +1040,7 @@ async function banner(txt, sub, op) {
   $('#layer').appendChild(b); const ms = 1300 * Math.max(0.35, SPEED[SET.speed]); b.style.animationDuration = ms + 'ms';
   await sleep(ms * 0.62); setTimeout(() => b.remove(), ms * 0.4);
 }
-async function turnBanner() { S.play('turn'); $('#dial').classList.toggle('op', D.tp !== 0); await banner(D.tp === 0 ? 'Your Turn' : "Computer's Turn", `Turn ${D.turn}`, D.tp !== 0); }
+async function turnBanner() { S.play('turn'); $('#dial').classList.toggle('op', D.tp !== 0); if (await FX.turn(D.tp === 0, D.turn)) return; await banner(D.tp === 0 ? 'Your Turn' : "Computer's Turn", `Turn ${D.turn}`, D.tp !== 0); }
 function renderChain() {
   const el = $('#chainp'); $('#s-duel').classList.toggle('chaining', !!D.chain.length); if (!D.chain.length) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
@@ -1618,7 +1629,7 @@ function renderDraftPools() { dPick = false;
   $('#draftBody').innerHTML = `<p class="dintro">Pick 1 of 3 cards, ${DRAFT_PICKS} times: ${DRAFT_MAIN} for the Main Deck and ${DRAFT_EXTRA} for the Extra or Fusion Deck. Every card is rated Common to Ultra Rare by how strong it is, and each pick shows three of the same rating. Your deck saves to My decks, ready to duel.</p>
     <div class="dgroups">${[...new Set(Object.values(DPOOLS).filter(P => !P.hidden).map(P => P.group))].map(g => `<div class="dgrp"><div class="ph">${esc(g)}</div><div class="fmt-row drow">${Object.entries(DPOOLS).filter(([, P]) => P.group === g && !P.hidden).map(([k, P]) => `<div class="fmt" data-dpool="${k}">${tileBg(P.art)}<span class="tg ${P.tag === 'Learn Retro mix' ? 'hot' : ''}">${esc(P.tag)}</span>
       <div class="txt"><h3 class="disp">${esc(P.name)}</h3><p>${esc(P.blurb)}</p></div></div>`).join('')}</div></div>`).join('')}</div>`;
-  const cx = DR(); $('#draftBody').classList.toggle('hascont', !!cx); if (cx) $('#draftBody').insertAdjacentHTML('afterbegin', contCard(DPOOLS[cx.pool], cx.theme ? (DTHEMES.find(t => t.k === cx.theme) || {}).name : '', cx.offer && cx.main.length + cx.extra.length < DRAFT_PICKS ? `Pick ${cx.main.length + cx.extra.length + 1} of ${DRAFT_PICKS}` : 'Finished, not saved yet', 'Draft'));
+  $('#draftBody').classList.remove('hascont');
   $('#draftBody').onclick = async e => { if (e.target.closest('[data-cont]')) { dMenu = false; S.play('click'); return renderDraft(true); } if (e.target.closest('[data-cont-toss]')) return draftRestart();
     const p = e.target.closest('[data-dpool]'); if (!p) return; if (DR() && !(await ask('Start a new draft? Your unfinished one is lost.', 'Start new'))) return; saveDR(null); S.play('shuffle'); if (DPOOLS[p.dataset.dpool].classic) return renderThemePick(p.dataset.dpool); startDraft(p.dataset.dpool); renderDraft(true); };
 }
@@ -1628,7 +1639,6 @@ function renderThemePick(pk) {   // a classic pool: an open draft, or any of its
   $('#draftTitle').textContent = P.name;
   $('#draftBody').innerHTML = `<p class="dintro">Draft from the whole pool, or pick a theme: every pick then shows two cards of your theme and one card that fits any deck.</p>
     <div class="tscroll"><div class="fmt-row drow rndrow">${[{ k: '', name: 'Open draft', blurb: 'Any card in the pool, three of the same rating each pick.', art: P.art }, ...th.map(t => ({ ...t, art: artOf(t) }))].map((t, i) => `<div class="fmt dopt in" style="animation-delay:${Math.min(i, 8) * 50}ms" data-theme="${t.k}">${tileBg(t.art)}<span class="tg ${i ? '' : 'hot'}">${i ? 'Theme' : 'Open'}</span><div class="txt"><h3 class="disp">${esc(t.name)}</h3><p>${esc(t.blurb)}</p></div></div>`).join('')}</div></div>`;
-  { const cx = DR(); if (cx && cx.pool === pk) $('#draftBody').insertAdjacentHTML('afterbegin', contCard(P, cx.theme ? (DTHEMES.find(t => t.k === cx.theme) || {}).name : '', cx.offer && cx.main.length + cx.extra.length < DRAFT_PICKS ? `Pick ${cx.main.length + cx.extra.length + 1} of ${DRAFT_PICKS}` : 'Finished, not saved yet', 'Draft')); $('#draftBody').classList.toggle('hascont', !!(cx && cx.pool === pk)); }
   $('#draftBody').onclick = async e => { if (e.target.closest('[data-cont]')) { dMenu = false; dPick = false; S.play('click'); return renderDraft(true); } if (e.target.closest('[data-cont-toss]')) return draftRestart();
     const t = e.target.closest('[data-theme]'); if (t) { if (DR() && !(await ask('Start a new draft? Your unfinished one is lost.', 'Start new'))) return; saveDR(null); S.play('shuffle'); startDraft(pk, t.dataset.theme || null); renderDraft(true); return; }
   };
@@ -1657,7 +1667,7 @@ const MODES = [
   { k: 'standard', go: 'format', name: 'Standard', art: 72989439, blurb: 'Goat or Edison with a tier deck or one you built. The classic duel.' },
   { k: 'draft', go: 'draft', name: 'Draft', art: 89631139, blurb: 'Pick 1 of 3 cards, 48 times, from Goat, Edison and our own mixes.' },
   { k: 'sealed', go: 'sealed', name: 'Sealed', art: 70781052, blurb: 'Open 10 packs and build a 40-card deck from what you pull.' },
-  { k: 'random', go: 'random', name: 'Random and Jank', art: 77585513, blurb: 'A random legal deck, or a themed jank pile, straight into a duel.' },
+  { k: 'random', go: 'random', name: 'Random and Jank', art: 27288416, blurb: 'A random legal deck, or a themed jank pile, straight into a duel.' },
   { k: 'tourney', name: 'Tournament', art: 73580471, blurb: 'Win four in a row in a 16-player bracket.', soon: true },
 ];
 function renderModes() {
@@ -1686,6 +1696,15 @@ function rndThemes(f) {
   add('deep', 'Deep cuts', 'Only cards that none of the tier decks run, Spells and Traps too.', x => !P.used.has(String(x.id)), x => !P.used.has(String(x.id)));
   return out;
 }
+// Jank drafts (Zack, 2026-11-26: "add a draft option in the jank mode"): a theme's monsters, every Spell and Trap (or the theme's own) and the
+// Extra Deck become a hidden draft pool for this visit, ranked like an era pool, so the pick screen, rarities and limits are the same as Draft
+function jankPool(f, th) {
+  const k = 'jank-' + f + '-' + th.k;
+  if (!DPOOLS[k]) { const P = rndPool(f); (self.DRAFT_POOLS = self.DRAFT_POOLS || {})[k] = [...P.mons.filter(th.mon), ...P.st.filter(th.st || (() => true)), ...P.extra].map(r => +r.id);
+    DPOOLS[k] = { group: 'Jank', fmt: f, era: k, name: th.name + ' jank', hidden: true, jank: true, art: th.art, tag: 'Jank', blurb: th.blurb, roll: [50, 30, 15, 5] }; }
+  return k;
+}
+function backToJank(pk) { const f = DPOOLS[pk].fmt; show('random'); RND = { f, themes: rollThemes(f), deck: null, mode: 'draft' }; renderRandom(true); }
 function rollThemes(f) { return rndThemes(f); }   // every theme the format can build (Zack, 2026-11-25: "lets just show all available options")
 function buildRandom(f, theme) {   // 40 Main (16 to 20 monsters), up to 8 Extra, every copy limit kept
   const P = rndPool(f), mons = P.mons.filter(theme ? theme.mon : () => true), st = P.st.filter(theme && theme.st ? theme.st : () => true);
@@ -1705,18 +1724,19 @@ function renderRandom(anim) {
       el.onclick = e => { const t = e.target.closest('[data-go2]'); if (!t) return; S.play('click'); RND = { f: t.dataset.go2, themes: rollThemes(t.dataset.go2), deck: null }; renderRandom(true); }; return; }
     if (!RND.deck) { $('#rndTitle').textContent = 'Pick a deck';
       const opts = [{ k: 'random', name: 'Fully random', blurb: 'Graceful Dice rolls for your deck, then the wheel spins for its theme. Anything can happen.', art: (FM.goat.cards.find(c => c.n === 'Graceful Dice') || { id: 70781052 }).id }, ...RND.themes];
-      const grp = [['Random', opts.slice(0, 1)], ['Jank piles', opts.filter(t => ['normal', 'low', 'deep'].includes(t.k))], ['One Type', opts.filter(t => t.k.startsWith('t:'))], ['One Attribute', opts.filter(t => t.k.startsWith('a:'))]].filter(g => g[1].length);
-      const tile = (t, i) => `<div class="fmt ${anim && !REDUCED ? 'dopt in' : ''}" style="animation-delay:${Math.min(i, 8) * 40}ms" data-go2="${esc(t.k)}">${tileBg(t.art)}<span class="tg ${t.k === 'random' ? 'hot' : ''}">${t.k === 'random' ? 'Random' : 'Jank'}</span><div class="txt"><h3 class="disp">${esc(t.name)}</h3><p>${esc(t.blurb)}</p></div></div>`;
-      el.innerHTML = `<div class="dsub"><span class="dpool">${f === 'goat' ? 'Goat' : 'Edison'} · every jank theme</span></div>
+      const drafting = RND.mode === 'draft', grp = [['Random', drafting ? [] : opts.slice(0, 1)], ['Jank piles', opts.filter(t => ['normal', 'low', 'deep'].includes(t.k))], ['One Type', opts.filter(t => t.k.startsWith('t:'))], ['One Attribute', opts.filter(t => t.k.startsWith('a:'))]].filter(g => g[1].length);
+      const tile = (t, i) => `<div class="fmt ${anim && !REDUCED ? 'dopt in' : ''}" style="animation-delay:${Math.min(i, 8) * 40}ms" data-go2="${esc(t.k)}">${tileBg(t.art)}<span class="tg ${t.k === 'random' ? 'hot' : ''}">${t.k === 'random' ? 'Random' : drafting ? 'Draft' : 'Jank'}</span><div class="txt"><h3 class="disp">${esc(t.name)}</h3><p>${esc(t.blurb)}</p></div></div>`;
+      el.innerHTML = `<div class="dsub"><div class="seg rmode"><button class="gb sm ${drafting ? '' : 'pri'}" data-rm="build">Build it<span class="shine"></span></button><button class="gb sm ${drafting ? 'pri' : ''}" data-rm="draft">Draft it<span class="shine"></span></button></div><span class="dpool">${f === 'goat' ? 'Goat' : 'Edison'} · ${drafting ? 'pick 1 of 3 cards, 48 times, from one theme' : 'a deck built for you'}</span></div>
         <div class="tscroll">${grp.map(([g, ts]) => `<div class="dgrp"><div class="ph">${g}</div><div class="fmt-row drow rndrow">${ts.map(tile).join('')}</div></div>`).join('')}</div>`;
-      el.onclick = e => { const t = e.target.closest('[data-go2]');
-        if (t) { if (t.dataset.go2 === 'random') return rollFullyRandom(f); const th = RND.themes.find(x => x.k === t.dataset.go2) || null; RND.deck = buildRandom(f, th); S.play('shuffle'); renderRandom(true); return; }
+      el.onclick = e => { const m = e.target.closest('[data-rm]'); if (m) { if ((m.dataset.rm === 'draft') !== drafting) { RND.mode = m.dataset.rm; S.play('click'); renderRandom(false); } return; } const t = e.target.closest('[data-go2]');
+        if (t) { if (t.dataset.go2 === 'random') return rollFullyRandom(f); const th = RND.themes.find(x => x.k === t.dataset.go2) || null;
+          if (drafting && th) { const pk = jankPool(f, th); S.play('shuffle'); show('draft'); startDraft(pk); renderDraft(true); return; } if (!th) { RND.deck = buildRandom(f, th); S.play('shuffle'); renderRandom(true); return; } return jankReveal(f, th); }
       };
       return; }
     const x = RND.deck, d = { name: '', main: x.main, extra: x.extra }, kc = keyCards(f, d), xl = f === 'goat' ? 'Fusion' : 'Extra', mons = x.main.filter(id => isMon(rec(f, id))).length;
     const kind = x.theme ? 'Jank' : 'Random', name = x.theme ? `Jank: ${x.theme}` : `Random ${f === 'goat' ? 'Goat' : 'Edison'} deck`;
     $('#rndTitle').textContent = 'Your deck';
-    const fresh = x.rolled && !x.shown; x.shown = true;   // right after a roll the deck fades in (Zack, 2026-11-25)
+    const fresh = (x.rolled || x.anim) && !x.shown; x.shown = true;   // right after a roll the deck fades in (Zack, 2026-11-25)
     el.innerHTML = `<div class="ddone ${fresh && !REDUCED ? 'reveal' : ''}"><div class="dk-fan">${kc.map((id, i) => `<div class="card" style="background-image:url(${artUrl(id)})" data-j="${i}"></div>`).join('')}</div>
       <div class="dinfo"><div class="ph">${x.rolled ? `Rolled a ${x.rolled.roll} · ${esc(x.rolled.cat)} · ` : ''}${esc(x.theme || 'Fully random')} · ${f === 'goat' ? 'Goat' : 'Edison'} · 40 Main · ${x.extra.length} ${xl}</div>
         <p>${mons} monsters and ${40 - mons} Spells and Traps, every copy limit kept. Duel it as it is, or save it to My decks first.</p>
@@ -1806,7 +1826,7 @@ function boxTypes(pk) {
     { k: 'box', name: 'Booster box', blurb: `Specialty: variety. ${SEALED_PACKS} random standard packs.`, art: (types[1] || types[0]).art, col: '#ff6a1f', packs: rand },
     { k: 'starter', name: 'Starter box', blurb: 'Specialty: a working deck every time. Spell/Trap, Removal and Boss packs, so every key role is covered.', art: (types.find(t => t.k === 'beat') || types[0]).art, col: '#47c47a', packs: tuned(MIX.starter) || (() => fill([...pick('core', 'core', 'core', 'core', 'beat', 'beat', 'st', 'st', 'removal', 'boss')])) },
     { k: 'champ', name: 'Champion box', blurb: 'Specialty: top-end power. Staples and a Holo pack, fewer cards in all.', art: (types.find(t => t.k === 'boss') || types[0]).art, col: '#f2c94c', packs: tuned(MIX.champ) || (() => fill([...pick('staple', 'staple', 'holo', 'removal', 'removal', 'boss', 'boss', 'core', 'core', 'core')])) },
-    { k: 'mystery', name: 'Mystery box', blurb: `Specialty: the gamble. Any packs, strong ones included, unseen until opened. Same power on average, bigger swings.`, art: null, col: '#7a7f88', packs: () => capped(types), mystery: true },
+    { k: 'mystery', name: 'Mystery box', blurb: `Specialty: the gamble. Any packs, strong ones included, unseen until opened. Same power on average, bigger swings.`, art: 38723936, col: '#7a7f88', packs: () => capped(types), mystery: true },
     ...themed.map(t => ({ k: 'tb:' + t.k, name: t.name + ' box', blurb: `Specialty: ${t.name} synergy. Mostly ${t.name} packs, balanced to the same power as every box.`, art: t.art, col: t.col, packs: tuned((MIX.theme || {})[t.k]) || (() => fill([...Array(8).fill(t.k), ...pick('core', 'st')])) })),
   ];
 }
@@ -1844,7 +1864,7 @@ function renderSealed(anim) {
     if (!x || sMenu) { sPick = false; $('#sealTitle').textContent = 'Sealed';
       el.innerHTML = `<p class="dintro">Pick a pool, then open a booster box or mix your own ${SEALED_PACKS} packs, and build a deck of at least 40 cards from what you pull.</p>
         <div class="dgroups">${[...new Set(Object.values(DPOOLS).filter(P => !P.hidden).map(P => P.group))].map(g => `<div class="dgrp"><div class="ph">${esc(g)}</div><div class="fmt-row drow">${Object.entries(DPOOLS).filter(([, P]) => P.group === g && !P.hidden).map(([k, P]) => `<div class="fmt" data-spool="${k}">${tileBg(P.art)}<span class="tg ${P.tag === 'Learn Retro mix' ? 'hot' : ''}">${esc(P.tag)}</span><div class="txt"><h3 class="disp">${esc(P.name)}</h3><p>${esc(P.blurb)}</p></div></div>`).join('')}</div></div>`).join('')}</div>`;
-      el.classList.toggle('hascont', !!x); if (x) el.insertAdjacentHTML('afterbegin', contCard(DPOOLS[x.pool], '', !x.boxOpen ? `${x.box || 'Box'}, not opened yet` : x.opened < SEALED_PACKS ? `Pack ${x.opened + 1} of ${SEALED_PACKS}` : 'Packs open, deck in progress', 'Sealed'));
+      el.classList.remove('hascont');
       el.onclick = async e => { if (e.target.closest('[data-cont]')) { sMenu = false; S.play('click'); return renderSealed(true); } if (e.target.closest('[data-cont-toss]')) return sealedRestart();
         const p = e.target.closest('[data-spool]'); if (!p) return; S.play('click'); renderPackPick(p.dataset.spool); }; return; }   // looking costs nothing: the question comes when a new box or mix starts
     const P = DPOOLS[x.pool], f = x.fmt, T = draftTiers(x.pool);
@@ -1854,7 +1874,7 @@ function renderSealed(anim) {
       el.onclick = e => { if (e.target.closest('[data-go2=box]') || e.target.closest('#sBox')) { $('#sBox').classList.add('opening'); S.play('shuffle'); setTimeout(() => { x.boxOpen = true; saveSD(x); renderSealed(true); }, REDUCED ? 0 : 650); } };
       return; }
     if (x.opened < SEALED_PACKS) {
-      const pt0 = packTypes(x.pool).find(t => t.k === (x.ptypes || [])[x.opened]) || packTypes(x.pool)[0], pt = x.mystery ? { k: 'mystery', name: 'Mystery pack', sub: 'Mystery pack', col: '#7a7f88', art: null } : pt0;
+      const pt0 = packTypes(x.pool).find(t => t.k === (x.ptypes || [])[x.opened]) || packTypes(x.pool)[0], pt = x.mystery ? { k: 'mystery', name: 'Mystery pack', sub: 'Mystery pack', col: '#7a7f88', art: 38723936 } : pt0;
       $('#sealTitle').textContent = `Pack ${x.opened + 1} of ${SEALED_PACKS}`;
       el.innerHTML = `<div class="dsub"><span class="dpool" id="sPackName">${esc(P.name)} sealed · ${esc(x.mystery ? 'Mystery pack' : pt.k === 'core' ? 'Core pack' : pt.name + ' ' + pt.sub.toLowerCase())}</span></div><div class="dprog">${Array.from({ length: SEALED_PACKS }, (_, i) => `<i class="${i < x.opened ? 'f' : i === x.opened ? 'now' : ''}"></i>`).join('')}</div>
         <div class="packstage">${packHTML(P, pt, anim, x.mystery ? 0 : x.packs[x.opened].length)}
@@ -1921,7 +1941,7 @@ function packFace(P, pt, n, small) {
   return `<div class="cfp" style="--pc:${pt.col}"><div class="cf-brush"></div><div class="cf-band"></div><div class="cf-crimp t"></div><div class="cf-tear">Tear here</div><div class="cf-logo">Learn<b>Retro</b></div>
     <div class="cf-win">${pt.art ? `<div class="art" style="background-image:url(${artSrc(pt.art, small)})"></div>` : '<div class="art mys">?</div>'}<i class="rv tl"></i><i class="rv tr"></i><i class="rv bl"></i><i class="rv br"></i></div><div class="cf-seal">LR</div>
     <div class="cf-burst">${n || '?'}<br>cards</div><div class="cf-plate"><h3>${esc(name)}</h3><div>${esc(kind)} · ${esc(P.name)}</div></div>
-    <div class="cf-foot"><span>${pt.art ? packCode(P, pt) : 'LR-????'}</span><span>${esc(P.name)}</span></div><div class="cf-crimp b"></div></div>`;
+    <div class="cf-foot"><span>${pt.art && pt.k !== 'mystery' ? packCode(P, pt) : 'LR-????'}</span><span>${esc(P.name)}</span></div><div class="cf-crimp b"></div></div>`;
 }
 function boxHTML(P, anim, b) { return `<div class="bbox ${anim && !REDUCED ? 'in' : ''}" id="sBox">${boxFace(P, b)}</div>`; }
 function boxFace(P, b, small) {
@@ -1972,7 +1992,7 @@ function renderPackPick(pk) {
       <p>${esc(pt.blurb)}</p>
       <div class="pcount"><button class="pm" data-dec="${esc(pt.k)}" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button class="pm" data-inc="${esc(pt.k)}" ${n >= cap || t >= SEALED_PACKS ? 'disabled' : ''}>+</button></div></div>`; };
   const boxCell = b => { const n = boxCards(b); return `<div class="mcell box" data-box="${esc(b.k)}"><div class="mbox">${boxFace(P, { ...b, cards: n }, true)}</div><p>${esc(b.blurb)}</p></div>`; };
-  const x = SD(), cont = x && x.pool === pk ? contCard(P, '', !x.boxOpen ? `${x.box || 'Box'}, not opened yet` : x.opened < SEALED_PACKS ? `Pack ${x.opened + 1} of ${SEALED_PACKS}` : 'Packs open, deck in progress', 'Sealed') : '';
+  const x = SD(), cont = '';
   $('#sealBody').innerHTML = `<div class="tscroll">${cont}<p class="dintro">Open a box, or mix your own ${SEALED_PACKS} packs. Strong packs have fewer cards and a limit per mix.</p>
       <div class="dgrp"><div class="ph big">Packs<span>Mix your own ${SEALED_PACKS}: tap a pack to add it</span></div><div class="mgrid packs">${types.map(packCell).join('')}</div></div>
       <div class="dgrp"><div class="ph big">Booster boxes<span>Tap a box to see what's inside</span></div><div class="mgrid boxes">${boxes.filter(b => !b.k.startsWith('tb:')).map(boxCell).join('')}</div></div>
@@ -2020,6 +2040,41 @@ const ease = t => 1 - Math.pow(1 - t, 3);
 function confetti(host, n = 26) { const cols = ['#ff6a1f', '#ffd23f', '#47c47a', '#3a9ee8', '#9b5de5', '#fff']; for (let i = 0; i < n; i++) { const c = document.createElement('i'); c.className = 'cfti'; const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 180;
   c.style.cssText = `--x:${Math.cos(a) * d}px;--y:${Math.sin(a) * d - 80}px;--r:${Math.random() * 720 - 360}deg;background:${cols[i % cols.length]};animation-delay:${Math.random() * 80}ms`; host.appendChild(c); setTimeout(() => c.remove(), 1600); } }
 var rollStop = null;   // var, not let: show() checks it before this line has run
+// a jank theme's deck comes in with a show (Zack, 2026-11-26: "fun animations for picking a random jank deck"); three options to pick from,
+// ?jk=a slot reels (Zack's pick, the default), b shuffle and deal, c card storm. The theme's name shows only when the show lands. The deck is built first and the show lands on its key cards. Transform and opacity only.
+const JK = new URLSearchParams(location.search).get('jk') || 'a';
+function jankReveal(f, th) {
+  const deck = buildRandom(f, th), d = { name: '', main: deck.main, extra: deck.extra }, kc = keyCards(f, d).slice(0, JK === 'a' ? 3 : 5), el = $('#rndBody');
+  const fin = () => { if (done) return; stop(); RND.deck = deck; deck.anim = true; renderRandom(true); };
+  let done = false; const timers = [], later = (fn, ms) => timers.push(setTimeout(fn, ms)), stop = () => { done = true; timers.forEach(clearTimeout); rollStop = null; };
+  rollStop = stop; RND.deck = null;
+  if (REDUCED) { RND.deck = deck; return renderRandom(true); }
+  const pool = [...new Set(deck.main)].filter(id => !kc.includes(id)), rnd = () => pool[Math.floor(Math.random() * pool.length)];
+  const card = (id, cls = '') => `<div class="jc ${cls}" style="background-image:url(${artUrl(id)})"></div>`;
+  $('#rndTitle').textContent = 'Building your deck';
+  const head = `<div class="jk-head"><span>${f === 'goat' ? 'Goat' : 'Edison'} jank</span><b class="jk-name">Shuffling up</b></div>`, named = () => { const b = el.querySelector('.jk-name'); if (b) { b.textContent = th.name; b.classList.add('shown'); } };
+  if (JK === 'a') {   // slot reels: three reels spin through the deck and stop, left to right, on its key cards
+    const N = 24, reel = (id, i) => `<div class="reel" style="--d:${2500 + i * 900}ms"><div class="strip">${[...Array.from({ length: N }, () => card(rnd())), card(id, 'key')].join('')}</div></div>`;
+    el.innerHTML = `<div class="jk jk-a">${head}<div class="reels">${kc.map(reel).join('')}</div><div class="jk-lever"><i></i></div></div>`;
+    S.play('shuffle'); requestAnimationFrame(() => el.querySelector('.jk').classList.add('go'));
+    kc.forEach((_, i) => later(() => { el.querySelectorAll('.reel')[i].classList.add('hit'); S.play(i === kc.length - 1 ? 'summon' : 'click'); if (i === kc.length - 1) named(); }, 2500 + i * 900 + 40));
+    later(fin, 2500 + (kc.length - 1) * 900 + 1300);
+  } else if (JK === 'b') {   // shuffle and deal: the deck riffles twice, then deals five cards that flip to its key cards
+    const stack = Array.from({ length: 12 }, (_, i) => `<div class="jc back rf" style="--i:${i};--s:${i % 2 ? 1 : -1}"></div>`).join('');
+    const deal = kc.map((id, i) => `<div class="deal" style="--i:${i};--x:${(i - (kc.length - 1) / 2) * (MOBILE ? 64 : 230)}px;--r:${(i - (kc.length - 1) / 2) * 7}deg"><div class="flip"><div class="jc back"></div>${card(id, 'face')}</div></div>`).join('');
+    el.innerHTML = `<div class="jk jk-b">${head}<div class="table"><div class="stack">${stack}</div>${deal}</div></div>`;
+    S.play('shuffle'); requestAnimationFrame(() => el.querySelector('.jk').classList.add('go'));
+    later(() => S.play('shuffle'), 700); kc.forEach((_, i) => later(() => S.play('click'), 1500 + i * 120)); kc.forEach((_, i) => later(() => { S.play(i === kc.length - 1 ? 'summon' : 'click'); if (i === kc.length - 1) named(); }, 2300 + i * 160));
+    later(fin, 2300 + kc.length * 160 + 900);
+  } else {   // card storm: the deck's cards whirl in a vortex, collapse to the middle and burst out as the key cards
+    const M = MOBILE ? 18 : 28, storm = Array.from({ length: M }, (_, i) => `<div class="vc" style="--a:${(i * 360 / M).toFixed(1)}deg;--r:${MOBILE ? 150 + (i % 3) * 40 : 260 + (i % 3) * 70}px;--t:${(i % 4) * 60}ms">${card(rnd())}</div>`).join('');
+    const out = kc.map((id, i) => `<div class="burst" style="--i:${i};--x:${(i - (kc.length - 1) / 2) * (MOBILE ? 64 : 230)}px;--r:${(i - (kc.length - 1) / 2) * 7}deg">${card(id, 'face')}</div>`).join('');
+    el.innerHTML = `<div class="jk jk-c">${head}<div class="table"><div class="vortex">${storm}</div><div class="core"></div>${out}</div></div>`;
+    S.play('shuffle'); requestAnimationFrame(() => el.querySelector('.jk').classList.add('go'));
+    later(() => S.play('destroy'), 1900); later(() => { S.play('summon'); named(); }, 2150);
+    later(fin, 3500);
+  }
+}
 function rollFullyRandom(f) {
   const forced = +new URLSearchParams(location.search).get('roll');
   const el = $('#rndBody'), themes = RND.themes, roll = forced >= 1 && forced <= 6 ? forced : 1 + Math.floor(Math.random() * 6);

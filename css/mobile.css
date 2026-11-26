@@ -776,3 +776,16 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .pn::before{backdrop-filter:none;-webkit-backdrop-filter:none}
 /* the shimmer passes twice on phones */
 #stage.m .cfp::after,#stage.m .bx-front::after{animation-iteration-count:2}
+/* duel effect styles on phones: smaller callouts and numbers, letterbox thinner */
+#stage.m .fx.l3{left:12px;bottom:330px;height:64px}#stage.m .fx.l3.op{right:12px;top:150px}#stage.m .fx.l3 .l3-art{width:64px;height:64px}#stage.m .fx.l3 .l3-t{height:64px;min-width:0;padding:0 14px}#stage.m .fx.l3 .l3-t b{font-size:24px}#stage.m .fx.l3 .l3-t span{font-size:11px}
+#stage.m .fx.rewind{top:330px;height:90px}#stage.m .fx.rewind b{font-size:46px}#stage.m .fx.rewind i{font-size:36px}
+#stage.m .fx.cutin{top:250px;height:220px}#stage.m .fx.cutin .ci-t b{font-size:48px;max-width:240px}#stage.m .fx.cutin .ci-t span{font-size:14px}
+#stage.m .fx.turnc{top:300px}#stage.m .fx.turnc b{font-size:56px}
+#stage.m.lbox::before,#stage.m #s-duel.lbox::before,#stage.m #s-duel.lbox::after{height:44px}
+#stage.m .fx.showcard .sc-card{width:180px}#stage.m .fx.showcard b{font-size:28px;bottom:120px}
+#stage.m .fx.stamp{font-size:30px}#stage.m .fx.stamp.big{font-size:40px}#stage.m .fx.bignum{font-size:64px}#stage.m .fx.turnarc b{font-size:58px}#stage.m .fx.combo{right:16px;top:200px;font-size:22px}#stage.m .fx.combo b{font-size:48px}
+#stage.m .fx.lines::before{left:-130px;top:-130px;width:260px;height:260px}
+/* jank deck reveals on phones */
+#stage.m .jk{--cw:92px;--ch:134px;min-height:420px;gap:18px}#stage.m .jk-head b{font-size:34px}#stage.m .jk-head span{font-size:12px}
+#stage.m .jk-a .reels{gap:10px;padding:12px}#stage.m .jk-lever{display:none}
+#stage.m .jk-c .vc .jc{--cw:54px;--ch:78px}#stage.m .jk-c .core{width:200px;height:200px;margin:-100px 0 0 -100px}
