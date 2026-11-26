@@ -1448,3 +1448,5 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 .rp-t{padding:30px 32px 10px}.rp-t span{font:800 16px 'Barlow Condensed';letter-spacing:.2em;text-transform:uppercase;color:#ff8a3d}
 .rp-t b{display:block;font:italic 900 64px/1 'Barlow Condensed';text-transform:uppercase;color:#fff;margin:8px 0 12px}.rp-t p{color:var(--mute,#9aa0aa);font-size:18px;margin:0}
 .rp-card .gb{margin:0 32px 30px;align-self:end;justify-self:start;font-size:24px;padding:16px 40px}
+.gbackbar{display:none}
+.cfb .bx-label.long{font-size:34px;line-height:.95;letter-spacing:-.01em}

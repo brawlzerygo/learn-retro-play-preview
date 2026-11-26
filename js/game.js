@@ -1,9 +1,9 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=144';
-import * as S from './sfx.js?v=144';
-import * as FX from './fx.js?v=144';
+import { Table } from './table.js?v=156';
+import * as S from './sfx.js?v=156';
+import * as FX from './fx.js?v=156';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -144,7 +144,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=144');
+const W = new Worker('js/worker.js?v=156');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -1880,11 +1880,12 @@ function renderSealed(anim) {
         <div class="packstage">${packHTML(P, pt, anim, x.mystery ? 0 : x.packs[x.opened].length)}
           <div class="pullrow" id="sPull"></div></div>
         <div class="row prow"><button class="gb pri" id="sOpen" data-go2="open">Open pack<span class="key">1</span><span class="shine"></span></button><button class="gb" id="sAll" data-go2="all">Open all<span class="key">2</span><span class="shine"></span></button></div>`;
-      const open = () => { const ids = x.packs[x.opened], pk = $('#sPack'), row = $('#sPull'); $('#sOpen').disabled = $('#sAll').disabled = true; S.play('shuffle'); pk.classList.add('rip');
+      const open = () => { const ids = x.packs[x.opened], pk = $('#sPack'), row = $('#sPull'); $('#sOpen').disabled = $('#sAll').disabled = true; S.play('shuffle'); pk.classList.add('rip'); const pkR = pk.getBoundingClientRect();
         // the reveal (Zack, 2026-11-25): Commons and Rares flip quickly; a Super Rare slows down, shakes and turns; an Ultra Rare is slower still,
         // shakes harder, turns and pops with a flash, a ring and sparkles. Each card waits for the one before it to finish.
         setTimeout(() => { pk.style.display = 'none'; let t = 0; const plan = ids.map(id => { const tr = T.tier.get(String(id)) || 'C', dur = REDUCED ? 0 : tr === 'UR' ? 2600 : tr === 'SR' ? 1500 : 550, d = t; t += REDUCED ? 0 : tr === 'UR' ? 2750 : tr === 'SR' ? 1650 : 110; return { id, tr, d, dur }; });
           row.innerHTML = plan.map(p => `<div class="pull r-${p.tr} ${p.tr === 'UR' ? 'rv-ur' : p.tr === 'SR' ? 'rv-sr' : ''}" style="--d:${p.d}ms;--dur:${p.dur}ms"><div class="fc"><div class="bk"></div><div class="fr" style="background-image:url(${artUrl(p.id)})"></div></div>${p.tr === 'UR' ? '<i class="burst"></i><i class="ring"></i>' : ''}<span class="tg r-${p.tr}">${RARNAME[p.tr]}</span></div>`).join('');
+          if (MOBILE) dealPulls(row, pkR, ids.length);
           for (const p of plan) { if (p.tr === 'UR') { setTimeout(() => S.play('chain', { gap: 40 }), p.d + 300); setTimeout(() => S.play('synchro'), p.d + p.dur * 0.78); }
             else if (p.tr === 'SR') { setTimeout(() => S.play('activate', { gap: 40 }), p.d + 200); setTimeout(() => S.play('summon'), p.d + p.dur * 0.75); }
             else setTimeout(() => S.play('flip', { gap: 40 }), p.d + 200); }
@@ -1935,6 +1936,17 @@ const artSrc = (id, small) => TILE_ART.has(+id) ? `assets/art/${small ? 's/' : '
 // Classic Foil packs and boxes (Zack, 2026-11-25: "i love classic foil"): our own 2002-style booster, a silver foil wrapper with a band in the
 // pack's color, crimped ends, the art in a chrome frame, a name plate and a starburst for the card count. Drawn at 260x420 (pack) and 420x280
 // (box front) and scaled to fit (--k), so the web and the PWA share one design.
+// phones (Zack, 2026-11-26: "when packs are opened, doesnt show everything without scrolling... card reveal animations are clunky"): the pulls
+// are sized so the whole pack fits above the buttons, and each card deals out of the torn pack into its slot
+function dealPulls(row, pkR, n) {
+  const st = row.closest('.packstage'), pr = $('.prow'); if (!st || !pr) return;
+  st.classList.add('pulled');
+  const sr = st.getBoundingClientRect(), rows = Math.ceil(n / 3), gap = 14, tag = 6, avail = sr.bottom - sr.top - 10;   // the screen area, not the stage (the stage's height follows its content)
+  const byH = ((avail - rows * (tag + gap)) / rows) * 421 / 614, byW = (st.getBoundingClientRect().width - 2 * gap) / 3;
+  row.style.maxWidth = Math.floor(3 * Math.min(byH, byW) + 2 * gap) + 'px';
+  const cx = pkR.left + pkR.width / 2, cy = pkR.top + pkR.height / 2;
+  for (const el of row.children) { const r = el.getBoundingClientRect(); el.style.setProperty('--fx', Math.round(cx - (r.left + r.width / 2)) + 'px'); el.style.setProperty('--fy', Math.round(cy - (r.top + r.height / 2)) + 'px'); }
+}
 function packHTML(P, pt, anim, n) { return `<div class="pack ${anim && !REDUCED ? 'in' : ''}" id="sPack">${packFace(P, pt, n)}</div>`; }
 function packFace(P, pt, n, small) {
   const kind = pt.k === 'core' ? 'Core pack' : pt.sub, name = pt.k === 'core' ? P.name : pt.name;
@@ -1949,7 +1961,7 @@ function boxFace(P, b, small) {
   const cards = b.cards ? `${SEALED_PACKS} packs · ${b.cards} cards` : `${SEALED_PACKS} packs`;
   return `<div class="cfb" style="--pc:${b.col}"><div class="bx-shadow"></div><div class="bx-top"><i></i><b>Learn<em>Retro</em></b></div><div class="bx-side"><span>Booster box · ${SEALED_PACKS} packs</span></div>
     <div class="bx-front"><div class="cf-brush"></div><div class="cf-band"></div><div class="cf-win">${b.art ? `<div class="art" style="background-image:url(${artSrc(b.art, small)})"></div>` : '<div class="art mys">?</div>'}<i class="rv tl"></i><i class="rv tr"></i><i class="rv bl"></i><i class="rv br"></i></div><div class="cf-seal">LR</div>
-      <div class="bx-lid"></div><div class="cf-logo">Learn<b>Retro</b></div><div class="bx-label">${esc(b.name).replace(/ box$/, '<br>box')}</div>
+      <div class="bx-lid"></div><div class="cf-logo">Learn<b>Retro</b></div><div class="bx-label${b.name.replace(/ box$/, '').length > 9 ? ' long' : ''}">${esc(b.name).replace(/ box$/, '<br>box')}</div>
       <div class="cf-plate"><h3>${esc(P.name)}</h3><div>${cards}</div></div><div class="cf-burst">10<br>packs</div></div></div>`;
 }
 // a box up close (Zack, 2026-11-25: "if you click on it, it enlarges it and gives you a description, and then an addtl option to pick 'select'"):

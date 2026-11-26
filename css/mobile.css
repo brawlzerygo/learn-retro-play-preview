@@ -35,7 +35,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m #s-title .heroes .card{width:170px;height:248px;border-radius:7px;box-shadow:0 0 0 2px #fff,0 20px 40px rgba(0,0,0,.8)}
 #stage.m #s-title .heroes .h1{left:4px;top:24px}
 #stage.m #s-title .heroes .h2{left:120px;top:6px}
-#stage.m #mainMenu{left:20px;right:20px;top:calc(var(--sat) + 380px);width:auto;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#stage.m #mainMenu{left:20px;right:20px;top:calc(var(--sat) + 380px);width:auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 #stage.m #mainMenu .mi{position:relative;isolation:isolate;justify-content:center;height:54px;font:italic 900 22px 'Barlow Condensed';text-transform:uppercase;color:#fff;transform:none;gap:6px}
 #stage.m #mainMenu .mi::after{display:none}
 #stage.m #mainMenu .mi::before{display:block;content:"";position:absolute;inset:0;z-index:-1;transform:skewX(-10deg);background:#1d2127;border-radius:3px;clip-path:none;box-shadow:inset 0 -3px 0 rgba(255,255,255,.06),0 8px 18px rgba(0,0,0,.45)}
@@ -86,7 +86,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .savebar{position:relative;left:auto;translate:none;top:auto!important;margin:0 16px 12px;font-size:12px;line-height:1.35;padding:8px 12px;white-space:normal}
 #stage.m #stBody{position:relative;left:auto;right:auto;top:auto;bottom:auto;padding:0 12px calc(var(--sab) + 80px);font-size:14px}
 #stage.m #stBody table{font-size:13px;width:100%}
-#stage.m #stBody .tiles,#stage.m #stBody [class*=grid]{grid-template-columns:repeat(2,1fr)!important}
+#stage.m #stBody .tiles,#stage.m #stBody [class*=grid]{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 #stage.m #stBody *{max-width:100%}
 
 /* results */
@@ -94,13 +94,13 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .res-hero{position:relative;left:auto;top:auto}
 #stage.m .res-hero .disp{font-size:78px}
 #stage.m .res-hero p{font-size:16px;margin-top:6px}
-#stage.m .tiles{position:relative;left:auto;top:auto;margin-top:16px;grid-template-columns:repeat(3,1fr);gap:8px}
+#stage.m .tiles{position:relative;left:auto;top:auto;margin-top:16px;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 #stage.m .tiles>*{min-width:0;padding:10px 6px!important}
 #stage.m .tiles .disp,#stage.m .tiles b{font-size:30px!important}
 #stage.m .review{position:relative;right:auto;top:auto;bottom:auto;width:auto;margin-top:14px;padding:16px}
 #stage.m .review p,#stage.m .review li{font-size:14px}
 #stage.m .review h4{font-size:19px}
-#stage.m .res-btns{position:relative;left:auto;top:auto;margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#stage.m .res-btns{position:relative;left:auto;top:auto;margin-top:16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 #stage.m .res-btns .gb{justify-content:center}
 #stage.m .res-btns .gb.pri{grid-column:1/-1;height:58px;font-size:26px}
 
@@ -130,14 +130,14 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .bbar .inp{min-width:0;height:40px;font-size:16px}
 #stage.m .bbar .seg .gb{height:32px;font-size:14px;padding:0 9px}
 #stage.m .bbar #bType{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
-#stage.m .pool2{left:8px;right:8px;width:auto;top:calc(var(--bt,150px) + 140px);bottom:calc(var(--sab) + 62px);grid-template-columns:repeat(4,1fr);gap:8px;padding:4px}
+#stage.m .pool2{left:8px;right:8px;width:auto;top:calc(var(--bt,150px) + 140px);bottom:calc(var(--sab) + 62px);grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:4px}
 #stage.m .roster{left:0;right:0;top:calc(var(--bt,150px) + 46px);bottom:calc(var(--sab) + 58px);border-left:0;padding:8px 10px;overflow-y:auto;display:none}
 #stage.m #s-build.deckview .roster{display:flex}
 #stage.m #s-build.deckview .pool2,#stage.m #s-build.deckview .bbar{display:none}
 #stage.m .roster .rhead{flex-wrap:wrap;gap:6px 10px}
 #stage.m .roster .lbl{font-size:24px}
 #stage.m .roster .stat{font-size:12px}
-#stage.m .roster .main,#stage.m .roster .extra{grid-template-columns:repeat(5,1fr)!important}
+#stage.m .roster .main,#stage.m .roster .extra{grid-template-columns:repeat(5,minmax(0,1fr))!important}
 #stage.m .roster .extra{margin-top:10px}
 #stage.m .roster .howto{position:relative;left:auto;top:auto;translate:none;width:auto;padding:16px}
 #stage.m .roster .howto h4{font-size:28px}
@@ -169,7 +169,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .dlist .head{flex-wrap:wrap;gap:8px}
 #stage.m .dlist .head h3{font-size:24px!important;flex:1 1 100%}
 #stage.m .dlist .body{overflow-y:auto}
-#stage.m .dlist .fitgrid,#stage.m .dlist .grid{grid-template-columns:repeat(5,1fr)!important;gap:6px}
+#stage.m .dlist .fitgrid,#stage.m .dlist .grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:6px}
 #stage.m .dlist .fitgrid .dl,#stage.m .dlist .grid .dl{width:auto!important;font-size:0}
 #stage.m .dlist .fitgrid .card,#stage.m .dlist .grid .card{width:100%!important;height:auto!important;aspect-ratio:421/614}
 #stage.m .dlist .peek{left:0;right:0;bottom:0;width:auto;padding:14px 16px calc(var(--sab) + 14px);display:flex;flex-wrap:wrap;gap:4px 14px;max-height:50%;overflow-y:auto}
@@ -278,7 +278,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .czoom .zc{width:160px}
 #stage.m .czoom p{overflow:visible;flex:none;max-height:none!important}
 #stage.m .czoom .cnt{margin-top:10px;padding-top:0}
-#stage.m .sttiles{grid-template-columns:repeat(4,1fr)!important;gap:6px;margin-bottom:12px}
+#stage.m .sttiles{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px;margin-bottom:12px}
 #stage.m .sttiles .tile{height:auto;min-height:62px;padding:8px 6px;min-width:0}
 #stage.m .sttiles .n,#stage.m .sttiles .tile .disp{font-size:22px!important;line-height:1;white-space:nowrap}
 #stage.m .sttiles .tile *{font-size:10px}
@@ -431,7 +431,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.ml .fmt{flex:1;height:230px}
 /* decks: the list on the left, the chosen deck on the right */
 #stage.ml #s-deck.on,#stage.ml #s-deck.leaving{display:grid}
-#stage.ml #s-deck{grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;align-items:start;column-gap:10px;padding-bottom:calc(var(--sab) + 70px)}
+#stage.ml #s-deck{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start;column-gap:10px;padding-bottom:calc(var(--sab) + 70px)}
 #stage.ml #s-deck .htitle{grid-column:1/-1}
 #stage.ml .dk-wrap{grid-column:1;padding-left:calc(var(--sal) + 6px)}
 #stage.ml .dk-list{max-height:none}
@@ -441,8 +441,8 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.ml .vlist,#stage.ml .vdesc{max-width:640px;margin-left:auto;margin-right:auto}
 #stage.ml .vdesc{margin-bottom:calc(var(--sab) + 60px)}
 #stage.ml #stBody{padding:0 calc(var(--sar) + 12px) calc(var(--sab) + 60px) calc(var(--sal) + 12px)}
-#stage.ml .sttiles{grid-template-columns:repeat(8,1fr)!important}
-#stage.ml .stcols{display:grid!important;grid-template-columns:1fr 1fr}
+#stage.ml .sttiles{grid-template-columns:repeat(8,minmax(0,1fr))!important}
+#stage.ml .stcols{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 #stage.ml .sfmt,#stage.ml #s-stats .savebar{margin-left:calc(var(--sal) + 14px)}
 /* deck builder: more cards across */
 #stage.ml .board{padding-top:4px}
@@ -450,7 +450,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.ml .board .act{flex:1 1 auto;order:0}
 #stage.ml .board .savebtn{top:6px}
 #stage.ml[data-scr=build] .gback{top:8px}
-#stage.ml .pool2{grid-template-columns:repeat(8,1fr);bottom:calc(var(--sab) + 50px)}
+#stage.ml .pool2{grid-template-columns:repeat(8,minmax(0,1fr));bottom:calc(var(--sab) + 50px)}
 #stage.ml .roster{bottom:calc(var(--sab) + 48px)}
 #stage.ml .roster .main,#stage.ml .roster .extra{grid-template-columns:repeat(10,1fr)!important}
 #stage.ml .czoom,#stage.ml .czoom.left,#stage.ml .czoom.right{flex-direction:row;align-items:flex-start;bottom:calc(var(--sab) + 48px)}
@@ -461,7 +461,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.ml #s-results{padding-left:calc(var(--sal) + 16px);padding-right:calc(var(--sar) + 16px)}
 #stage.ml .res-btns{grid-template-columns:1fr 1fr 1fr}
 #stage.ml .res-btns .gb.pri{grid-column:auto;height:48px;font-size:20px}
-#stage.ml .tiles{grid-template-columns:repeat(6,1fr)}
+#stage.ml .tiles{grid-template-columns:repeat(6,minmax(0,1fr))}
 #stage.ml .lp .who{padding-right:56px}
 #stage.ml .lp .num{font-size:26px}
 #stage.ml .toast{top:66px;left:var(--sal);translate:none;width:176px;max-width:176px;font-size:12px;text-align:left}
@@ -489,7 +489,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.ml .bbar .inp{height:34px;font-size:14px;flex:1 1 120px}
 #stage.ml .bbar #bType{flex-basis:auto;order:0}
 #stage.ml .bbar .seg .gb{height:30px;font-size:12px;padding:0 7px}
-#stage.ml .pool2{top:calc(var(--bt,60px) + 44px);left:var(--sal);right:var(--sar);grid-template-columns:repeat(9,1fr)}
+#stage.ml .pool2{top:calc(var(--bt,60px) + 44px);left:var(--sal);right:var(--sar);grid-template-columns:repeat(9,minmax(0,1fr))}
 #stage.ml .roster{top:calc(var(--bt,60px) + 42px)}
 #stage.ml .czoom,#stage.ml .czoom.left,#stage.ml .czoom.right{top:calc(var(--bt,60px) + 42px)}
 #stage.ml #s-deck{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
@@ -640,7 +640,7 @@ html.m,html.m body{position:fixed;inset:0;width:100%;height:100%;margin:0}
 #stage.m #s-build.listview .blists{left:10px;right:10px;top:calc(var(--bt,150px) + 48px);bottom:calc(var(--sab) + 62px)}
 #stage.m .blists .lhead{gap:8px;margin-bottom:10px}
 #stage.m .blists .seg .gb{height:30px;font-size:13px;padding:0 9px}
-#stage.m .blists .lgrid{grid-template-columns:1fr 1fr;gap:8px;overscroll-behavior:contain}
+#stage.m .blists .lgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;overscroll-behavior:contain}
 #stage.m .ldeck{flex-direction:column;align-items:flex-start;gap:6px;min-height:0;padding:10px}
 #stage.m .ldeck .lfan{width:100%;height:84px}
 #stage.m .ldeck .lfan .card{width:50px;height:73px}
@@ -665,7 +665,7 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .draft .drow{display:flex;flex-direction:column;gap:14px;padding:0}
 #stage.m .draft .drow .fmt{height:200px}#stage.m .draft .drow .fmt h3{font-size:48px}#stage.m .draft .drow .fmt p{font-size:14px}
 #stage.m .dsub .tg{font-size:11px}#stage.m .dsub .dpool{font-size:16px}
-#stage.m .dopts{grid-template-columns:repeat(3,1fr);gap:8px;flex:none}
+#stage.m .dopts{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;flex:none}
 #stage.m .dopt{display:block;padding:0}
 #stage.m .dopt::before{display:none}
 #stage.m .dopt .card{width:100%;height:auto;aspect-ratio:421/614;border-radius:5px}
@@ -688,7 +688,7 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .ddone .row .gb{flex:1;justify-content:center}
 #stage.m .ddone .dinfo{padding:18px 16px}
 #stage.m #mainMenu .mi[data-href]{grid-column:auto;height:54px;font-size:22px}
-#stage.m .dstat{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 6px;font-size:11px;text-align:center;line-height:1.2}
+#stage.m .dstat{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 6px;font-size:11px;text-align:center;line-height:1.2}
 #stage.m .dstat b{display:block;font-size:24px;margin:0}
 #stage.m .dstat .gb{grid-column:span 2;justify-content:center}
 /* lighter on phones (Zack, 2026-11-25: the phone ran hot): the hand glow's running light repainted every playable card each frame,
@@ -707,16 +707,16 @@ html.m.hs #stage.m{position:absolute}
 /* Sealed on phones: a smaller pack, pulls in rows of three */
 #stage.m .pack{width:200px;height:320px}#stage.m .pk-art{left:18px;right:18px;top:50px;height:160px}#stage.m .pk-logo{top:220px;font-size:22px}#stage.m .pk-name{top:248px;font-size:28px}#stage.m .pk-top{height:24px}
 #stage.m .packstage{min-height:360px}
-#stage.m .pullrow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 10px;width:100%}#stage.m .pull{width:auto;height:auto}#stage.m .pull .fc{width:100%;height:auto;aspect-ratio:421/614}
+#stage.m .pullrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 10px;width:100%}#stage.m .pull{width:auto;height:auto}#stage.m .pull .fc{width:100%;height:auto;aspect-ratio:421/614}
 #stage.m .pull .tg{position:static;margin-top:6px;font-size:10px}
 #stage.m .moderow .tg.hot{display:none}
 #stage.m .prow .gb,#stage.m #sealBody > .row .gb{flex:1;justify-content:center}
-#stage.m .pulls{grid-template-columns:repeat(4,1fr);gap:8px;max-height:none;overflow:visible}
+#stage.m .pulls{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;max-height:none;overflow:visible}
 #stage.m .restart{right:16px;top:calc(var(--sat) + 10px);height:44px}
 #stage.m .fmt .tg{top:12px;left:14px;font-size:10px}
 #stage.m .dgrp .fmt .tg{left:auto;right:14px}
 #stage.m .draft .tscroll{overflow:visible;padding:0;gap:14px}
-#stage.m .draft .tscroll .rndrow{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:130px;gap:10px}
+#stage.m .draft .tscroll .rndrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-auto-rows:130px;gap:10px}
 #stage.m .draft .tscroll .rndrow .fmt{height:auto}#stage.m .draft .tscroll .rndrow .fmt h3{font-size:26px}#stage.m .draft .tscroll .rndrow .fmt p{display:none}
 #stage.m .draft .tscroll .rndrow .fmt .txt{left:12px;right:12px;bottom:12px}
 #stage.m .dcont{flex-wrap:wrap;gap:10px;padding:10px}#stage.m .dcont .dc-art{width:96px;height:56px}#stage.m .dcont h3{font-size:24px}#stage.m .dcont p{font-size:13px}
@@ -738,7 +738,7 @@ html.m.hs #stage.m{position:absolute}
 /* Classic Foil on phones (PWA): the same design, scaled */
 #stage.m .pack{--k:.85;width:calc(260px * var(--k));height:calc(420px * var(--k))}
 #stage.m .bbox{--k:.66;width:calc(466px * var(--k));height:calc(326px * var(--k));margin:10px 0}
-#stage.m .mgrid.packs{grid-template-columns:1fr 1fr;gap:14px 8px}#stage.m .mgrid.boxes{grid-template-columns:1fr;gap:14px}
+#stage.m .mgrid.packs{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 8px}#stage.m .mgrid.boxes{grid-template-columns:1fr;gap:14px}
 #stage.m .mpack{width:calc(260px * .56);height:calc(420px * .56)}#stage.m .mpack .cfp{--k:.56}
 #stage.m .mbox{width:calc(466px * .62);height:calc(326px * .62)}#stage.m .mbox .cfb{--k:.62}
 #stage.m .mcell p{font-size:12px}#stage.m .mcell{padding:8px 4px}
@@ -791,3 +791,78 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .jk-c .vc .jc{--cw:54px;--ch:78px}#stage.m .jk-c .core{width:200px;height:200px;margin:-100px 0 0 -100px}
 #stage.m .rp-card{grid-template-columns:1fr;width:calc(100% - 40px)}#stage.m .rp-art{grid-row:auto;min-height:220px}#stage.m .rp-t{padding:20px 22px 6px}#stage.m .rp-t b{font-size:40px}#stage.m .rp-card .gb{margin:10px 22px 22px;justify-self:stretch}
 #stage.m .jk-g .gc .jc,#stage.m .jk-c2 .gc .jc{--cw:92px;--ch:134px}
+/* PWA pass (Zack, 2026-11-26: "in sealed packs just show one at a time... maybe do 2-3 packs per line"): grid cells may shrink below the
+   unscaled pack art, three packs a row, the blurb left to the pack's own face, compact counters */
+#stage.m .mgrid.packs{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px 6px}
+#stage.m .mgrid .mcell{min-width:0;padding:6px 2px}
+#stage.m .mpack,#stage.m .mbox{overflow:visible;margin:0 auto}
+#stage.m .mgrid.packs .mpack{width:calc(260px * .4);height:calc(420px * .4)}#stage.m .mgrid.packs .mpack .cfp{--k:.4}
+#stage.m .mgrid.packs .mcell p{display:none}
+#stage.m .mgrid.packs .mtag{font-size:11px;line-height:1.2;min-height:28px;display:flex;align-items:center;justify-content:center;text-align:center}
+#stage.m .mgrid.packs .pcount{transform:scale(.86);transform-origin:50% 0}
+#stage.m .mgrid.boxes{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 8px}
+#stage.m .mgrid.boxes .mbox{width:calc(466px * .34);height:calc(326px * .34)}#stage.m .mgrid.boxes .mbox .cfb{--k:.34}
+#stage.m .mgrid.boxes .mcell p{font-size:11px;line-height:1.3}
+/* the mix bar: one compact row (count, Clear, the main button) with the ten pips as a thin line above it, clear of the home indicator */
+#stage.m .mixbar{flex-wrap:nowrap;gap:8px;padding:12px 10px 10px;bottom:calc(var(--sab) + 6px);margin-top:6px}
+#stage.m .mixbar .mx-n{flex:none;flex-basis:auto;font-size:12px;line-height:1.1;max-width:84px;white-space:normal}#stage.m .mixbar .mx-n b{font-size:26px;display:block}
+#stage.m .mixbar .dprog{position:absolute;left:10px;right:10px;top:5px;order:0;flex-basis:auto;height:3px}#stage.m .mixbar .dprog i{height:3px}
+#stage.m .mixbar #mixClear{flex:none;padding:0 14px}#stage.m .mixbar #mixGo{flex:1;font-size:18px;white-space:nowrap}
+#stage.m #s-sealed .tscroll{padding-bottom:20px}
+/* a solid strip behind Back, so scrolled content never runs under the button (Zack, 2026-11-26: "back button overlaps") */
+#stage.m:has(#gBack.on) .gbackbar{display:block;position:absolute;left:0;right:0;top:0;height:calc(var(--sat) + 52px);z-index:39;pointer-events:none;background:linear-gradient(rgba(9,10,13,.97) 78%,rgba(9,10,13,0))}
+#stage.m[data-scr=build] .gbackbar,#stage.m[data-scr=stats] .gbackbar,#stage.m[data-scr=settings] .gbackbar,#stage.m[data-scr=duel] .gbackbar{display:none}
+#stage.m .restart{z-index:41}
+/* phones: pulls deal out of the torn pack (--fx/--fy, set by dealPulls) and fit above the buttons; rare glows are a separate layer that fades,
+   never an animated filter (filters repaint every frame on phones and made the reveals stutter) */
+#stage.m .packstage{overflow:hidden}
+#stage.m .packstage.pulled{justify-content:flex-start;padding-top:4px}
+#stage.m .pullrow{margin:0 auto;gap:10px}
+#stage.m .pull .tg{height:14px;line-height:14px;margin-top:6px}
+#stage.m .pull .fc{animation:pDealM .62s var(--d) cubic-bezier(.25,.8,.3,1) both}
+@keyframes pDealM{0%{translate:var(--fx,0) var(--fy,0);scale:.55;opacity:0;transform:none}12%{opacity:1}42%{translate:0 0;scale:1;transform:none}70%{transform:scaleX(0)}100%{translate:0 0;scale:1;transform:scaleX(1)}}
+#stage.m .pull .fr{animation:pFace .62s var(--d) step-end both;animation-name:pFaceM}
+@keyframes pFaceM{0%{opacity:0}70%{opacity:1}100%{opacity:1}}
+#stage.m .pull .tg{animation-delay:calc(var(--d) + .55s)}
+#stage.m .pull.rv-sr .fc{animation:pRevSRM var(--dur) var(--d) cubic-bezier(.4,0,.2,1) both}
+#stage.m .pull.rv-ur .fc{animation:pRevURM var(--dur) var(--d) cubic-bezier(.4,0,.2,1) both}
+#stage.m .pull.rv-sr .fr{animation:pFaceSR var(--dur) var(--d) step-end both}
+#stage.m .pull.rv-ur .fr{animation:pFaceUR var(--dur) var(--d) step-end both}
+#stage.m .pull.rv-sr .tg,#stage.m .pull.rv-ur .tg{animation-delay:calc(var(--d) + var(--dur))}
+@keyframes pRevSRM{0%{translate:var(--fx,0) var(--fy,0);scale:.55;opacity:0;transform:none}14%{translate:0 0;scale:1;opacity:1;transform:none}
+  22%{transform:rotate(-2deg)}30%{transform:rotate(2.5deg)}38%{transform:rotate(-3deg)}46%{transform:rotate(3deg)}54%{transform:rotate(-2deg)}
+  60%{transform:scale(1.04)}75%{transform:scaleX(0) scale(1.04)}90%{transform:scale(1.08)}100%{translate:0 0;scale:1;transform:none}}
+@keyframes pRevURM{0%{translate:var(--fx,0) var(--fy,0);scale:.55;opacity:0;transform:none}10%{translate:0 0;scale:1;opacity:1;transform:none}
+  16%{transform:rotate(-2deg) scale(1.01)}22%{transform:rotate(3deg) scale(1.02)}28%{transform:rotate(-4deg) scale(1.03)}34%{transform:rotate(4deg) scale(1.04)}
+  40%{transform:rotate(-5deg) scale(1.05)}46%{transform:rotate(5deg) scale(1.06)}52%{transform:rotate(-5deg) scale(1.07)}58%{transform:rotate(4deg) scale(1.08)}
+  64%{transform:scale(1.08)}78%{transform:scaleX(0) scale(1.08)}84%{transform:scale(1.18)}92%{transform:scale(.97)}100%{translate:0 0;scale:1;transform:none}}
+/* the glow: a soft halo behind the card that only fades (opacity), building during the shake and settling after the turn */
+#stage.m .pull.rv-sr .fc::after,#stage.m .pull.rv-ur .fc::after{content:"";position:absolute;inset:-6px;border-radius:10px;z-index:-1;opacity:0;pointer-events:none}
+#stage.m .pull.rv-sr .fc::after{box-shadow:0 0 22px 6px rgba(162,122,232,.75);animation:pGlowM var(--dur) var(--d) ease-out both}
+#stage.m .pull.rv-ur .fc::after{box-shadow:0 0 30px 10px rgba(255,190,80,.85);animation:pGlowM var(--dur) var(--d) ease-out both}
+@keyframes pGlowM{0%,15%{opacity:0}55%{opacity:.8}82%{opacity:1}100%{opacity:.55}}
+#stage.m .pull .ring{animation-name:pRingM}@keyframes pRingM{0%{opacity:0;transform:scale(.4)}1%{opacity:1;transform:scale(.4)}100%{opacity:0;transform:scale(3.6)}}
+#stage.m .pull .burst{scale:.6}
+#stage.m .pullrow{grid-template-columns:repeat(3,minmax(0,1fr))}#stage.m .pull{min-width:0}
+/* opening packs on phones: the screen is one column that fills the height, the buttons pinned at the bottom above the home indicator,
+   and the pulls fill the space between; a rarity tag sits on its card's bottom edge instead of costing a row */
+#stage.m #s-sealed.on[data-step=open]{display:flex;flex-direction:column;overflow:hidden}
+#stage.m #s-sealed[data-step=open] #sealBody{flex:1;min-height:0;display:flex;flex-direction:column}
+#stage.m #s-sealed[data-step=open] .packstage{flex:1;min-height:0}
+#stage.m #s-sealed[data-step=open] .prow{flex:none;margin-top:8px;padding-bottom:calc(var(--sab) + 4px)}
+#stage.m .pull .tg{position:absolute;left:50%;bottom:-7px;translate:-50% 0;margin:0;z-index:4}
+#stage.m #s-sealed[data-step=open] .htitle{font-size:34px;padding-bottom:4px}
+#stage.m #s-sealed[data-step=open] .dsub{margin-top:0}#stage.m #s-sealed[data-step=open] .dsub .dpool{font-size:13px}
+/* the pulls on phones: four a row, the deck buttons in a bar pinned at the bottom (Start over is already at the top right) */
+#stage.m #s-sealed[data-step=pulls] .pulls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 6px}
+#stage.m #s-sealed[data-step=pulls] .pulls .pl{min-width:0;width:auto;height:auto}
+#stage.m #s-sealed[data-step=pulls] .pulls .card{width:100%;height:auto;aspect-ratio:421/614}
+#stage.m #s-sealed[data-step=pulls] #sealBody > .row{position:sticky;bottom:calc(var(--sab) + 6px);z-index:6;display:flex;gap:8px;padding:10px;margin-top:12px;background:rgba(16,18,22,.95);border-radius:4px;box-shadow:inset 0 0 0 1px var(--pnl-edge)}
+#stage.m #s-sealed[data-step=pulls] #sealBody > .row .gb{flex:1;justify-content:center;font-size:16px;padding:0 10px;height:48px}
+#stage.m #s-sealed[data-step=pulls] #sealBody > .row .dtoss{display:none}
+#stage.m #s-sealed[data-step=pulls] .dsub .dpool{font-size:13px}
+/* stats tables fit the phone: the win bar goes (the % stays), headers and names may wrap */
+#stage.m .sttab{table-layout:auto}#stage.m .sttab .bar2{display:none}
+#stage.m .sttab th{white-space:normal;line-height:1.2;vertical-align:bottom}
+#stage.m .sttab td:first-child{white-space:normal;word-break:break-word}
+#stage.m .stbox{overflow-x:auto}
