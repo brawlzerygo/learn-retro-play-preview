@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=116';
-import * as S from './sfx.js?v=116';
+import { Table } from './table.js?v=119';
+import * as S from './sfx.js?v=119';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -143,7 +143,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=116');
+const W = new Worker('js/worker.js?v=119');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -157,8 +157,11 @@ const BACK = { sealed: 'mode', random: 'mode', settings: 'title', mode: 'title',
 // inside Draft, Sealed and Random and Jank, Back goes one step back before leaving the mode (Zack, 2026-11-25: "it should take you to the prev screen")
 function subBack() {
   if (closeCardZoom()) return true;
-  if (cur === 'sealed' && (!sMenu || sPick)) { sMenu = true; sPick = false; renderSealed(true); return true; }
-  if (cur === 'draft' && (!dMenu || dPick)) { dMenu = true; dPick = false; dSel = null; renderDraft(true); return true; }
+  // the screen before: a sealed run or box -> its pool's pack page -> the Sealed home; a draft -> its theme list (classic pools) or the Draft home
+  if (cur === 'sealed' && !sMenu) { const x = SD(); sMenu = true; if (x) return (renderPackPick(x.pool), true); renderSealed(true); return true; }
+  if (cur === 'sealed' && sPick) { sPick = false; renderSealed(true); return true; }
+  if (cur === 'draft' && !dMenu) { const x = DR(); dMenu = true; dSel = null; if (x && DPOOLS[x.pool].classic) return (renderThemePick(x.pool), true); dPick = false; renderDraft(true); return true; }
+  if (cur === 'draft' && dPick) { dPick = false; renderDraft(true); return true; }
   if (cur === 'random' && RND.f) { if (RND.deck) RND.deck = null; else RND = { f: null }; renderRandom(true); return true; }
   return false;
 }
@@ -1614,7 +1617,7 @@ function renderDraftPools() { dPick = false;
   $('#draftBody').innerHTML = `<p class="dintro">Pick 1 of 3 cards, ${DRAFT_PICKS} times: ${DRAFT_MAIN} for the Main Deck and ${DRAFT_EXTRA} for the Extra or Fusion Deck. Every card is rated Common to Ultra Rare by how strong it is, and each pick shows three of the same rating. Your deck saves to My decks, ready to duel.</p>
     <div class="dgroups">${[...new Set(Object.values(DPOOLS).filter(P => !P.hidden).map(P => P.group))].map(g => `<div class="dgrp"><div class="ph">${esc(g)}</div><div class="fmt-row drow">${Object.entries(DPOOLS).filter(([, P]) => P.group === g && !P.hidden).map(([k, P]) => `<div class="fmt" data-dpool="${k}">${tileBg(P.art)}<span class="tg ${P.tag === 'Learn Retro mix' ? 'hot' : ''}">${esc(P.tag)}</span>
       <div class="txt"><h3 class="disp">${esc(P.name)}</h3><p>${esc(P.blurb)}</p></div></div>`).join('')}</div></div>`).join('')}</div>`;
-  const cx = DR(); if (cx) $('#draftBody').insertAdjacentHTML('afterbegin', contCard(DPOOLS[cx.pool], cx.theme ? (DTHEMES.find(t => t.k === cx.theme) || {}).name : '', cx.offer && cx.main.length + cx.extra.length < DRAFT_PICKS ? `Pick ${cx.main.length + cx.extra.length + 1} of ${DRAFT_PICKS}` : 'Finished, not saved yet', 'Draft'));
+  const cx = DR(); $('#draftBody').classList.toggle('hascont', !!cx); if (cx) $('#draftBody').insertAdjacentHTML('afterbegin', contCard(DPOOLS[cx.pool], cx.theme ? (DTHEMES.find(t => t.k === cx.theme) || {}).name : '', cx.offer && cx.main.length + cx.extra.length < DRAFT_PICKS ? `Pick ${cx.main.length + cx.extra.length + 1} of ${DRAFT_PICKS}` : 'Finished, not saved yet', 'Draft'));
   $('#draftBody').onclick = async e => { if (e.target.closest('[data-cont]')) { dMenu = false; S.play('click'); return renderDraft(true); } if (e.target.closest('[data-cont-toss]')) return draftRestart();
     const p = e.target.closest('[data-dpool]'); if (!p) return; if (DR() && !(await ask('Start a new draft? Your unfinished one is lost.', 'Start new'))) return; saveDR(null); S.play('shuffle'); if (DPOOLS[p.dataset.dpool].classic) return renderThemePick(p.dataset.dpool); startDraft(p.dataset.dpool); renderDraft(true); };
 }
@@ -1624,7 +1627,9 @@ function renderThemePick(pk) {   // a classic pool: an open draft, or any of its
   $('#draftTitle').textContent = P.name;
   $('#draftBody').innerHTML = `<p class="dintro">Draft from the whole pool, or pick a theme: every pick then shows two cards of your theme and one card that fits any deck.</p>
     <div class="tscroll"><div class="fmt-row drow rndrow">${[{ k: '', name: 'Open draft', blurb: 'Any card in the pool, three of the same rating each pick.', art: P.art }, ...th.map(t => ({ ...t, art: artOf(t) }))].map((t, i) => `<div class="fmt dopt in" style="animation-delay:${Math.min(i, 8) * 50}ms" data-theme="${t.k}">${tileBg(t.art)}<span class="tg ${i ? '' : 'hot'}">${i ? 'Theme' : 'Open'}</span><div class="txt"><h3 class="disp">${esc(t.name)}</h3><p>${esc(t.blurb)}</p></div></div>`).join('')}</div></div>`;
-  $('#draftBody').onclick = e => { const t = e.target.closest('[data-theme]'); if (t) { S.play('shuffle'); startDraft(pk, t.dataset.theme || null); renderDraft(true); return; }
+  { const cx = DR(); if (cx && cx.pool === pk) $('#draftBody').insertAdjacentHTML('afterbegin', contCard(P, cx.theme ? (DTHEMES.find(t => t.k === cx.theme) || {}).name : '', cx.offer && cx.main.length + cx.extra.length < DRAFT_PICKS ? `Pick ${cx.main.length + cx.extra.length + 1} of ${DRAFT_PICKS}` : 'Finished, not saved yet', 'Draft')); $('#draftBody').classList.toggle('hascont', !!(cx && cx.pool === pk)); }
+  $('#draftBody').onclick = async e => { if (e.target.closest('[data-cont]')) { dMenu = false; dPick = false; S.play('click'); return renderDraft(true); } if (e.target.closest('[data-cont-toss]')) return draftRestart();
+    const t = e.target.closest('[data-theme]'); if (t) { if (DR() && !(await ask('Start a new draft? Your unfinished one is lost.', 'Start new'))) return; saveDR(null); S.play('shuffle'); startDraft(pk, t.dataset.theme || null); renderDraft(true); return; }
   };
 }
 function renderDraftDone(x) {
@@ -1835,11 +1840,11 @@ function renderSealed(anim) {
   readyP.then(() => {
     const x = SD(), el = $('#sealBody'); $('#sRestartTop').hidden = !x || sMenu; $('#s-sealed').dataset.step = !x || sMenu ? 'pools' : x.opened < SEALED_PACKS ? 'open' : 'pulls';
     if (!x || sMenu) { sPick = false; $('#sealTitle').textContent = 'Sealed';
-      el.innerHTML = `<p class="dintro">Open ${SEALED_PACKS} packs, then build a deck of at least 40 cards from what you pulled. Each pack has 9 cards: 6 Common, 2 Rare and 1 foil, a Super Rare 5 times in 6 or an Ultra Rare 1 in 6. Ratings come from how strong each card is in the format.</p>
+      el.innerHTML = `<p class="dintro">Pick a pool, then open a booster box or mix your own ${SEALED_PACKS} packs, and build a deck of at least 40 cards from what you pull.</p>
         <div class="dgroups">${[...new Set(Object.values(DPOOLS).filter(P => !P.hidden).map(P => P.group))].map(g => `<div class="dgrp"><div class="ph">${esc(g)}</div><div class="fmt-row drow">${Object.entries(DPOOLS).filter(([, P]) => P.group === g && !P.hidden).map(([k, P]) => `<div class="fmt" data-spool="${k}">${tileBg(P.art)}<span class="tg ${P.tag === 'Learn Retro mix' ? 'hot' : ''}">${esc(P.tag)}</span><div class="txt"><h3 class="disp">${esc(P.name)}</h3><p>${esc(P.blurb)}</p></div></div>`).join('')}</div></div>`).join('')}</div>`;
-      if (x) el.insertAdjacentHTML('afterbegin', contCard(DPOOLS[x.pool], '', x.opened < SEALED_PACKS ? `Pack ${x.opened + 1} of ${SEALED_PACKS}` : 'Packs open, deck in progress', 'Sealed'));
+      el.classList.toggle('hascont', !!x); if (x) el.insertAdjacentHTML('afterbegin', contCard(DPOOLS[x.pool], '', !x.boxOpen ? `${x.box || 'Box'}, not opened yet` : x.opened < SEALED_PACKS ? `Pack ${x.opened + 1} of ${SEALED_PACKS}` : 'Packs open, deck in progress', 'Sealed'));
       el.onclick = async e => { if (e.target.closest('[data-cont]')) { sMenu = false; S.play('click'); return renderSealed(true); } if (e.target.closest('[data-cont-toss]')) return sealedRestart();
-        const p = e.target.closest('[data-spool]'); if (!p) return; if (SD() && !(await ask('Open new packs? Your unfinished sealed run is lost.', 'Start new'))) return; S.play('click'); renderPackPick(p.dataset.spool); }; return; }
+        const p = e.target.closest('[data-spool]'); if (!p) return; S.play('click'); renderPackPick(p.dataset.spool); }; return; }   // looking costs nothing: the question comes when a new box or mix starts
     const P = DPOOLS[x.pool], f = x.fmt, T = draftTiers(x.pool);
     if (!x.boxOpen) { $('#sealTitle').textContent = x.box || 'Booster box'; $('#s-sealed').dataset.step = 'open';
       el.innerHTML = `<div class="dsub"><span class="dpool">${esc(P.name)} · ${SEALED_PACKS} packs</span></div><div class="packstage">${boxHTML(P, anim, boxTypes(x.pool).find(b => b.k === x.kind))}</div>
@@ -1908,52 +1913,60 @@ const artSrc = id => TILE_ART.has(+id) ? `assets/art/${id}.webp` : artUrl(id);
 // Classic Foil packs and boxes (Zack, 2026-11-25: "i love classic foil"): our own 2002-style booster, a silver foil wrapper with a band in the
 // pack's color, crimped ends, the art in a chrome frame, a name plate and a starburst for the card count. Drawn at 260x420 (pack) and 420x280
 // (box front) and scaled to fit (--k), so the web and the PWA share one design.
-function packHTML(P, pt, anim, n) {
+function packHTML(P, pt, anim, n) { return `<div class="pack ${anim && !REDUCED ? 'in' : ''}" id="sPack">${packFace(P, pt, n)}</div>`; }
+function packFace(P, pt, n) {
   const kind = pt.k === 'core' ? 'Core pack' : pt.sub, name = pt.k === 'core' ? P.name : pt.name;
-  return `<div class="pack ${anim && !REDUCED ? 'in' : ''}" id="sPack"><div class="cfp" style="--pc:${pt.col}"><div class="cf-brush"></div><div class="cf-band"></div><div class="cf-crimp t"></div><div class="cf-tear">Tear here</div><div class="cf-logo">Learn<b>Retro</b></div>
+  return `<div class="cfp" style="--pc:${pt.col}"><div class="cf-brush"></div><div class="cf-band"></div><div class="cf-crimp t"></div><div class="cf-tear">Tear here</div><div class="cf-logo">Learn<b>Retro</b></div>
     <div class="cf-win">${pt.art ? `<div class="art" style="background-image:url(${artSrc(pt.art)})"></div>` : '<div class="art mys">?</div>'}<i class="rv tl"></i><i class="rv tr"></i><i class="rv bl"></i><i class="rv br"></i></div><div class="cf-seal">LR</div>
     <div class="cf-burst">${n || '?'}<br>cards</div><div class="cf-plate"><h3>${esc(name)}</h3><div>${esc(kind)} · ${esc(P.name)}</div></div>
-    <div class="cf-foot"><span>${pt.art ? packCode(P, pt) : 'LR-????'}</span><span>${esc(P.name)}</span></div><div class="cf-crimp b"></div></div></div>`;
+    <div class="cf-foot"><span>${pt.art ? packCode(P, pt) : 'LR-????'}</span><span>${esc(P.name)}</span></div><div class="cf-crimp b"></div></div>`;
 }
-function boxHTML(P, anim, b) {
+function boxHTML(P, anim, b) { return `<div class="bbox ${anim && !REDUCED ? 'in' : ''}" id="sBox">${boxFace(P, b)}</div>`; }
+function boxFace(P, b) {
   b = b || { name: 'Booster box', art: P.art, col: '#ff6a1f' };
   const cards = b.cards ? `${SEALED_PACKS} packs · ${b.cards} cards` : `${SEALED_PACKS} packs`;
-  return `<div class="bbox ${anim && !REDUCED ? 'in' : ''}" id="sBox"><div class="cfb" style="--pc:${b.col}"><div class="bx-shadow"></div><div class="bx-top"><i></i><b>Learn<em>Retro</em></b></div><div class="bx-side"><span>Booster box · ${SEALED_PACKS} packs</span></div>
+  return `<div class="cfb" style="--pc:${b.col}"><div class="bx-shadow"></div><div class="bx-top"><i></i><b>Learn<em>Retro</em></b></div><div class="bx-side"><span>Booster box · ${SEALED_PACKS} packs</span></div>
     <div class="bx-front"><div class="cf-brush"></div><div class="cf-band"></div><div class="cf-win">${b.art ? `<div class="art" style="background-image:url(${artSrc(b.art)})"></div>` : '<div class="art mys">?</div>'}<i class="rv tl"></i><i class="rv tr"></i><i class="rv bl"></i><i class="rv br"></i></div><div class="cf-seal">LR</div>
       <div class="bx-lid"></div><div class="cf-logo">Learn<b>Retro</b></div><div class="bx-label">${esc(b.name).replace(/ box$/, '<br>box')}</div>
-      <div class="cf-plate"><h3>${esc(P.name)}</h3><div>${cards}</div></div><div class="cf-burst">10<br>packs</div></div></div></div>`;
+      <div class="cf-plate"><h3>${esc(P.name)}</h3><div>${cards}</div></div><div class="cf-burst">10<br>packs</div></div></div>`;
 }
-// after choosing a pool: a box, or your own mix of up to 10 packs (strong packs capped)
+// after choosing a pool (Zack, 2026-11-25: "the pack and booster arts should be on the sealed format page"): the real Classic Foil packs, each with
+// its counter, then the boxes; your own mix is up to 10 packs (strong packs capped). An unfinished run in this pool shows its Continue card on top.
 let sMix = null;
 function renderPackPick(pk) {
   const P = DPOOLS[pk], types = packTypes(pk), boxes = boxTypes(pk); sPick = true; $('#sRestartTop').hidden = true;
   if (!sMix || sMix.pk !== pk) sMix = { pk, n: {} };
-  $('#sealTitle').textContent = P.name; $('#s-sealed').dataset.step = 'pools';
+  $('#sealTitle').textContent = P.name; $('#s-sealed').dataset.step = 'pick';
   const total = () => Object.values(sMix.n).reduce((a, b) => a + b, 0), cards = () => types.reduce((a, t) => a + (sMix.n[t.k] || 0) * packSlots(t).length, 0);
-  const boxCards = b => { if (b.mystery || b.k === 'box') return null; const ks = b.packs(); return ks.reduce((a, k) => a + packSlots(types.find(t => t.k === k)).length, 0); };
-  const tileB = b => { const n = boxCards(b); return `<div class="fmt dopt in" data-box="${esc(b.k)}">${b.art ? tileBg(b.art) : '<div class="art mystery"></div>'}<div class="txt"><h3 class="disp">${esc(b.name)}</h3><p>${SEALED_PACKS} packs${n ? ` · ${n} cards` : ''}. ${esc(b.blurb)}</p></div></div>`; };
-  const tileP = t => { const n = sMix.n[t.k] || 0, cap = PACK_CAP[t.str || 0];
-    return `<div class="fmt pmix ${n ? 'on' : ''}" data-pack="${esc(t.k)}">${tileBg(t.art)}${t.str ? `<span class="pstr s${t.str}">${t.str === 2 ? 'Very strong' : 'Strong'} · max ${cap}</span>` : ''}
-      <div class="txt"><h3 class="disp">${esc(t.k === 'core' ? P.name + ' core' : t.name + (t.sub === 'Core pack' ? ' core' : ''))}</h3><p>${packSlots(t).length} cards. ${esc(t.blurb)}</p></div>
-      <div class="pcount"><button class="pm" data-dec="${esc(t.k)}" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button class="pm" data-inc="${esc(t.k)}" ${n >= cap || total() >= SEALED_PACKS ? 'disabled' : ''}>+</button></div></div>`; };
+  const boxCards = b => { if (b.mystery) return null; const ks = b.packs(); return ks.reduce((a, k) => a + packSlots(types.find(t => t.k === k) || types[0]).length, 0); };
   const t = total();
-  $('#sealBody').innerHTML = `<p class="dintro">Open a box, or mix your own ${SEALED_PACKS} packs. Strong packs have fewer cards and a limit per mix.</p>
-    <div class="tscroll"><div class="dgrp"><div class="ph">Your mix · tap a pack to add it</div><div class="fmt-row drow rndrow">${types.map(tileP).join('')}</div></div>
-      <div class="dgrp"><div class="ph">Boxes</div><div class="fmt-row drow rndrow">${boxes.filter(b => !b.k.startsWith('tb:')).map(tileB).join('')}</div></div>
-      <div class="dgrp"><div class="ph">Theme boxes</div><div class="fmt-row drow rndrow">${boxes.filter(b => b.k.startsWith('tb:')).map(tileB).join('')}</div></div></div>
+  const packCell = pt => { const n = sMix.n[pt.k] || 0, cap = PACK_CAP[pt.str || 0];
+    return `<div class="mcell ${n ? 'on' : ''}" data-pack="${esc(pt.k)}"><div class="mpack">${packFace(P, pt, packSlots(pt).length)}</div>
+      <div class="mtag">${pt.str ? `<span class="pstr s${pt.str}">${pt.str === 2 ? 'Very strong' : 'Strong'} · max ${cap}</span>` : `<span class="mk">${esc(pt.k === 'core' ? 'Core pack' : pt.sub)}</span>`}</div>
+      <p>${esc(pt.blurb)}</p>
+      <div class="pcount"><button class="pm" data-dec="${esc(pt.k)}" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button class="pm" data-inc="${esc(pt.k)}" ${n >= cap || t >= SEALED_PACKS ? 'disabled' : ''}>+</button></div></div>`; };
+  const boxCell = b => { const n = boxCards(b); return `<div class="mcell box" data-box="${esc(b.k)}"><div class="mbox">${boxFace(P, { ...b, cards: n })}</div><p>${esc(b.blurb)}</p></div>`; };
+  const x = SD(), cont = x && x.pool === pk ? contCard(P, '', !x.boxOpen ? `${x.box || 'Box'}, not opened yet` : x.opened < SEALED_PACKS ? `Pack ${x.opened + 1} of ${SEALED_PACKS}` : 'Packs open, deck in progress', 'Sealed') : '';
+  $('#sealBody').innerHTML = `<div class="tscroll">${cont}<p class="dintro">Open a box, or mix your own ${SEALED_PACKS} packs. Strong packs have fewer cards and a limit per mix.</p>
+      <div class="dgrp"><div class="ph">Your mix · tap a pack to add it</div><div class="mgrid packs">${types.map(packCell).join('')}</div></div>
+      <div class="dgrp"><div class="ph">Boxes</div><div class="mgrid boxes">${boxes.filter(b => !b.k.startsWith('tb:')).map(boxCell).join('')}</div></div>
+      <div class="dgrp"><div class="ph">Theme boxes</div><div class="mgrid boxes">${boxes.filter(b => b.k.startsWith('tb:')).map(boxCell).join('')}</div></div></div>
     <div class="mixbar"><div class="mx-n"><b>${t}</b> of ${SEALED_PACKS} packs · ${cards()} cards</div><div class="dprog">${Array.from({ length: SEALED_PACKS }, (_, i) => `<i class="${i < t ? 'f' : ''}"></i>`).join('')}</div>
       <button class="gb" id="mixClear" ${t ? '' : 'disabled'}>Clear<span class="shine"></span></button><button class="gb pri" id="mixGo" ${t === SEALED_PACKS ? '' : 'disabled'}>${t === SEALED_PACKS ? 'Open your packs' : `Pick ${SEALED_PACKS - t} more`}<span class="shine"></span></button></div>`;
-  const sc = $('#sealBody .tscroll'), keep = sc ? sc.scrollTop : 0;
-  $('#sealBody').onclick = e => {
-    const b = e.target.closest('[data-box]'); if (b) { S.play('shuffle'); startSealed(pk, b.dataset.box); sMix = null; sMenu = false; sPick = false; return renderSealed(true); }
-    const inc = e.target.closest('[data-inc]'), dec = e.target.closest('[data-dec]'), tile = e.target.closest('[data-pack]');
-    const k = inc ? inc.dataset.inc : dec ? dec.dataset.dec : tile ? tile.dataset.pack : null;
-    if (k) { const pt = types.find(x => x.k === k), n = sMix.n[k] || 0;
+  const redraw = () => { const sc = $('#sealBody .tscroll'), top = sc ? sc.scrollTop : 0, wy = scrollY; renderPackPick(pk); const s2 = $('#sealBody .tscroll'); if (s2) s2.scrollTop = top; scrollTo(0, wy); };
+  const newRun = async () => !SD() || await ask('Start new packs? Your unfinished sealed run is lost.', 'Start new');
+  $('#sealBody').onclick = async e => {
+    if (e.target.closest('[data-cont]')) { sMenu = false; sPick = false; S.play('click'); return renderSealed(true); }
+    if (e.target.closest('[data-cont-toss]')) return sealedRestart();
+    const b = e.target.closest('[data-box]'); if (b) { if (!(await newRun())) return; S.play('shuffle'); startSealed(pk, b.dataset.box); sMix = null; sMenu = false; sPick = false; return renderSealed(true); }
+    const inc = e.target.closest('[data-inc]'), dec = e.target.closest('[data-dec]'), cell = e.target.closest('[data-pack]');
+    const k = inc ? inc.dataset.inc : dec ? dec.dataset.dec : cell ? cell.dataset.pack : null;
+    if (k) { const pt = types.find(q => q.k === k), n = sMix.n[k] || 0;
       if (dec) { if (n) sMix.n[k] = n - 1; S.play('set', { gap: 30 }); }
       else if (n < PACK_CAP[pt.str || 0] && total() < SEALED_PACKS) { sMix.n[k] = n + 1; S.play('place', { gap: 30 }); } else S.play('error');
-      const top = $('#sealBody .tscroll').scrollTop; renderPackPick(pk); $('#sealBody .tscroll').scrollTop = top; return; }
-    if (e.target.closest('#mixClear')) { sMix.n = {}; S.play('set'); const top = $('#sealBody .tscroll').scrollTop; renderPackPick(pk); $('#sealBody .tscroll').scrollTop = top; return; }
-    if (e.target.closest('#mixGo') && total() === SEALED_PACKS) { const mix = []; for (const tp of types) for (let i = 0; i < (sMix.n[tp.k] || 0); i++) mix.push(tp.k);
+      return redraw(); }
+    if (e.target.closest('#mixClear')) { sMix.n = {}; S.play('set'); return redraw(); }
+    if (e.target.closest('#mixGo') && total() === SEALED_PACKS) { if (!(await newRun())) return; const mix = []; for (const tp of types) for (let i = 0; i < (sMix.n[tp.k] || 0); i++) mix.push(tp.k);
       for (let i = mix.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [mix[i], mix[j]] = [mix[j], mix[i]]; }
       S.play('shuffle'); startSealed(pk, 'mix', mix); sMix = null; sMenu = false; sPick = false; renderSealed(true); }
   };

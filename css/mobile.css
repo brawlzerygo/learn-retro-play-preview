@@ -738,3 +738,8 @@ html.m.hs #stage.m{position:absolute}
 /* Classic Foil on phones (PWA): the same design, scaled */
 #stage.m .pack{--k:.85;width:calc(260px * var(--k));height:calc(420px * var(--k))}
 #stage.m .bbox{--k:.66;width:calc(466px * var(--k));height:calc(326px * var(--k));margin:10px 0}
+#stage.m .mgrid.packs{grid-template-columns:1fr 1fr;gap:14px 8px}#stage.m .mgrid.boxes{grid-template-columns:1fr;gap:14px}
+#stage.m .mpack{width:calc(260px * .56);height:calc(420px * .56)}#stage.m .mpack .cfp{--k:.56}
+#stage.m .mbox{width:calc(466px * .62);height:calc(326px * .62)}#stage.m .mbox .cfb{--k:.62}
+#stage.m .mcell p{font-size:12px}#stage.m .mcell{padding:8px 4px}
+#stage.m .draft.hascont .dgroups{overflow:visible}#stage.m .draft.hascont .dgrp .drow{grid-auto-rows:150px}

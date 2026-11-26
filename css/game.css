@@ -1159,3 +1159,22 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 .bbox.opening .bx-top{transform:skewX(-45deg) translateY(-70px) rotate(-6deg);opacity:0;transition:transform .55s cubic-bezier(.3,.7,.2,1),opacity .5s .2s}
 .bbox.opening .bx-front{animation:bxShake .5s ease-in-out}
 .cfb .cf-logo{color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.4)}.cfb .cf-logo b{color:#ffe2c4}
+/* a Continue card on top of a home screen: the tiles keep their size and the list scrolls (Zack, 2026-11-25: "makes the rest of the screen janky") */
+.draft.hascont .dgroups{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--acc-lo) transparent}
+.draft.hascont .dgrp{flex:none}.draft.hascont .dgrp .drow{flex:none;grid-auto-rows:160px}
+/* the pack page: real Classic Foil packs and boxes, each with its counter */
+.mgrid{display:grid;gap:26px 22px;align-items:start}
+.mgrid.packs{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+.mgrid.boxes{grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+.mcell{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;padding:12px 8px 10px;border-radius:4px;transition:background .15s}
+.mcell:hover{background:rgba(255,255,255,.04)}.mcell.on{background:rgba(255,106,31,.1);box-shadow:inset 0 0 0 2px var(--acc)}
+.mcell p{font-size:14px;line-height:1.35;color:var(--mute);text-align:center;max-width:230px}
+.mpack{position:relative;width:calc(260px * .64);height:calc(420px * .64)}.mpack .cfp{--k:.64}
+.mcell:hover .mpack{transform:translateY(-4px)}.mpack{transition:transform .2s}
+.mbox{position:relative;width:calc(466px * .55);height:calc(326px * .55)}.mbox .cfb{--k:.55}
+.mcell .mtag{min-height:22px}.mcell .mtag .mk{font:800 13px 'Barlow Condensed';letter-spacing:.12em;text-transform:uppercase;color:var(--acc-hi)}
+.mcell .pstr{position:static}
+.mcell .pcount{position:static;margin-top:2px}
+.mcell .mpack .cfp::after{animation:none;display:none}.mcell:hover .mpack .cfp::after{display:block;animation:cfShine 1.4s ease-in-out 1}
+.mcell .mbox .bx-front::after{animation:none;display:none}
+#s-sealed[data-step=pick] .keybar .k123{display:none}
