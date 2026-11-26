@@ -1006,3 +1006,6 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .draft .dgrp .fmt .tg,.moderow .fmt .tg,.draft .rndrow .fmt .tg{top:16px;left:30px}
 /* pool tiles: the Format / Learn Retro mix / Learn Retro pool pill sits top right (Zack, 2026-11-25) */
 .draft .dgrp .fmt .tg{left:auto;right:30px}
+/* square tiles (Zack, 2026-11-25: the art had cut corners inside a rectangular border): the art fills a plain rectangle and the outline follows it */
+.fmt{clip-path:none;border-radius:3px}
+.fmt::after,.fmt.sel::after{border-radius:3px;clip-path:polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0,2px 2px,2px calc(100% - 2px),calc(100% - 2px) calc(100% - 2px),calc(100% - 2px) 2px,2px 2px)}
