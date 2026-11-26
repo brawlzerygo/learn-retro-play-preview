@@ -730,3 +730,8 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .bx-name{font-size:32px;bottom:38px}#stage.m .bx-sub{font-size:12px;bottom:14px}#stage.m .bbox .pk-logo{font-size:18px;top:12px}
 #stage.m .packstage{flex-direction:column;justify-content:center}#stage.m .pullrow:empty{display:none}
 #stage.m .prow{position:sticky;bottom:calc(var(--sab) + 12px);z-index:5;padding-top:10px}
+#stage.m .czoom.read{left:0;right:0;transform:none;top:calc(var(--sat) + 64px);position:fixed}
+#stage.m .pcount{right:8px;top:8px;gap:4px;padding:2px 4px}#stage.m .pm{width:34px;height:34px}#stage.m .pcount b{font-size:20px}
+#stage.m .pstr{left:8px;top:auto;bottom:44px;font-size:9px;padding:2px 5px}
+#stage.m .mixbar{position:sticky;bottom:calc(var(--sab) + 10px);z-index:6;flex-wrap:wrap;gap:8px;padding:10px}
+#stage.m .mixbar .dprog{order:3;flex-basis:100%}#stage.m .mixbar .gb{flex:1;justify-content:center}#stage.m .mixbar .mx-n{font-size:14px;flex-basis:100%}
