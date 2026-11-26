@@ -658,3 +658,36 @@ html.m,html.m body{position:fixed;inset:0;width:100%;height:100%;margin:0}
 /* the home-screen app: iOS lays the page out 59 points shorter than the screen it draws on; the page box takes the full screen */
 html.m.hs,html.m.hs body{position:absolute;left:0;top:0;right:auto;bottom:auto;width:100%;height:calc(100vh + env(safe-area-inset-top,0px));min-height:100lvh}
 html.m.hs #stage.m{position:absolute}
+/* Draft on phones: three small cards in a row, tap one to read it, then Pick */
+#stage.m #mainMenu .mi[data-go=draft]{order:0}
+#stage.m .draft{position:relative;left:auto;right:auto;top:auto;bottom:auto;padding:0 16px calc(var(--sab) + 24px);gap:12px}
+#stage.m .draft .dintro{font-size:15px}
+#stage.m .draft .drow{display:flex;flex-direction:column;gap:14px;padding:0}
+#stage.m .draft .drow .fmt{height:200px}#stage.m .draft .drow .fmt h3{font-size:48px}#stage.m .draft .drow .fmt p{font-size:14px}
+#stage.m .dsub .tg{font-size:11px}#stage.m .dsub .dpool{font-size:16px}
+#stage.m .dopts{grid-template-columns:repeat(3,1fr);gap:8px;flex:none}
+#stage.m .dopt{display:block;padding:0}
+#stage.m .dopt::before{display:none}
+#stage.m .dopt .card{width:100%;height:auto;aspect-ratio:421/614;border-radius:5px}
+#stage.m .dopt .card:hover{transform:none}
+#stage.m .dopt.sel .card{box-shadow:0 0 0 3px var(--acc),0 0 18px rgba(255,106,31,.6)}
+#stage.m .dopt .dtx,#stage.m .dopt .dgo{display:none}
+#stage.m .dread{min-height:120px;padding:12px 14px;background:rgba(16,18,22,.94);border-radius:3px}
+#stage.m .dread .nm{font-size:24px;line-height:1;text-transform:uppercase}
+#stage.m .dread .meta{font-size:12px;color:var(--acc-hi);margin:6px 0}
+#stage.m .dread p{font-size:14px;line-height:1.45}
+#stage.m .dpick{width:100%;justify-content:center}
+#stage.m .dstat{flex-wrap:wrap;gap:8px 16px;font-size:13px}#stage.m .dstat b{font-size:22px}
+#stage.m .dstat #dSee{margin-left:0}
+#stage.m .ddone{flex-direction:column;gap:10px;align-items:stretch}
+#stage.m .ddone .dk-fan{width:100%;height:220px}
+#stage.m .ddone .dk-fan .card{width:120px;height:175px}
+#stage.m .ddone .dk-fan .card[data-j="0"]{left:calc(50% - 150px)}#stage.m .ddone .dk-fan .card[data-j="1"]{left:calc(50% - 60px)}#stage.m .ddone .dk-fan .card[data-j="2"]{left:calc(50% + 30px)}
+#stage.m .ddone .dinfo p{font-size:15px}
+#stage.m .dname input{height:48px;font-size:22px}
+#stage.m .ddone .row .gb{flex:1;justify-content:center}
+#stage.m .ddone .dinfo{padding:18px 16px}
+#stage.m #mainMenu .mi[data-href]{grid-column:auto;height:54px;font-size:22px}
+#stage.m .dstat{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 6px;font-size:11px;text-align:center;line-height:1.2}
+#stage.m .dstat b{display:block;font-size:24px;margin:0}
+#stage.m .dstat .gb{grid-column:span 2;justify-content:center}

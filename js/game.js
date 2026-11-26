@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=83';
-import * as S from './sfx.js?v=83';
+import { Table } from './table.js?v=84';
+import * as S from './sfx.js?v=84';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -140,7 +140,7 @@ const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] |
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=83');
+const W = new Worker('js/worker.js?v=84');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -150,11 +150,11 @@ let cur = 'title';
 const AUTO = new URLSearchParams(location.search).has('autoplay');   // testing only: your seat plays itself with the hint engine
 window.__lr = { get D() { return D; }, get SEL() { return SEL; }, start: () => startDuel(), show: x => show(x) };
 // one Back button, the same spot on every screen that has one (Zack, 2026-11-24)
-const BACK = { settings: 'title', format: 'title', deck: 'format', stats: 'title', build: 'title' };
+const BACK = { settings: 'title', format: 'title', deck: 'format', stats: 'title', build: 'title', draft: 'title' };
 async function goBack() { if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; if (BACK[cur]) show(BACK[cur]); }
 $('#gBack').onclick = () => { S.unlock(); goBack(); };
 $('#mTabs').onclick = async e => { const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === cur) return; S.unlock(); if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; show(b.dataset.tab); };
-function show(s) { const prevScr = cur; if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') { if (prevScr !== 'deck') { PK = { you: false, cpu: false }; pickingOpp = false; SEL.mtab = 'you'; } renderDecks(); } if (s === 'format') renderFormats(); if (s === 'build') { B.howto = undefined; readyP.then(openBuilder); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
+function show(s) { const prevScr = cur; if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') { if (prevScr !== 'deck') { PK = { you: false, cpu: false }; pickingOpp = false; SEL.mtab = 'you'; } renderDecks(); } if (s === 'format') renderFormats(); if (s === 'build') { B.howto = undefined; readyP.then(openBuilder); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'draft') { dSel = null; renderDraft(true); } if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
 // browsers keep a page silent until the first click, tap or key press (hovering doesn't count): turn sound on at the very first one, anywhere
 for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, () => S.unlock(), { capture: true, passive: true });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { S.unlock(); show(b.dataset.go); } const h = e.target.closest('[data-href]'); if (h) open(h.dataset.href, '_blank'); });
@@ -172,6 +172,7 @@ addEventListener('keydown', e => {
   else if (cur === 'deck') { if (e.key === 'Escape') { if (!closeDeckList()) show('format'); return; } if ($('#dlist')) return; if (e.key === 'Enter') $('#duelGo').click(); if (e.key === 'l' || e.key === 'L') $('#seeList') && $('#seeList').click(); }
   else if (cur === 'settings') { if (e.key === 'Escape') show('title'); if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { setRow = (setRow + (e.key === 'ArrowDown' ? 1 : -1) + SETROWS.length) % SETROWS.length; S.play('hover'); renderSettings(); } if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') changeSetting(setRow, e.key === 'ArrowRight' ? 1 : -1); }
   else if (cur === 'stats') { if (e.key === 'Escape') show('title'); }
+  else if (cur === 'draft') { if (e.key === 'Escape') { if (!closeDeckList()) show('title'); return; } if ($('#dlist') || (document.activeElement && document.activeElement.tagName === 'INPUT')) return; const b = $$('#draftBody [data-go2]')[+e.key - 1]; if (b) b.click(); }
   else if (cur === 'build') { if (e.key === 'Escape' && closeCardZoom()) return; if (e.key === 'Escape') { if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur(); else goBack(); } }
   else if (cur === 'results') { if (e.key === 'Enter') $('#resAgain').click(); }
   else if (cur === 'duel') duelKey(e);
@@ -233,7 +234,7 @@ async function renderDecks() {
   const sel = pickingOpp ? s.cpu : s.you;
   const why = r => r.problems && r.problems.length ? ' · not legal yet' : r.missing.length ? ` · ${r.missing.length} card${r.missing.length > 1 ? 's' : ''} not playable yet` : '';
   $('#deckList').innerHTML = (list.length ? list : []).map(d => { const r = info.get(d.key); const k = keyCards(f, d)[0];
-    return `<div class="dk ${d.key === sel && PK[pickingOpp ? 'cpu' : 'you'] ? 'sel' : ''} ${pickingOpp ? 'opp' : ''} ${r.ready ? '' : 'off'}" data-deck="${esc(d.key)}"><div class="strip" style="background-image:url(${artUrl(k)})"></div><div><div class="nm cap">${esc(d.name)}</div><div class="pl">${d.main.length} cards${d.extra.length ? ` · ${d.extra.length} in the ${f === 'goat' ? 'Fusion' : 'Extra'} Deck` : ''}${why(r)}</div></div><div class="tags"><span class="tg ${d.tier === 'my' || d.tier === TIERS[f][0] ? 'hot' : ''}">${d.tier === 'my' ? 'Yours' : esc(TIERNAME[d.tier] || d.tier)}</span>${r.ready ? '' : `<span class="tg">${r.problems && r.problems.length ? 'Fix' : 'Soon'}</span>`}</div></div>`; }).join('')
+    return `<div class="dk ${d.key === sel && PK[pickingOpp ? 'cpu' : 'you'] ? 'sel' : ''} ${pickingOpp ? 'opp' : ''} ${r.ready ? '' : 'off'}" data-deck="${esc(d.key)}"><div class="strip" style="background-image:url(${artUrl(k)})"></div><div><div class="nm cap">${esc(d.name)}</div><div class="pl">${d.main.length} cards${d.extra.length ? ` · ${d.extra.length} in the ${f === 'goat' ? 'Fusion' : 'Extra'} Deck` : ''}${why(r)}</div></div><div class="tags"><span class="tg ${d.tier === 'my' || d.tier === TIERS[f][0] ? 'hot' : ''}">${d.draft ? 'Draft' : d.tier === 'my' ? 'Yours' : esc(TIERNAME[d.tier] || d.tier)}</span>${r.ready ? '' : `<span class="tg">${r.problems && r.problems.length ? 'Fix' : 'Soon'}</span>`}</div></div>`; }).join('')
     || (SEL.tier === 'my' ? '<div class="mute" style="font-size:20px;padding:20px">No decks of your own yet. Build one in the Deck Builder.</div>' : '');
   $('#deckList').onclick = e => { const el = e.target.closest('[data-deck]'); if (!el) return; const r = info.get(el.dataset.deck);
     if (el.classList.contains('off')) { S.play('error'); toast(r.problems && r.problems.length ? r.problems[0] : 'This deck has cards the engine can\'t play yet: ' + r.missing.slice(0, 4).join(', ') + (r.missing.length > 4 ? '…' : '')); return; }
@@ -244,7 +245,7 @@ async function renderDecks() {
   if (!you || !cpu) { $('#deckSide').innerHTML = ''; return; }
   const kc = keyCards(f, you);
   $('#deckSide').innerHTML = `<div class="dk-fan">${kc.map((id, i) => `<div class="card" style="background-image:url(${artUrl(id)});left:${170 + i * 150}px;${i === 1 ? 'top:-4px;z-index:2;box-shadow:0 20px 50px rgba(0,0,0,.8)' : `transform:rotate(${i ? 10 : -10}deg)`}"></div>`).join('')}</div>
-    <div class="ph">Your deck · ${you.tier === 'my' ? 'Yours' : esc(TIERNAME[you.tier] || you.tier)} · ${f === 'goat' ? 'Goat' : 'Edison'}</div><h3 class="disp">${esc(you.name)}</h3>
+    <div class="ph">Your deck · ${you.draft ? 'Draft' : you.tier === 'my' ? 'Yours' : esc(TIERNAME[you.tier] || you.tier)} · ${f === 'goat' ? 'Goat' : 'Edison'}</div><h3 class="disp">${esc(you.name)}</h3>
     <p>${you.main.length} cards in the Main Deck${you.extra.length ? `, ${you.extra.length} in the ${f === 'goat' ? 'Fusion' : 'Extra'} Deck` : ''}.${you.credit ? ' List: ' + esc(you.credit) + '.' : ''}</p>
     <div class="row"><button class="gb sm pri" id="seeList"><svg><use href="#i-list"/></svg>See the full deck list<span class="key">L</span><span class="shine"></span></button><button class="gb sm" id="seeOpp" ${PK.cpu ? '' : 'disabled'}><svg><use href="#i-list"/></svg>Computer's list<span class="shine"></span></button></div>
     <div class="row"><span class="lb cap">Opponent</span><div style="display:flex;align-items:center;gap:12px;font-size:22px">${PK.cpu ? `<div class="card" style="width:50px;height:73px;background-image:url(${artUrl(keyCards(f, cpu)[0])})"></div><b class="cap">${esc(cpu.name)}</b>` : `<span class="mute">${pickingOpp ? 'Pick it from the list' : 'Not chosen yet'}</span>`}</div>
@@ -381,7 +382,7 @@ function deckProblems(f, d) {
 const scriptedSet = {}; function playable(f, id) { if (!scriptedSet[f]) scriptedSet[f] = new Set(READY ? READY[f].scripted : []); return scriptedSet[f].has(String(id)); }
 // every deck for a format: your own first, then the prebuilt ones. key: the prebuilt name, or 'my:<id>'
 function allDecks(f) {
-  const mine = MY().filter(d => d.fmt === f).map(d => ({ key: 'my:' + d.id, name: d.name, tier: 'my', main: d.main, extra: d.extra, custom: true }));
+  const mine = MY().filter(d => d.fmt === f).map(d => ({ key: 'my:' + d.id, name: d.name, tier: 'my', main: d.main, extra: d.extra, custom: true, draft: d.draft }));
   return [...mine, ...FM[f].decks.map(d => ({ ...d, key: d.name }))];
 }
 function deckInfo(f, d) {
@@ -1458,3 +1459,124 @@ function updateTicker() {
   $('#ticker').innerHTML = items.map(esc).join(' <i class="dia"></i> ');
 }
 readyP.then(() => { if (cur === 'format') renderFormats(); updateTicker(); const sc = new URLSearchParams(location.search).get('screen'); if (sc) { if (sc === 'build') B.deck = null; show(sc); if (sc === 'list') { show('deck'); setTimeout(() => $('#seeList') && $('#seeList').click(), 300); } } });
+
+/* =====================================================================================================
+   ARENA DRAFT (Zack, 2026-11-25: "gives you three cards to pick from from a limited pool, then you build a deck from your selections... save as a
+   deck onto your profile right away and then can take it right into a duel... balanced... with rarity levels of each card"). Plan: MODES_PLAN.md.
+   - Pools: Goat, Edison and our own All-Stars (Goat cards that made the tier A, B and Tournament lists). Only cards the engine plays, from the
+     format's deck lists, never Forbidden.
+   - Our own power tiers (not Master Duel rarities): a card's score is how many decks run it and how many copies, weighted by the deck's tier;
+     the top 8% are Ultra Rare, the next 17% Super Rare, the next 30% Rare, the rest Common. Main and Extra cards are ranked apart.
+   - Every pick rolls one tier (50% Common, 30% Rare, 15% Super Rare, 5% Ultra Rare; at most 5 Ultras) and offers 3 cards of that tier, so the
+     choices are close in power. 48 picks: 40 Main, with an Extra pick after every 5th Main pick. The banlist and 3 copies always hold.
+   - Saved after every pick (lrplay:draft), offer included, so leaving never rerolls. The finished deck goes to My decks tagged Draft.
+   ===================================================================================================== */
+const RAR = ['C', 'R', 'SR', 'UR'], RARNAME = { C: 'Common', R: 'Rare', SR: 'Super Rare', UR: 'Ultra Rare' };
+const DPOOLS = {
+  goat: { fmt: 'goat', name: 'Goat', art: 73915051, tag: 'Format', blurb: 'Every playable card from the Goat deck lists. Summer 2005: Scapegoat, Chaos and control.', roll: [50, 30, 15, 5] },
+  edison: { fmt: 'edison', name: 'Edison', art: 44508094, tag: 'Format', blurb: 'Every playable card from the Edison deck lists. April 2010: Synchros, Blackwings, Plants.', roll: [50, 30, 15, 5] },
+  allstars: { fmt: 'goat', name: 'All-Stars', art: 63519819, tag: 'Learn Retro pool', blurb: 'Our own pool: only the Goat cards that two or more top decks run, with Ultra Rares twice as often. Stronger picks, harder choices.', roll: [40, 30, 20, 10], tiers: ['A', 'B', 'T'], minDecks: 2 },
+};
+const DRAFT_MAIN = 40, DRAFT_EXTRA = 8, DRAFT_PICKS = DRAFT_MAIN + DRAFT_EXTRA, UR_CAP = 5;
+const TIER_W = { A: 4, T: 4, B: 3, C: 2, D: 1, Best: 5, Competitive: 4, Rogue: 3, Contender: 2, Casual: 1 };
+const DTIERS = {};
+function draftTiers(pk) {
+  if (DTIERS[pk]) return DTIERS[pk];
+  const P = DPOOLS[pk], f = P.fmt, score = new Map(), seen = new Map();
+  for (const d of FM[f].decks) { if (P.tiers && !P.tiers.includes(d.tier)) continue; const w = TIER_W[d.tier] || 1;
+    for (const [list, k] of [[d.main, 1], [d.extra, 1], [d.side || [], 0.5]]) for (const id of list) { const s = String(id); score.set(s, (score.get(s) || 0) + w * k); }
+    for (const id of new Set([...d.main, ...d.extra].map(String))) seen.set(id, (seen.get(id) || 0) + 1); }
+  const out = { main: { C: [], R: [], SR: [], UR: [] }, extra: { C: [], R: [], SR: [], UR: [] }, tier: new Map() };
+  for (const part of ['main', 'extra']) {
+    const ids = [...score.keys()].filter(id => { const r = rec(f, id); return r && playable(f, id) && LIMIT(r) > 0 && (part === 'extra') === isExtraK(r) && (seen.get(id) || 0) >= (P.minDecks || 1); }).sort((a, b) => score.get(b) - score.get(a));
+    const n = ids.length, cut = [0.08, 0.25, 0.55].map(x => Math.round(n * x));
+    ids.forEach((id, i) => { const t = i < cut[0] ? 'UR' : i < cut[1] ? 'SR' : i < cut[2] ? 'R' : 'C'; out[part][t].push(id); out.tier.set(id, t); });
+  }
+  return (DTIERS[pk] = out);
+}
+const DR = () => JSON.parse(localStorage.getItem('lrplay:draft') || 'null');
+const saveDR = x => x ? localStorage.setItem('lrplay:draft', JSON.stringify(x)) : localStorage.removeItem('lrplay:draft');
+const isMon = r => !['spell', 'trap'].includes(r.k);
+function draftNext(x) {   // which part the next pick is for, and its offer
+  const nm = x.main.length, ne = x.extra.length;
+  if (nm + ne >= DRAFT_PICKS) return null;
+  const part = ne < DRAFT_EXTRA && nm >= (ne + 1) * 5 ? 'extra' : nm < DRAFT_MAIN ? 'main' : 'extra';
+  const T = draftTiers(x.pool), f = DPOOLS[x.pool].fmt, have = new Map(); for (const id of [...x.main, ...x.extra]) have.set(id, (have.get(id) || 0) + 1);
+  const ok = id => (have.get(id) || 0) < LIMIT(rec(f, id));
+  const roll = DPOOLS[x.pool].roll; let r = Math.random() * 100, t = 'C'; for (let i = 0; i < 4; i++) { if (r < roll[i]) { t = RAR[i]; break; } r -= roll[i]; }
+  if (t === 'UR' && x.ur >= UR_CAP) t = 'SR';
+  // keep the Main Deck playable: once it leans too far one way, one of the three cards fixes the lean
+  const mons = x.main.filter(id => isMon(rec(f, id))).length, need = part === 'main' && nm >= 6 ? (mons / nm < 0.42 ? 'mon' : mons / nm > 0.62 ? 'st' : null) : null;
+  const order = [t, ...RAR.slice(0, RAR.indexOf(t)).reverse(), ...RAR.slice(RAR.indexOf(t) + 1)];   // a tier that runs dry falls back a step, then up
+  for (const tt of order) {
+    const c = T[part][tt].filter(ok); if (c.length < 3) continue;
+    for (let i = c.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [c[i], c[j]] = [c[j], c[i]]; }
+    let pick = c.slice(0, 3);
+    if (need) { const fit = c.find(id => (need === 'mon') === isMon(rec(f, id))); if (fit && !pick.some(id => (need === 'mon') === isMon(rec(f, id)))) pick = [fit, ...pick.slice(0, 2)]; }
+    return { part, tier: tt, ids: pick };
+  }
+  return { part, tier: t, ids: [] };
+}
+function startDraft(pk) { const x = { pool: pk, fmt: DPOOLS[pk].fmt, main: [], extra: [], ur: 0, at: Date.now() }; x.offer = draftNext(x); saveDR(x); return x; }
+let dSel = null;   // phones: the card tapped among the three, before Pick
+function renderDraft(anim) {
+  readyP.then(() => {
+    const x = DR(), el = $('#draftBody'); $('#s-draft').dataset.step = !x ? 'pools' : x.offer && x.main.length + x.extra.length < DRAFT_PICKS ? 'pick' : 'done';
+    if (!x) return renderDraftPools();
+    const P = DPOOLS[x.pool], f = P.fmt, n = x.main.length + x.extra.length, xl = f === 'goat' ? 'Fusion' : 'Extra';
+    if (n >= DRAFT_PICKS || !x.offer) return renderDraftDone(x);
+    if (!x.offer.ids.length) { el.innerHTML = `<div class="pn dempty"><h3 class="disp">The pool ran out</h3><p>There aren't three legal cards left to offer. Start a new draft.</p><button class="gb pri" id="dRestart">Start over<span class="shine"></span></button></div>`; $('#dRestart').onclick = () => { saveDR(null); renderDraft(); }; return; }
+    const o = x.offer, mons = x.main.filter(id => isMon(rec(f, id))).length;
+    $('#draftTitle').textContent = `Pick ${n + 1} of ${DRAFT_PICKS}`;
+    if (dSel != null && !o.ids.includes(dSel)) dSel = null;
+    el.innerHTML = `<div class="dsub"><span class="tg ${o.part === 'extra' ? 'hot' : ''}">${o.part === 'extra' ? xl + ' Deck pick' : 'Main Deck pick'}</span><span class="tg r-${o.tier}">${RARNAME[o.tier]}</span><span class="dpool">${esc(P.name)} draft</span></div>
+      <div class="dprog">${Array.from({ length: DRAFT_PICKS }, (_, i) => `<i class="${i < n ? 'f' : i === n ? 'now' : ''}"></i>`).join('')}</div>
+      <div class="dopts">${o.ids.map((id, i) => { const r = rec(f, id);
+        return `<div class="dopt ${anim && !REDUCED ? 'in' : ''} ${dSel === id ? 'sel' : ''}" data-pick="${id}" style="animation-delay:${i * 90}ms"><div class="card r-${o.tier}" style="background-image:url(${artUrl(id)})"></div>
+          <div class="dtx"><div class="nm disp">${esc(r.n)}</div><div class="meta">${esc(cardMeta(r))}${r.b ? ` · ${r.b === 'L' ? 'Limited' : 'Semi-Limited'}` : ''}</div><p>${esc(cardText(f, r))}</p></div>
+          <button class="gb pri dgo" data-go2="${id}">Pick<span class="key">${i + 1}</span><span class="shine"></span></button></div>`; }).join('')}</div>
+      ${MOBILE ? `<div class="dread" id="dRead">${dSel != null ? (() => { const r = rec(f, dSel); return `<div class="nm disp">${esc(r.n)}</div><div class="meta">${esc(cardMeta(r))}</div><p>${esc(cardText(f, r))}</p>`; })() : '<p class="mute">Tap a card to read it, then Pick it.</p>'}</div>
+        <button class="gb pri dpick" id="dPick" ${dSel == null ? 'disabled' : ''}>${dSel == null ? 'Choose a card' : 'Pick ' + esc(rec(f, dSel).n)}<span class="shine"></span></button>` : ''}
+      <div class="dstat"><span><b>${x.main.length}</b> of ${DRAFT_MAIN} Main</span><span><b>${x.extra.length}</b> of ${DRAFT_EXTRA} ${xl}</span><span><b>${mons}</b> monsters</span><span><b>${x.main.length - mons}</b> Spells, Traps</span>
+        <button class="gb sm" id="dSee" ${n ? '' : 'disabled'}><svg><use href="#i-list"/></svg>Your picks<span class="shine"></span></button><button class="gb sm" id="dQuit">Start over<span class="shine"></span></button></div>`;
+    if (anim) S.play('draw');
+    el.onclick = e => {
+      const g = e.target.closest('[data-go2]'); if (g) return draftPick(g.dataset.go2);
+      const c = e.target.closest('[data-pick]'); if (c && (MOBILE || e.target.closest('.card'))) { if (MOBILE) { dSel = dSel === c.dataset.pick ? null : c.dataset.pick; S.play('click'); renderDraft(); } else draftPick(c.dataset.pick); return; }
+      if (e.target.closest('#dPick') && dSel != null) return draftPick(dSel);
+      if (e.target.closest('#dSee')) return deckList(f, { name: `${P.name} draft so far`, main: x.main, extra: x.extra }, 'Your picks');
+      if (e.target.closest('#dQuit')) ask('Start over? Your picks so far are lost.', 'Start over').then(y => { if (y) { saveDR(null); dSel = null; S.play('click'); renderDraft(); } });
+    };
+  });
+}
+function draftPick(id) {
+  const x = DR(); if (!x || !x.offer || !x.offer.ids.includes(String(id))) return;
+  const opt = $(`.dopt[data-pick="${id}"]`); if (opt && !REDUCED) { opt.classList.add('took'); $$('.dopt').forEach(o => o !== opt && o.classList.add('drop')); }
+  S.play('place'); x[x.offer.part].push(String(id)); if (x.offer.tier === 'UR') x.ur++; x.offer = draftNext(x); saveDR(x); dSel = null;
+  setTimeout(() => renderDraft(true), REDUCED ? 0 : 320);
+}
+function renderDraftPools() {
+  $('#draftTitle').textContent = 'Draft';
+  $('#draftBody').innerHTML = `<p class="dintro">Pick 1 of 3 cards, ${DRAFT_PICKS} times: ${DRAFT_MAIN} for the Main Deck and ${DRAFT_EXTRA} for the Extra or Fusion Deck. Every card is rated Common to Ultra Rare by how strong it is, and each pick shows three of the same rating. Your deck saves to My decks, ready to duel.</p>
+    <div class="fmt-row drow">${Object.entries(DPOOLS).map(([k, P]) => `<div class="fmt" data-dpool="${k}"><div class="art" style="background-image:url(${artUrl(P.art)})"></div><span class="tg ${k === 'allstars' ? 'hot' : ''}">${esc(P.tag)}</span>
+      <div class="txt"><h3 class="disp">${esc(P.name)}</h3><p>${esc(P.blurb)}</p></div></div>`).join('')}</div>`;
+  $('#draftBody').onclick = e => { const p = e.target.closest('[data-dpool]'); if (!p) return; S.play('shuffle'); startDraft(p.dataset.dpool); renderDraft(true); };
+}
+function renderDraftDone(x) {
+  const P = DPOOLS[x.pool], f = P.fmt, d = { name: '', main: x.main, extra: x.extra }, kc = keyCards(f, d), xl = f === 'goat' ? 'Fusion' : 'Extra';
+  const mons = x.main.filter(id => isMon(rec(f, id))).length, ct = t => [...x.main, ...x.extra].filter(id => draftTiers(x.pool).tier.get(id) === t).length;
+  const name = `${P.name} Draft ${new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+  $('#draftTitle').textContent = 'Draft complete';
+  $('#draftBody').innerHTML = `<div class="ddone"><div class="dk-fan">${kc.map((id, i) => `<div class="card" style="background-image:url(${artUrl(id)})" data-j="${i}"></div>`).join('')}</div>
+    <div class="dinfo"><div class="ph">${esc(P.name)} draft · ${DRAFT_MAIN} Main · ${x.extra.length} ${xl}</div>
+      <p>${mons} monsters and ${DRAFT_MAIN - mons} Spells and Traps. ${RAR.slice().reverse().map(t => `${ct(t)} ${RARNAME[t]}`).join(', ')}.</p>
+      <label class="dname"><span class="lb cap">Deck name</span><input id="dName" maxlength="40" value="${esc(name)}"></label>
+      <div class="row"><button class="gb pri" id="dSaveDuel"><svg><use href="#i-swords"/></svg>Save and duel<span class="shine"></span></button><button class="gb" id="dSave">Save<span class="shine"></span></button>
+        <button class="gb" id="dList"><svg><use href="#i-list"/></svg>Deck list<span class="shine"></span></button></div>
+      <button class="gb sm dtoss" id="dToss">Throw it away<span class="shine"></span></button></div></div>`;
+  const save = () => { const id = Date.now().toString(36), nm = ($('#dName').value || name).trim().slice(0, 40); const a = MY(); a.unshift({ id, fmt: f, name: nm, main: [...x.main], extra: [...x.extra], draft: x.pool }); saveMY(a); saveDR(null); S.play('summon'); return 'my:' + id; };
+  $('#dSave').onclick = () => { save(); toast('Saved to My decks.'); show('title'); };
+  $('#dSaveDuel').onclick = () => { const key = save(); SEL.fmt = f; show('deck'); SEL[f].you = key; PK.you = true; if (MOBILE) SEL.mtab = 'opp'; else pickingOpp = true; saveSel(); renderDecks(); };
+  $('#dList').onclick = () => deckList(f, { ...d, name: $('#dName').value || name }, 'Your draft');
+  $('#dToss').onclick = () => ask('Throw this deck away?', 'Throw away').then(y => { if (y) { saveDR(null); S.play('destroy'); renderDraft(); } });
+}

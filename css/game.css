@@ -892,3 +892,44 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .board .cell.name{min-width:280px}.board .name input{font-size:46px}
 /* card pictures fill their card exactly (Zack, 2026-11-25: some hand cards showed zoomed in on the phone) */
 .hc,.flyc .fin i,.ohand .card{background-size:100% 100%!important;background-repeat:no-repeat}
+
+/* Draft (Zack, 2026-11-25): pick 1 of 3, Broadcast slabs, a tier tag on each pick */
+.tg.r-C{background:rgba(255,255,255,.14);color:#e7e9ec}.tg.r-R{background:#2f6fb0;color:#fff}.tg.r-SR{background:#7b4fc9;color:#fff}.tg.r-UR{background:linear-gradient(90deg,var(--acc),#ffc24a);color:#140a04}
+.draft{position:absolute;left:110px;right:110px;top:200px;bottom:110px;display:flex;flex-direction:column;gap:16px}
+.draft .dintro{font-size:22px;color:var(--mute);max-width:1300px;line-height:1.4}
+.draft .drow{position:relative;left:auto;right:auto;top:auto;bottom:auto;flex:1;grid-template-columns:1fr 1fr 1fr;gap:36px}
+.draft .drow .fmt h3{font-size:96px}.draft .drow .fmt p{font-size:21px}
+.dsub{display:flex;align-items:center;gap:10px}.dsub .dpool{font:italic 800 22px 'Barlow Condensed';text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin-left:8px}
+.dprog{display:flex;gap:4px}.dprog i{flex:1;height:6px;background:rgba(255,255,255,.1);transform:skewX(-20deg)}.dprog i.f{background:var(--acc)}.dprog i.now{background:#fff}
+.dopts{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:30px;min-height:0}
+.dopt{position:relative;isolation:isolate;display:grid;grid-template-columns:250px 1fr;grid-template-rows:1fr auto;gap:14px 22px;padding:22px;min-height:0}
+.dopt::before{content:"";position:absolute;inset:0;z-index:-1;clip-path:var(--shape);background:var(--pnl);box-shadow:inset 0 0 0 1px var(--pnl-edge)}
+.dopt .card{grid-row:1/3;width:250px;height:365px;border-radius:6px;background:center/100% 100% no-repeat;cursor:pointer;box-shadow:0 18px 40px rgba(0,0,0,.7);transition:transform .2s}
+.dopt .card:hover{transform:translateY(-6px)}
+.dopt .card.r-UR{box-shadow:0 0 0 3px #ffc24a,0 0 30px rgba(255,170,60,.55),0 18px 40px rgba(0,0,0,.7)}
+.dopt .card.r-SR{box-shadow:0 0 0 3px #a27ae8,0 18px 40px rgba(0,0,0,.7)}
+.dopt .dtx{min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--acc-lo) transparent;padding-right:6px}
+.dopt .nm{font-size:34px;line-height:1;text-transform:uppercase}
+.dopt .meta{font-size:15px;color:var(--acc-hi);margin:8px 0 10px}
+.dopt p{font-size:17px;line-height:1.45;color:#dfe2e6}
+.dopt .dgo{align-self:end;justify-self:start}
+.dopt.in{animation:dIn .38s cubic-bezier(.2,.8,.2,1) both}
+@keyframes dIn{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
+.dopt.took{transition:transform .3s,opacity .3s;transform:scale(1.04);opacity:0}.dopt.drop{transition:transform .3s,opacity .25s;transform:translateY(40px);opacity:0}
+.dstat{display:flex;align-items:center;gap:28px;font-size:18px;color:var(--mute)}.dstat b{font:italic 900 30px 'Barlow Condensed';color:var(--ink);margin-right:4px}
+.dstat #dSee{margin-left:auto}
+.ddone{flex:1;display:flex;align-items:center;gap:60px}
+.ddone .dk-fan{position:relative;width:560px;height:440px;flex:none}
+.ddone .dk-fan .card{position:absolute;top:30px;width:250px;height:365px;border-radius:6px;background:center/100% 100%;box-shadow:0 20px 50px rgba(0,0,0,.8)}
+.ddone .dk-fan .card[data-j="0"]{left:0;transform:rotate(-9deg)}.ddone .dk-fan .card[data-j="1"]{left:150px;top:10px;z-index:2}.ddone .dk-fan .card[data-j="2"]{left:300px;transform:rotate(9deg)}
+.ddone .dinfo{max-width:820px;display:flex;flex-direction:column;gap:20px}.ddone .dinfo p{font-size:22px;color:var(--mute);line-height:1.4}
+.ddone .row{display:flex;gap:14px;flex-wrap:wrap}
+.dname{display:flex;flex-direction:column;gap:8px}.dname .lb{font-size:15px;color:var(--mute)}
+.dname input{height:56px;font:italic 800 28px 'Barlow Condensed';text-transform:uppercase;color:#fff;background:rgba(0,0,0,.45);border:0;box-shadow:inset 0 0 0 1px var(--pnl-edge);padding:0 18px;outline:none}
+.dname input:focus{box-shadow:inset 0 0 0 2px var(--acc)}
+.ddone .dtoss{align-self:flex-start;opacity:.75}
+.dempty{position:relative;padding:40px;max-width:700px;display:flex;flex-direction:column;gap:16px;font-size:20px}
+.ddone .dinfo{position:relative;isolation:isolate;padding:34px 40px}
+.ddone .dinfo::before{content:"";position:absolute;inset:0;z-index:-1;clip-path:var(--shape);background:var(--pnl);box-shadow:inset 0 0 0 1px var(--pnl-edge)}
+#s-draft:not([data-step=pick]) .keybar .k123{display:none}
+.draft{top:216px}
