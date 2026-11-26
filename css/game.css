@@ -990,7 +990,7 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
    the art-only crop fills the tile, a soft fade keeps the text readable, and a crisp outline follows the cut corners,
    light at the top fading to the accent, brighter on hover and when chosen */
 .fmt{background:#0b0c0e}
-.fmt .art{opacity:1;mask:none;-webkit-mask:none;background-size:cover;background-position:center 35%;z-index:0}
+.fmt .art{opacity:1;mask:none;-webkit-mask:none;background-size:cover;background-position:center 22%;z-index:0}
 .fmt .art.framed{background-size:132% auto;background-position:50% 41%}
 .fmt::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(8,9,11,0) 25%,rgba(8,9,11,.62) 52%,rgba(8,9,11,.96) 100%)}
 .fmt .txt,.fmt .tg{z-index:2}
