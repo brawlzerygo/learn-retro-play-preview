@@ -115,6 +115,7 @@ function runComputer() {
 
 /* ---------- the review: your choices checked in the background, turns summarised, for hints and the post-match summary ---------- */
 const MISTAKE = 900;          // a clear mistake costs at least about one card's worth on the computer's scale (Zack: clear mistakes only)
+let lite = false;            // phones: the review runs in slower, smaller steps so it never keeps the processor busy (Zack, 2026-11-25: the phone ran hot)
 let pending = [], reviewed = [], turnLog = new Map(), curve = [], acts0 = 0, reviewBusy = false;
 const keyEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function optWords(h, keys) { // a plain description of an answer: "Normal Summon Sangan", "Breaker the Magical Warrior attacks Dupe Frog"
@@ -158,7 +159,7 @@ function reviewOne(d) {
 // review in small steps while you think, so the duel never waits on it
 function reviewSoon() {
   if (reviewBusy || !pending.length) return; reviewBusy = true;
-  setTimeout(() => { try { const d = pending.shift(); if (d) reviewOne(d); } catch (e) { console.error('review', e); } reviewBusy = false; if (pending.length && g && g.prompt && g.prompt.p === 0) reviewSoon(); }, 40);
+  setTimeout(() => { try { const d = pending.shift(); if (d) reviewOne(d); } catch (e) { console.error('review', e); } reviewBusy = false; if (pending.length && g && g.prompt && g.prompt.p === 0) reviewSoon(); }, lite ? 600 : 40);
 }
 function logTurn(ev) { // per-turn tallies for the summary's turning points
   const t = ev.turn; if (!t) return; let L = turnLog.get(t); if (!L) { L = { turn: t, tp: g.tp, dmg: [0, 0], lost: [0, 0], acts: [[], []], summons: [[], []] }; turnLog.set(t, L); }
@@ -192,7 +193,7 @@ self.onmessage = ({ data: m }) => {
       const fmtInfo = f => { const decks = readiness(f); return { decks, scripted: CARDS(f).filter(c => E.scripted(c.n)).map(c => String(c.id)) }; };
       self.postMessage({ type: 'ready', formats: { edison: fmtInfo('edison'), goat: fmtInfo('goat') }, tokens: self.TOKEN_ART });
     } else if (m.type === 'start') {
-      fmt = m.format; level = m.level || 'intermediate';
+      fmt = m.format; level = m.level || 'intermediate'; lite = !!m.lite;
       E.init(CARDS(fmt), { format: fmt });
       // a deck is a prebuilt deck's name, or a custom deck {name, main, extra} from the deck builder
       const D = self.FORMATS[fmt].decks; const deck = n => { const d = typeof n === 'string' ? D.find(x => x.name === n) : n; return { name: d.name, main: d.main.map(Number), extra: d.extra.map(Number) }; };

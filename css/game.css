@@ -933,3 +933,53 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 .ddone .dinfo::before{content:"";position:absolute;inset:0;z-index:-1;clip-path:var(--shape);background:var(--pnl);box-shadow:inset 0 0 0 1px var(--pnl-edge)}
 #s-draft:not([data-step=pick]) .keybar .k123{display:none}
 .draft{top:216px}
+
+/* Duel modes (Zack, 2026-11-25): five tiles, the playable ones numbered */
+.moderow{grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr;gap:36px}
+.moderow .fmt h3{font-size:80px}.moderow .fmt p{font-size:21px}
+.fmt.lock{cursor:default;filter:saturate(.3);opacity:.55}.fmt.lock:hover{transform:none}
+/* draft pools in groups: Classic, Goat, Edison */
+.dgroups{flex:1;display:flex;flex-direction:column;gap:18px;min-height:0}
+.dgrp{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0}
+.draft .dgrp .drow{grid-template-columns:repeat(3,1fr);gap:28px}
+.draft .dgrp .drow .fmt h3{font-size:54px}.draft .dgrp .drow .fmt p{font-size:17px}
+.draft .dgrp .fmt .txt,.moderow .fmt .txt{left:30px;right:30px;bottom:26px}
+.draft .dgrp .fmt p{margin-top:8px}
+/* Random and Jank: four tiles, Fully random plus three rolled themes */
+.draft .rndrow{grid-template-columns:repeat(4,1fr);gap:28px}.draft .rndrow .fmt h3{font-size:60px}.draft .rndrow .fmt p{font-size:18px}
+.draft .rndrow .fmt .txt{left:30px;right:30px;bottom:30px}
+#rndBody > .row,#draftBody > .row{display:flex;gap:14px}
+#s-random:not([data-step=theme]):not([data-step=fmt]) .keybar .kh:first-child{display:none}
+/* Sealed (Zack, 2026-11-25): our own Learn Retro booster, torn open, cards flipping in a row */
+.packstage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0}
+.pack{position:relative;width:300px;height:480px;border-radius:10px;overflow:hidden;cursor:pointer;background:linear-gradient(160deg,#2a1a12,#0f0c0a 55%,#2a1208);box-shadow:0 0 0 2px #ff6a1f,0 30px 70px rgba(0,0,0,.8),0 0 60px -10px rgba(255,106,31,.5)}
+.pack::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.22) 45%,transparent 60%);background-size:250% 100%;background-position:100% 0;transition:background-position .8s}
+.pack:hover::after{background-position:0 0}
+.pack.in{animation:pkIn .45s cubic-bezier(.2,.8,.2,1) both}
+@keyframes pkIn{from{opacity:0;transform:translateY(60px) rotate(-4deg)}to{opacity:1;transform:none}}
+.pk-top{position:absolute;left:0;right:0;top:0;height:34px;background:repeating-linear-gradient(90deg,#ff6a1f 0 10px,#c94b10 10px 20px)}
+.pk-art{position:absolute;left:26px;right:26px;top:70px;height:250px;background:center 28%/cover;border-radius:4px;box-shadow:0 0 0 2px rgba(255,255,255,.15)}
+.pk-logo{position:absolute;left:0;right:0;top:336px;text-align:center;font:italic 900 30px 'Barlow Condensed';text-transform:uppercase;color:#fff}.pk-logo b{color:#ff6a1f}
+.pk-name{position:absolute;left:16px;right:16px;top:372px;text-align:center;font-size:40px;line-height:1;color:#ffe2b0;text-transform:uppercase}
+.pk-sub{position:absolute;left:0;right:0;bottom:18px;text-align:center;font-size:15px;color:var(--mute);letter-spacing:.08em;text-transform:uppercase}
+.pack.rip{animation:pkRip .42s ease-in forwards}
+@keyframes pkRip{40%{transform:scale(1.05) rotate(2deg)}100%{transform:scale(1.15) translateY(-40px);opacity:0;filter:brightness(2)}}
+.pullrow{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;max-width:100%}
+.pull{position:relative;width:170px;height:248px;display:flex;flex-direction:column;align-items:center}
+.pull .fc{position:relative;width:170px;height:248px;animation:pFlip .55s var(--d) ease-in-out both}
+.pull .bk,.pull .fr{position:absolute;inset:0;border-radius:6px;background:center/100% 100%}
+.pull .bk{background-image:url(../img/back.webp)}.pull .fr{animation:pFace .55s var(--d) step-end both}
+/* a flat flip: the card narrows to nothing, the face swaps in at the middle, and it widens again */
+@keyframes pFlip{0%{transform:translateY(-30px);opacity:0}30%{opacity:1;transform:none}65%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+@keyframes pFace{0%{opacity:0}65%{opacity:1}100%{opacity:1}}
+.pull .tg{position:absolute;bottom:-30px;opacity:0;animation:pTag .3s calc(var(--d) + .45s) both}
+@keyframes pTag{to{opacity:1}}
+.pull.r-UR .fr{box-shadow:0 0 0 3px #ffc24a,0 0 34px rgba(255,170,60,.7)}.pull.r-SR .fr{box-shadow:0 0 0 3px #a27ae8,0 0 24px rgba(162,122,232,.5)}.pull.r-R .fr{box-shadow:0 0 0 2px #2f6fb0}
+.prow{display:flex;gap:14px;justify-content:center}
+.pulls{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:12px;align-content:start;padding:4px;scrollbar-width:thin;scrollbar-color:var(--acc-lo) transparent}
+.pulls .pl{position:relative;cursor:pointer}.pulls .pl .card{width:100%;aspect-ratio:421/614;border-radius:5px;background:center/100% 100%;box-shadow:0 10px 24px rgba(0,0,0,.6)}
+.pulls .pl.r-UR .card{box-shadow:0 0 0 3px #ffc24a,0 0 22px rgba(255,170,60,.55)}.pulls .pl.r-SR .card{box-shadow:0 0 0 3px #a27ae8}.pulls .pl.r-R .card{box-shadow:0 0 0 2px #2f6fb0}
+.pulls .pl .in{position:absolute;right:6px;bottom:6px;background:var(--acc);color:#140a04;font:italic 900 18px 'Barlow Condensed';padding:0 6px;border-radius:2px}
+#sealBody > .row{display:flex;gap:14px;align-items:center}
+.pc .in.own{min-width:auto;padding:0 5px}
+#s-sealed:not([data-step=open]) .keybar .k123{display:none}

@@ -39,8 +39,8 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m #mainMenu .mi{position:relative;isolation:isolate;justify-content:center;height:54px;font:italic 900 22px 'Barlow Condensed';text-transform:uppercase;color:#fff;transform:none;gap:6px}
 #stage.m #mainMenu .mi::after{display:none}
 #stage.m #mainMenu .mi::before{display:block;content:"";position:absolute;inset:0;z-index:-1;transform:skewX(-10deg);background:#1d2127;border-radius:3px;clip-path:none;box-shadow:inset 0 -3px 0 rgba(255,255,255,.06),0 8px 18px rgba(0,0,0,.45)}
-#stage.m #mainMenu .mi[data-go=format]{grid-column:1/-1;height:68px;font-size:32px;color:#140a04}
-#stage.m #mainMenu .mi[data-go=format]::before{background:var(--acc);box-shadow:0 10px 26px -8px rgba(255,106,31,.9)}
+#stage.m #mainMenu .mi[data-go=mode]{grid-column:1/-1;height:68px;font-size:32px;color:#140a04}
+#stage.m #mainMenu .mi[data-go=mode]::before{background:var(--acc);box-shadow:0 10px 26px -8px rgba(255,106,31,.9)}
 #stage.m #mainMenu .mi[data-go=stats],#stage.m #mainMenu .mi[data-go=settings]{display:none}
 #stage.m #mainMenu .mi.lock{color:rgba(255,255,255,.4)}
 #stage.m #mainMenu .mi .soon{font:800 11px 'Barlow Condensed';letter-spacing:.1em;text-transform:uppercase;color:var(--acc-hi)}
@@ -420,7 +420,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.ml #s-title{grid-template-columns:1fr minmax(220px,38%);grid-template-rows:auto auto 1fr auto auto;column-gap:24px;padding:10px calc(var(--sar) + 16px) calc(var(--sab) + 54px) calc(var(--sal) + 16px)}
 #stage.ml #s-title .ttl-logo{grid-column:1;grid-row:1}
 #stage.ml #s-title #mainMenu{grid-column:1;grid-row:2;margin-top:12px}
-#stage.ml #s-title #mainMenu .mi[data-go=format]{height:56px;font-size:28px}
+#stage.ml #s-title #mainMenu .mi[data-go=mode]{height:56px;font-size:28px}
 #stage.ml #s-title #mainMenu .mi{height:44px}
 #stage.ml #s-title .savenote{grid-column:1;grid-row:4;margin-top:8px;padding-top:0}
 #stage.ml #s-title .legal{grid-column:1;grid-row:5}
@@ -659,7 +659,7 @@ html.m,html.m body{position:fixed;inset:0;width:100%;height:100%;margin:0}
 html.m.hs,html.m.hs body{position:absolute;left:0;top:0;right:auto;bottom:auto;width:100%;height:calc(100vh + env(safe-area-inset-top,0px));min-height:100lvh}
 html.m.hs #stage.m{position:absolute}
 /* Draft on phones: three small cards in a row, tap one to read it, then Pick */
-#stage.m #mainMenu .mi[data-go=draft]{order:0}
+#stage.m #mainMenu .mi[data-practice]{order:0}
 #stage.m .draft{position:relative;left:auto;right:auto;top:auto;bottom:auto;padding:0 16px calc(var(--sab) + 24px);gap:12px}
 #stage.m .draft .dintro{font-size:15px}
 #stage.m .draft .drow{display:flex;flex-direction:column;gap:14px;padding:0}
@@ -691,3 +691,24 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .dstat{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 6px;font-size:11px;text-align:center;line-height:1.2}
 #stage.m .dstat b{display:block;font-size:24px;margin:0}
 #stage.m .dstat .gb{grid-column:span 2;justify-content:center}
+/* lighter on phones (Zack, 2026-11-25: the phone ran hot): the hand glow's running light repainted every playable card each frame,
+   so on phones the gradient border holds still and only the soft glow breathes (an opacity change the GPU does alone); the title's drifting dust stops */
+#stage.m .hc.play::before,#stage.m .hc.pick::before{animation:none;--gang:200deg}
+#stage.m .hc.play::after,#stage.m .hc.pick::after{will-change:opacity}
+#stage.m .dust{animation:none}
+/* Duel modes and draft pool groups on phones */
+#stage.m .moderow .fmt{height:150px}#stage.m .moderow .fmt h3{font-size:44px}#stage.m .moderow .fmt p{font-size:14px}
+#stage.ml .moderow{flex-wrap:wrap}#stage.ml .moderow .fmt{flex:1 1 30%;height:150px}
+#stage.m .fmt.lock{opacity:.5}
+#stage.m .dgroups{display:flex;flex-direction:column;gap:14px}#stage.m .dgrp .ph{margin:0 0 8px}
+#stage.m .draft .drow .fmt{height:150px}#stage.m .draft .drow .fmt h3{font-size:40px}
+#stage.m .draft .rndrow .fmt{height:130px}#stage.m .draft .rndrow .fmt h3{font-size:36px}#stage.m .draft .rndrow .fmt p{font-size:13px}
+#stage.m #rndBody > .row .gb,#stage.m #draftBody > .row .gb{flex:1;justify-content:center}
+/* Sealed on phones: a smaller pack, pulls in rows of three */
+#stage.m .pack{width:200px;height:320px}#stage.m .pk-art{left:18px;right:18px;top:50px;height:160px}#stage.m .pk-logo{top:220px;font-size:22px}#stage.m .pk-name{top:248px;font-size:28px}#stage.m .pk-top{height:24px}
+#stage.m .packstage{min-height:360px}
+#stage.m .pullrow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 10px;width:100%}#stage.m .pull{width:auto;height:auto}#stage.m .pull .fc{width:100%;height:auto;aspect-ratio:421/614}
+#stage.m .pull .tg{position:static;margin-top:6px;font-size:10px}
+#stage.m .moderow .tg.hot{display:none}
+#stage.m .prow .gb,#stage.m #sealBody > .row .gb{flex:1;justify-content:center}
+#stage.m .pulls{grid-template-columns:repeat(4,1fr);gap:8px;max-height:none;overflow:visible}

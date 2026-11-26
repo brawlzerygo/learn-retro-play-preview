@@ -20,9 +20,11 @@ export class Table {
     this.COLX = i => (i - 3) * (this.CW + this.G);
     this.ROW_M = -(this.MID / 2 + this.CH / 2); this.ROW_S = this.ROW_M - (this.CH + this.G);
 
-    const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+    // phones (Zack, 2026-11-25: the phone ran hot): no forced high-power GPU, a smaller shadow map, and frames only when something changes (loop)
+    this.phone = !!opts.phone;
+    const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: this.phone ? 'default' : 'high-performance' });
     r.setPixelRatio(this.V.dpr); r.setSize(this.V.w, this.V.h, false);
-    r.outputColorSpace = THREE.SRGBColorSpace; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.outputColorSpace = THREE.SRGBColorSpace; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; r.shadowMap.autoUpdate = false;
     this.scene = new THREE.Scene();
     // the Blender camera: lens over a 36 mm sensor, fitted to the width
     const hfov = 2 * Math.atan(cam.sensor / 2 / cam.lens), vfov = 2 * Math.atan(Math.tan(hfov / 2) * this.V.h / this.V.w);
@@ -33,12 +35,18 @@ export class Table {
     // light that matches the lamp-lit render: warm key from above, soft fill
     this.scene.add(new THREE.HemisphereLight(0xfff1e0, 0x3a2a20, 1.55));
     const key = new THREE.DirectionalLight(0xffe2c2, 1.35); key.position.copy(B(0.6, -1.2, 7)); key.target.position.copy(B(0, 0, 0));
-    key.castShadow = true; key.shadow.mapSize.set(2048, 2048); const sc = key.shadow.camera; sc.left = -4; sc.right = 4; sc.top = 4; sc.bottom = -4; sc.near = 1; sc.far = 14;
+    key.castShadow = true; key.shadow.mapSize.set(this.phone ? 1024 : 2048, this.phone ? 1024 : 2048); const sc = key.shadow.camera; sc.left = -4; sc.right = 4; sc.top = 4; sc.bottom = -4; sc.near = 1; sc.far = 14;
     key.shadow.radius = 5; key.shadow.bias = -0.0008; this.scene.add(key, key.target);
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.ShadowMaterial({ opacity: 0.42 }));
     ground.rotation.x = -Math.PI / 2; ground.position.y = 0.001; ground.receiveShadow = true; this.scene.add(ground);
 
     this.loader = new THREE.TextureLoader(); this.tex = new Map();
+    // draw on demand: anything that changes the scene marks it dirty (adds, removes, a texture arriving, any table method that isn't a read)
+    this.hot = 0; this.wake = () => { this.hot = performance.now() + 350; };
+    { const sa = this.scene.add.bind(this.scene), sr = this.scene.remove.bind(this.scene); this.scene.add = (...a) => { this.wake(); return sa(...a); }; this.scene.remove = (...a) => { this.wake(); return sr(...a); }; }
+    { const ld = this.loader.load.bind(this.loader); this.loader.load = (u, ok, pr, er) => ld(u, t => { this.wake(); if (ok) ok(t); }, pr, er); }
+    const READS = new Set(['constructor', 'url', 'slot', 'pileTop', 'screenToWorld', 'ndc', 'project', 'cardScreen', 'where', 'has', 'loop', 'step', 'wait', 'bindPointer', 'dispose']);
+    for (const k of Object.getOwnPropertyNames(Table.prototype)) if (!READS.has(k) && typeof this[k] === 'function') { const f = this[k]; this[k] = function (...a) { this.wake(); return f.apply(this, a); }; }
     this.cardGeo = new THREE.BoxGeometry(this.CW, 0.008, this.CH);
     this.edgeMat = new THREE.MeshLambertMaterial({ color: 0x0c0a09 });
     this.backMat = this.faceMat('back');   // pile tops
@@ -295,12 +303,18 @@ export class Table {
 
   // tweens advance here; a fallback clock calls it too when the browser stops sending frames (a background tab or window)
   step(now) { for (const tw of [...this.tweens]) { const k = Math.min(1, (now - tw.t0) / tw.dur); tw.fn(tw.e(k)); if (k >= 1) { this.tweens.splice(this.tweens.indexOf(tw), 1); tw.res(); } } }
+  canvasHidden() { const c = this.renderer.domElement; return document.hidden || !c.isConnected || c.offsetParent === null; }
   dispose() { this.dead = true; clearInterval(this.tick); this.renderer.dispose(); }
   loop(t) {
     if (this.dead) return;
     requestAnimationFrame(this.loop);
     const now = performance.now(); this.lastFrame = now;
+    if (this.tweens.length) this.wake();
     this.step(now);
+    // nothing moving: skip the frame. Glows, rings and lit zones only shimmer, so they draw at 30 fps (20 on phones) without the shadow pass
+    const busy = now < this.hot, ambient = this.glows.size || this.rings.length || this.zones.some(z => z.visible);
+    if (!busy) { if (!ambient || this.canvasHidden() || now - (this.lastDraw || 0) < (this.phone ? 50 : 33)) return; }
+    this.lastDraw = now; if (busy) this.renderer.shadowMap.needsUpdate = true;
     const pulse = 0.5 + 0.5 * Math.sin(now / 220);
     const T = now / 1000; for (const z of this.zones) if (z.visible) z.material.uniforms.uTime.value = T + z.userData.zone.i * 0.7;
     for (const [u, m] of this.glows) { const c = this.cards.get(u); if (!c) continue; m.position.set(c.g.position.x, 0.005, c.g.position.z); m.rotation.z = c.def ? Math.PI / 2 : 0; m.scale.setScalar(c.g.scale.x); m.material.uniforms.uTime.value = T + (u % 7) * 0.9; m.material.uniforms.uAmp.value = Math.min(1, (now - m.userData.t0) / 220); }
