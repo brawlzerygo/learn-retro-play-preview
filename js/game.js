@@ -1,9 +1,9 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=143';
-import * as S from './sfx.js?v=143';
-import * as FX from './fx.js?v=143';
+import { Table } from './table.js?v=144';
+import * as S from './sfx.js?v=144';
+import * as FX from './fx.js?v=144';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -144,7 +144,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=143');
+const W = new Worker('js/worker.js?v=144');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -2041,7 +2041,7 @@ function confetti(host, n = 26) { const cols = ['#ff6a1f', '#ffd23f', '#47c47a',
   c.style.cssText = `--x:${Math.cos(a) * d}px;--y:${Math.sin(a) * d - 80}px;--r:${Math.random() * 720 - 360}deg;background:${cols[i % cols.length]};animation-delay:${Math.random() * 80}ms`; host.appendChild(c); setTimeout(() => c.remove(), 1600); } }
 var rollStop = null;   // var, not let: show() checks it before this line has run
 // a jank theme's deck comes in with a show (Zack, 2026-11-26: "fun animations for picking a random jank deck"); three options to pick from,
-// ?jk=a slot reels (Zack's pick, the default), b shuffle and deal, c card storm. The theme's name shows only when the show lands. The deck is built first and the show lands on its key cards. Transform and opacity only.
+// ?jk=a gather, b cascade, c card storm (Zack, 2026-11-26: a picked theme gets a pile-up, not slots). The theme's name shows from the start: the player picked it. The deck is built first and the show lands on its key cards. Transform and opacity only.
 const JK = new URLSearchParams(location.search).get('jk') || 'a';
 function jankReveal(f, th) {
   const deck = buildRandom(f, th), d = { name: '', main: deck.main, extra: deck.extra }, kc = keyCards(f, d).slice(0, JK === 'a' ? 3 : 5), el = $('#rndBody');
@@ -2052,20 +2052,25 @@ function jankReveal(f, th) {
   const pool = [...new Set(deck.main)].filter(id => !kc.includes(id)), rnd = () => pool[Math.floor(Math.random() * pool.length)];
   const card = (id, cls = '') => `<div class="jc ${cls}" style="background-image:url(${artUrl(id)})"></div>`;
   $('#rndTitle').textContent = 'Building your deck';
-  const head = `<div class="jk-head"><span>${f === 'goat' ? 'Goat' : 'Edison'} jank</span><b class="jk-name">Shuffling up</b></div>`, named = () => { const b = el.querySelector('.jk-name'); if (b) { b.textContent = th.name; b.classList.add('shown'); } };
-  if (JK === 'a') {   // slot reels: three reels spin through the deck and stop, left to right, on its key cards
-    const N = 24, reel = (id, i) => `<div class="reel" style="--d:${2500 + i * 900}ms"><div class="strip">${[...Array.from({ length: N }, () => card(rnd())), card(id, 'key')].join('')}</div></div>`;
-    el.innerHTML = `<div class="jk jk-a">${head}<div class="reels">${kc.map(reel).join('')}</div><div class="jk-lever"><i></i></div></div>`;
+  const head = `<div class="jk-head"><span>${f === 'goat' ? 'Goat' : 'Edison'} jank</span><b class="jk-name shown">${esc(th.name)}</b></div>`, named = () => { const b = el.querySelector('.jk-name'); if (b) { b.textContent = th.name; b.classList.add('shown'); } };
+  const fanOut = (t0) => kc.map((id, i) => `<div class="burst" style="--i:${i};--bd:${t0 + i * 90}ms;--x:${(i - (kc.length - 1) / 2) * (MOBILE ? 64 : 230)}px;--r:${(i - (kc.length - 1) / 2) * 7}deg">${card(id, 'face')}</div>`).join('');
+  if (JK === 'a') {   // gather: the deck's cards fly in from every side and land on one pile, it squares up, and its key cards fan out
+    const M = MOBILE ? 18 : 30, far = MOBILE ? 520 : 1100;
+    const fly = Array.from({ length: M }, (_, i) => { const ang = Math.random() * Math.PI * 2;
+      return `<div class="gc" style="--i:${i};--sx:${Math.round(Math.cos(ang) * far)}px;--sy:${Math.round(Math.sin(ang) * far * 0.6)}px;--sr:${Math.round(Math.random() * 540 - 270)}deg;--ex:${Math.round(Math.random() * 22 - 11)}px;--ey:${Math.round(-i * 1.2 + Math.random() * 10 - 5)}px;--er:${Math.round(Math.random() * 24 - 12)}deg">${card(rnd())}</div>`; }).join('');
+    el.innerHTML = `<div class="jk jk-g">${head}<div class="table"><div class="pile">${fly}</div>${fanOut(2350)}</div></div>`;
     S.play('shuffle'); requestAnimationFrame(() => el.querySelector('.jk').classList.add('go'));
-    kc.forEach((_, i) => later(() => { el.querySelectorAll('.reel')[i].classList.add('hit'); S.play(i === kc.length - 1 ? 'summon' : 'click'); if (i === kc.length - 1) named(); }, 2500 + i * 900 + 40));
-    later(fin, 2500 + (kc.length - 1) * 900 + 1300);
-  } else if (JK === 'b') {   // shuffle and deal: the deck riffles twice, then deals five cards that flip to its key cards
-    const stack = Array.from({ length: 12 }, (_, i) => `<div class="jc back rf" style="--i:${i};--s:${i % 2 ? 1 : -1}"></div>`).join('');
-    const deal = kc.map((id, i) => `<div class="deal" style="--i:${i};--x:${(i - (kc.length - 1) / 2) * (MOBILE ? 64 : 230)}px;--r:${(i - (kc.length - 1) / 2) * 7}deg"><div class="flip"><div class="jc back"></div>${card(id, 'face')}</div></div>`).join('');
-    el.innerHTML = `<div class="jk jk-b">${head}<div class="table"><div class="stack">${stack}</div>${deal}</div></div>`;
+    for (let i = 0; i < M; i += 6) later(() => S.play('click'), 200 + i * 55);
+    later(() => { el.querySelector('.jk').classList.add('sq'); S.play('shuffle'); }, 200 + M * 55 + 300);
+    later(() => S.play('summon'), 2350); later(fin, 3700);
+  } else if (JK === 'b') {   // cascade: cards rain down one after another onto the pile, it squares up, and the key cards rise off the top
+    const M = MOBILE ? 16 : 26;
+    const drop = Array.from({ length: M }, (_, i) => `<div class="gc" style="--i:${i};--sx:${Math.round(Math.random() * 160 - 80)}px;--sy:${MOBILE ? -560 : -900}px;--sr:${Math.round(Math.random() * 60 - 30)}deg;--ex:${Math.round(Math.random() * 26 - 13)}px;--ey:${Math.round(-i * 1.2 + Math.random() * 8 - 4)}px;--er:${Math.round(Math.random() * 30 - 15)}deg">${card(rnd())}</div>`).join('');
+    el.innerHTML = `<div class="jk jk-c2">${head}<div class="table"><div class="pile">${drop}</div>${fanOut(2500)}</div></div>`;
     S.play('shuffle'); requestAnimationFrame(() => el.querySelector('.jk').classList.add('go'));
-    later(() => S.play('shuffle'), 700); kc.forEach((_, i) => later(() => S.play('click'), 1500 + i * 120)); kc.forEach((_, i) => later(() => { S.play(i === kc.length - 1 ? 'summon' : 'click'); if (i === kc.length - 1) named(); }, 2300 + i * 160));
-    later(fin, 2300 + kc.length * 160 + 900);
+    for (let i = 0; i < M; i += 3) later(() => S.play('click'), 150 + i * 70 + 380);
+    later(() => { el.querySelector('.jk').classList.add('sq'); S.play('shuffle'); }, 150 + M * 70 + 450);
+    later(() => S.play('summon'), 2500); later(fin, 3850);
   } else {   // card storm: the deck's cards whirl in a vortex, collapse to the middle and burst out as the key cards
     const M = MOBILE ? 18 : 28, storm = Array.from({ length: M }, (_, i) => `<div class="vc" style="--a:${(i * 360 / M).toFixed(1)}deg;--r:${MOBILE ? 150 + (i % 3) * 40 : 260 + (i % 3) * 70}px;--t:${(i % 4) * 60}ms">${card(rnd())}</div>`).join('');
     const out = kc.map((id, i) => `<div class="burst" style="--i:${i};--x:${(i - (kc.length - 1) / 2) * (MOBILE ? 64 : 230)}px;--r:${(i - (kc.length - 1) / 2) * 7}deg">${card(id, 'face')}</div>`).join('');
@@ -2121,7 +2126,7 @@ function rollFullyRandom(f) {
   const landed = () => {
     die.classList.add('landed'); S.play('summon');
     const m = $('#rollMsg'); m.innerHTML = `<b>${roll}</b><span>${cat[0]}${pick ? '' : '!'}</span>`; m.classList.add('slam');
-    if (!pick) { stage = 'end'; say.textContent = 'Total chaos!'; later(() => { m.innerHTML = `<b>6</b><span>Total chaos: anything goes</span>`; m.classList.remove('slam'); void m.offsetWidth; m.classList.add('slam', 'big'); confetti($('#rollStage')); S.play('synchro'); go.disabled = false; go.innerHTML = 'See your deck<span class="shine"></span>'; stage = 'deck'; }, 900); return; }
+    if (!pick) { stage = 'end'; say.textContent = 'Total chaos!'; later(() => { m.innerHTML = `<b>6</b><span>Total chaos: anything goes</span>`; m.classList.remove('slam'); void m.offsetWidth; m.classList.add('slam', 'big'); confetti($('#rollStage')); S.play('synchro'); go.disabled = false; go.innerHTML = 'See your deck<span class="shine"></span>'; stage = 'deck'; later(() => rollPop('Total chaos', 'Rolled a 6 · anything goes', gd), 1100); }, 900); return; }
     say.textContent = `${cat[0]}! Now spin the wheel.`;
     later(showWheel, 700);
   };
@@ -2157,8 +2162,14 @@ function rollFullyRandom(f) {
   const won = () => {
     stage = 'deck'; const w = $('#wheel'); w.classList.remove('spinning'); w.classList.add('won'); S.play('synchro'); confetti($('#rollStage'));
     const m = $('#rollMsg'); m.innerHTML = `<b>${roll}</b><span>${esc(pick.name)}</span>`; m.classList.remove('slam'); void m.offsetWidth; m.classList.add('slam', 'big');
-    say.textContent = `${pick.name}! Let's see your deck.`; go.disabled = false; go.innerHTML = 'See your deck<span class="shine"></span>';
+    say.textContent = `${pick.name}! Let's see your deck.`; go.disabled = false; go.innerHTML = 'See your deck<span class="shine"></span>'; later(() => rollPop(pick.name, `Rolled a ${roll} · ${cat[0]}`, pick.art), 1100);
   };
+  const rollPop = (name, sub, art) => {   // the deck card: its picture, its name, and one big See deck
+    if (done) return; const p = document.createElement('div'); p.className = 'rollpop';
+    p.innerHTML = `<div class="rp-card"><div class="rp-art" style="background-image:url(${artSrc(art)})"></div><div class="rp-t"><span>${esc(sub)}</span><b>${esc(name)}</b><p>A 40-card ${f === 'goat' ? 'Goat' : 'Edison'} deck, built at random.</p></div>
+      <button class="gb pri" id="rpGo">See deck<span class="shine"></span></button></div>`;
+    $('#rollStage').appendChild(p); $('.rollrow') && ($('.rollrow').style.visibility = 'hidden'); S.play('nav');
+    $('#rpGo').onclick = () => { S.play('shuffle'); finish(); }; };
   die.onclick = throwDie;
   go.onclick = () => { if (stage === 'die') throwDie(); else if (stage === 'wheel' && spinFn) spinFn(); else if (stage === 'deck') { S.play('shuffle'); finish(); } };
   $('#rSkip').onclick = finish;

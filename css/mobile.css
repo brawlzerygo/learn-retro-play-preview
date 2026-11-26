@@ -789,3 +789,5 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .jk{--cw:92px;--ch:134px;min-height:420px;gap:18px}#stage.m .jk-head b{font-size:34px}#stage.m .jk-head span{font-size:12px}
 #stage.m .jk-a .reels{gap:10px;padding:12px}#stage.m .jk-lever{display:none}
 #stage.m .jk-c .vc .jc{--cw:54px;--ch:78px}#stage.m .jk-c .core{width:200px;height:200px;margin:-100px 0 0 -100px}
+#stage.m .rp-card{grid-template-columns:1fr;width:calc(100% - 40px)}#stage.m .rp-art{grid-row:auto;min-height:220px}#stage.m .rp-t{padding:20px 22px 6px}#stage.m .rp-t b{font-size:40px}#stage.m .rp-card .gb{margin:10px 22px 22px;justify-self:stretch}
+#stage.m .jk-g .gc .jc,#stage.m .jk-c2 .gc .jc{--cw:92px;--ch:134px}
