@@ -983,3 +983,24 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;touch
 #sealBody > .row{display:flex;gap:14px;align-items:center}
 .pc .in.own{min-width:auto;padding:0 5px}
 #s-sealed:not([data-step=open]) .keybar .k123{display:none}
+/* Start over, top right of Draft and Sealed while a run is in progress */
+.restart{position:absolute;right:110px;top:64px;z-index:3}
+.restart[hidden]{display:none}
+/* Menu tiles (Zack, 2026-11-25: "just the card art image high quality where you cant see the card frame, and then do a clean outline"):
+   the art-only crop fills the tile, a soft fade keeps the text readable, and a crisp outline follows the cut corners,
+   light at the top fading to the accent, brighter on hover and when chosen */
+.fmt{background:#0b0c0e}
+.fmt .art{opacity:1;mask:none;-webkit-mask:none;background-size:cover;background-position:center 35%;z-index:0}
+.fmt .art.framed{background-size:132% auto;background-position:50% 41%}
+.fmt::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(8,9,11,0) 25%,rgba(8,9,11,.62) 52%,rgba(8,9,11,.96) 100%)}
+.fmt .txt,.fmt .tg{z-index:2}
+.fmt::after,.fmt.sel::after{z-index:3;box-shadow:none;
+  background:linear-gradient(165deg,rgba(255,255,255,.6),rgba(255,255,255,.14) 38%,rgba(255,255,255,.1) 62%,rgba(255,138,61,.55));
+  clip-path:polygon(evenodd,12px 0,calc(100% - 12px) 0,100% 12px,100% calc(100% - 12px),calc(100% - 12px) 100%,12px 100%,0 calc(100% - 12px),0 12px,12px 0,
+    13px 2px,2px 13px,2px calc(100% - 13px),13px calc(100% - 2px),calc(100% - 13px) calc(100% - 2px),calc(100% - 2px) calc(100% - 13px),calc(100% - 2px) 13px,calc(100% - 13px) 2px,13px 2px);
+  transition:filter .2s}
+.fmt:not(.lock):hover::after,.fmt.sel::after{filter:brightness(1.6) saturate(1.4);background:linear-gradient(165deg,#fff,rgba(255,170,110,.7) 40%,var(--acc))}
+.fmt:not(.lock):hover .art{transform:scale(1.04)}
+.fmt .art{transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.fmt .tg:not(.hot){background:rgba(10,11,13,.8);color:#e7e9ec}
+.draft .dgrp .fmt .tg,.moderow .fmt .tg,.draft .rndrow .fmt .tg{top:16px;left:30px}

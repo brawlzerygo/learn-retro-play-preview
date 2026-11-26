@@ -712,3 +712,5 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .moderow .tg.hot{display:none}
 #stage.m .prow .gb,#stage.m #sealBody > .row .gb{flex:1;justify-content:center}
 #stage.m .pulls{grid-template-columns:repeat(4,1fr);gap:8px;max-height:none;overflow:visible}
+#stage.m .restart{right:16px;top:calc(var(--sat) + 10px);height:44px}
+#stage.m .fmt .tg{top:12px;left:14px;font-size:10px}

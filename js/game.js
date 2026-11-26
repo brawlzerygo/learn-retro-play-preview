@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=93';
-import * as S from './sfx.js?v=93';
+import { Table } from './table.js?v=95';
+import * as S from './sfx.js?v=95';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -137,10 +137,13 @@ const FM = window.FORMATS, TOKEN_ART = window.TOKEN_ART;
 const CARD = {}; for (const f in FM) CARD[f] = new Map(FM[f].cards.map(c => [String(c.id), c]));
 const TOK = { 'tok-sheep': { n: 'Sheep Token', k: 'token', a: 'EARTH', r: 'Beast', lv: 1, atk: '0', def: '0', tx: 'A token made by Scapegoat.' }, 'tok-gorz': { n: 'Emissary of Darkness Token', k: 'token', a: 'LIGHT', r: 'Fairy', lv: 7, atk: '?', def: '?', tx: 'A token made by Gorz the Emissary of Darkness.' } };
 const rec = (f, id) => id == null ? null : (CARD[f].get(String(id)) || TOK[id] || null);
+// menu tile art (Zack, 2026-11-25): the art-only crop from assets/art/ (tools/build_tile_art.mjs), or the full card cropped to its art box
+const TILE_ART = new Set((self.TILE_ART || []).map(Number));
+const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-image:url(assets/art/${id}.webp)"></div>` : `<div class="art framed" style="background-image:url(${artUrl(id)})"></div>`;
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=93');
+const W = new Worker('js/worker.js?v=95');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -494,7 +497,7 @@ function renderDeckSide() {
     <div class="cell"><div class="k">Main</div><div class="v ${okMain ? 'ok' : 'bad'}">${d.main.length}</div></div>
     <div class="cell"><div class="k">${f === 'goat' ? 'Fusion' : 'Extra'}</div><div class="v ${d.extra.length > 15 ? 'bad' : ''}">${d.extra.length}</div></div>
     <div class="cell"><div class="k">Mon · Spell · Trap</div><div class="v">${nMon}·${nSp}·${nTr}</div></div>
-    ${B.sealed ? `<div class="act"><button class="gb sm" id="sAuto">Auto build<span class="shine"></span></button><button class="gb sm" id="sClear">Clear<span class="shine"></span></button><button class="gb sm" id="sPacks">Your pulls<span class="shine"></span></button><button class="gb sm pri" id="sDuel"><svg><use href="#i-swords"/></svg>${MOBILE ? 'Duel' : 'Save and duel'}<span class="shine"></span></button></div>` : `<div class="act"><div class="seg bview" id="bView"><button class="gb sm ${B.view !== 'lists' ? 'pri' : ''}" data-bv="build"><svg><use href="#i-cards"/></svg>Deck Builder<span class="shine"></span></button><button class="gb sm ${B.view === 'lists' ? 'pri' : ''}" data-bv="lists"><svg><use href="#i-list"/></svg>Deck lists<span class="shine"></span></button></div><button class="gb sm" id="bMine">My decks<span class="shine"></span></button><button class="gb sm" id="bCopy">Start from a deck<span class="shine"></span></button><button class="gb sm" id="bNew">New<span class="shine"></span></button><button class="gb sm" id="bDel">Delete<span class="shine"></span></button></div>`}
+    ${B.sealed ? `<div class="act"><button class="gb sm" id="sAuto">Auto build<span class="shine"></span></button><button class="gb sm" id="sClear">Clear<span class="shine"></span></button><button class="gb sm" id="sPacks">Your pulls<span class="shine"></span></button><button class="gb sm" id="sRestart">Start over<span class="shine"></span></button><button class="gb sm pri" id="sDuel"><svg><use href="#i-swords"/></svg>${MOBILE ? 'Duel' : 'Save and duel'}<span class="shine"></span></button></div>` : `<div class="act"><div class="seg bview" id="bView"><button class="gb sm ${B.view !== 'lists' ? 'pri' : ''}" data-bv="build"><svg><use href="#i-cards"/></svg>Deck Builder<span class="shine"></span></button><button class="gb sm ${B.view === 'lists' ? 'pri' : ''}" data-bv="lists"><svg><use href="#i-list"/></svg>Deck lists<span class="shine"></span></button></div><button class="gb sm" id="bMine">My decks<span class="shine"></span></button><button class="gb sm" id="bCopy">Start from a deck<span class="shine"></span></button><button class="gb sm" id="bNew">New<span class="shine"></span></button><button class="gb sm" id="bDel">Delete<span class="shine"></span></button></div>`}
     <button class="savebtn" id="bSave">${B.dirty ? 'Save' : 'Saved'}</button>`;
   // the roster (right half): every card of the Main Deck and the Extra (Fusion) Deck, sized to fit without scrolling
   const main = sortDeck(f, d.main), extra = sortDeck(f, d.extra), RW = 912, xl = f === 'goat' ? 'Fusion' : 'Extra';
@@ -1487,8 +1490,8 @@ const RAR = ['C', 'R', 'SR', 'UR'], RARNAME = { C: 'Common', R: 'Rare', SR: 'Sup
 // pools (Zack, 2026-11-25): the two formats, the classic eras players call Duelist Kingdom and Battle City, and our own mixes.
 // era pools list their cards in data/draft-pools.js (tools/build_pools.js: by each card's first TCG release); they duel under Goat rules and its banlist
 const DPOOLS = {
-  dk: { group: 'Classic', fmt: 'goat', era: 'dk', name: 'Duelist Kingdom', classic: true, forbiddenAs: 1, art: 89631139, tag: '2002 cards', blurb: 'Cards first released in 2002, Legend of Blue Eyes to Pharaoh\'s Servant. Big Normal monsters, Fusions and the first staples.', roll: [50, 30, 15, 5] },
-  bc: { group: 'Classic', fmt: 'goat', era: 'bc', name: 'Battle City', classic: true, forbiddenAs: 1, art: 71413901, tag: '2002 to 2003 cards', blurb: 'Every card first released by the end of 2003, through Dark Crisis. Breaker, Jinzo, Torrential and the first real toolboxes.', roll: [50, 30, 15, 5] },
+  dk: { group: 'Classic', fmt: 'goat', era: 'dk', name: 'Duelist Kingdom', classic: true, forbiddenAs: 1, art: 89631139, tag: 'Learn Retro pool', blurb: 'Hand-picked from the Duelist Kingdom days: Blue-Eyes, Dark Magician, Toons, Exodia, Fusions and the first staples.', roll: [50, 30, 15, 5] },
+  bc: { group: 'Classic', fmt: 'goat', era: 'bc', name: 'Battle City', classic: true, forbiddenAs: 1, art: 71413901, tag: 'Learn Retro pool', blurb: 'Hand-picked from the Battle City days: the Egyptian Gods, Jinzo, Breaker, rituals and the first real toolboxes.', roll: [50, 30, 15, 5] },
   goat: { group: 'Goat', fmt: 'goat', name: 'Goat', art: 73915051, tag: 'Format', blurb: 'Every playable card from the Goat deck lists. Summer 2005: Scapegoat, Chaos and control.', roll: [50, 30, 15, 5] },
   allstars: { group: 'Goat', fmt: 'goat', name: 'Goat All-Stars', art: 63519819, tag: 'Learn Retro mix', blurb: 'Only the Goat cards that two or more top decks run, with Ultra Rares twice as often. Stronger picks, harder choices.', roll: [40, 30, 20, 10], tiers: ['A', 'B', 'T'], minDecks: 2 },
   edison: { group: 'Edison', fmt: 'edison', name: 'Edison', art: 44508094, tag: 'Format', blurb: 'Every playable card from the Edison deck lists. April 2010: Synchros, Blackwings, Plants.', roll: [50, 30, 15, 5] },
@@ -1565,7 +1568,7 @@ function startDraft(pk, theme) { const x = { pool: pk, fmt: DPOOLS[pk].fmt, main
 let dSel = null;   // phones: the card tapped among the three, before Pick
 function renderDraft(anim) {
   readyP.then(() => {
-    const x = DR(), el = $('#draftBody'); $('#s-draft').dataset.step = !x ? 'pools' : x.offer && x.main.length + x.extra.length < DRAFT_PICKS ? 'pick' : 'done';
+    const x = DR(), el = $('#draftBody'); $('#dRestartTop').hidden = !x; $('#s-draft').dataset.step = !x ? 'pools' : x.offer && x.main.length + x.extra.length < DRAFT_PICKS ? 'pick' : 'done';
     if (!x) return renderDraftPools();
     const P = DPOOLS[x.pool], f = P.fmt, n = x.main.length + x.extra.length, xl = f === 'goat' ? 'Fusion' : 'Extra';
     if (n >= DRAFT_PICKS || !x.offer) return renderDraftDone(x);
@@ -1582,14 +1585,13 @@ function renderDraft(anim) {
       ${MOBILE ? `<div class="dread" id="dRead">${dSel != null ? (() => { const r = rec(f, dSel); return `<div class="nm disp">${esc(r.n)}</div><div class="meta">${esc(cardMeta(r))}</div><p>${esc(cardText(f, r))}</p>`; })() : '<p class="mute">Tap a card to read it, then Pick it.</p>'}</div>
         <button class="gb pri dpick" id="dPick" ${dSel == null ? 'disabled' : ''}>${dSel == null ? 'Choose a card' : 'Pick ' + esc(rec(f, dSel).n)}<span class="shine"></span></button>` : ''}
       <div class="dstat"><span><b>${x.main.length}</b> of ${DRAFT_MAIN} Main</span><span><b>${x.extra.length}</b> of ${DRAFT_EXTRA} ${xl}</span><span><b>${mons}</b> monsters</span><span><b>${x.main.length - mons}</b> Spells, Traps</span>
-        <button class="gb sm" id="dSee" ${n ? '' : 'disabled'}><svg><use href="#i-list"/></svg>Your picks<span class="shine"></span></button><button class="gb sm" id="dQuit">Start over<span class="shine"></span></button></div>`;
+        <button class="gb sm" id="dSee" ${n ? '' : 'disabled'}><svg><use href="#i-list"/></svg>Your picks<span class="shine"></span></button></div>`;
     if (anim) S.play('draw');
     el.onclick = e => {
       const g = e.target.closest('[data-go2]'); if (g) return draftPick(g.dataset.go2);
       const c = e.target.closest('[data-pick]'); if (c && (MOBILE || e.target.closest('.card'))) { if (MOBILE) { dSel = dSel === c.dataset.pick ? null : c.dataset.pick; S.play('click'); renderDraft(); } else draftPick(c.dataset.pick); return; }
       if (e.target.closest('#dPick') && dSel != null) return draftPick(dSel);
       if (e.target.closest('#dSee')) return deckList(f, { name: `${P.name} draft so far`, main: x.main, extra: x.extra }, 'Your picks');
-      if (e.target.closest('#dQuit')) ask('Start over? Your picks so far are lost.', 'Start over').then(y => { if (y) { saveDR(null); dSel = null; S.play('click'); renderDraft(); } });
     };
   });
 }
@@ -1602,16 +1604,16 @@ function draftPick(id) {
 function renderDraftPools() {
   $('#draftTitle').textContent = 'Draft';
   $('#draftBody').innerHTML = `<p class="dintro">Pick 1 of 3 cards, ${DRAFT_PICKS} times: ${DRAFT_MAIN} for the Main Deck and ${DRAFT_EXTRA} for the Extra or Fusion Deck. Every card is rated Common to Ultra Rare by how strong it is, and each pick shows three of the same rating. Your deck saves to My decks, ready to duel.</p>
-    <div class="dgroups">${[...new Set(Object.values(DPOOLS).filter(P => !P.hidden).map(P => P.group))].map(g => `<div class="dgrp"><div class="ph">${esc(g)}</div><div class="fmt-row drow">${Object.entries(DPOOLS).filter(([, P]) => P.group === g && !P.hidden).map(([k, P]) => `<div class="fmt" data-dpool="${k}"><div class="art" style="background-image:url(${artUrl(P.art)})"></div><span class="tg ${P.tag === 'Learn Retro mix' ? 'hot' : ''}">${esc(P.tag)}</span>
+    <div class="dgroups">${[...new Set(Object.values(DPOOLS).filter(P => !P.hidden).map(P => P.group))].map(g => `<div class="dgrp"><div class="ph">${esc(g)}</div><div class="fmt-row drow">${Object.entries(DPOOLS).filter(([, P]) => P.group === g && !P.hidden).map(([k, P]) => `<div class="fmt" data-dpool="${k}">${tileBg(P.art)}<span class="tg ${P.tag === 'Learn Retro mix' ? 'hot' : ''}">${esc(P.tag)}</span>
       <div class="txt"><h3 class="disp">${esc(P.name)}</h3><p>${esc(P.blurb)}</p></div></div>`).join('')}</div></div>`).join('')}</div>`;
   $('#draftBody').onclick = e => { const p = e.target.closest('[data-dpool]'); if (!p) return; S.play('shuffle'); if (DPOOLS[p.dataset.dpool].classic) return renderThemePick(p.dataset.dpool); startDraft(p.dataset.dpool); renderDraft(true); };
 }
 function renderThemePick(pk) {   // a classic pool: an open draft, or a theme from three rolled at random
   const P = DPOOLS[pk], th = themesFor(pk).sort(() => Math.random() - 0.5).slice(0, 3), f = P.fmt, T = draftTiers(pk);
-  const artOf = t => [...T.tier.keys()].filter(id => t.test(rec(f, id)) && isMon(rec(f, id))).sort((a, b) => (+rec(f, b).atk || 0) - (+rec(f, a).atk || 0))[0];
+  const artOf = t => (self.THEME_ART || {})[t.k] || [...T.tier.keys()].filter(id => t.test(rec(f, id)) && isMon(rec(f, id))).sort((a, b) => (+rec(f, b).atk || 0) - (+rec(f, a).atk || 0))[0];
   $('#draftTitle').textContent = P.name;
   $('#draftBody').innerHTML = `<p class="dintro">Draft from the whole pool, or pick a theme: every pick then shows two cards of your theme and one card that fits any deck.</p>
-    <div class="fmt-row drow rndrow">${[{ k: '', name: 'Open draft', blurb: 'Any card in the pool, three of the same rating each pick.', art: P.art }, ...th.map(t => ({ ...t, art: artOf(t) }))].map((t, i) => `<div class="fmt dopt in" style="animation-delay:${i * 70}ms" data-theme="${t.k}"><div class="art" style="background-image:url(${artUrl(t.art)})"></div><span class="tg ${i ? '' : 'hot'}">${i ? 'Theme' : 'Open'} · ${i + 1}</span><div class="txt"><h3 class="disp">${esc(t.name)}</h3><p>${esc(t.blurb)}</p></div></div>`).join('')}</div>
+    <div class="fmt-row drow rndrow">${[{ k: '', name: 'Open draft', blurb: 'Any card in the pool, three of the same rating each pick.', art: P.art }, ...th.map(t => ({ ...t, art: artOf(t) }))].map((t, i) => `<div class="fmt dopt in" style="animation-delay:${i * 70}ms" data-theme="${t.k}">${tileBg(t.art)}<span class="tg ${i ? '' : 'hot'}">${i ? 'Theme' : 'Open'} · ${i + 1}</span><div class="txt"><h3 class="disp">${esc(t.name)}</h3><p>${esc(t.blurb)}</p></div></div>`).join('')}</div>
     <div class="row"><button class="gb" id="dReTheme">New themes<span class="shine"></span></button><button class="gb" id="dPools">Change pool<span class="shine"></span></button></div>`;
   $('#draftBody').onclick = e => { const t = e.target.closest('[data-theme]'); if (t) { S.play('shuffle'); startDraft(pk, t.dataset.theme || null); renderDraft(true); return; }
     if (e.target.closest('#dReTheme')) { S.play('shuffle'); renderThemePick(pk); } if (e.target.closest('#dPools')) renderDraft(true); };
@@ -1645,7 +1647,7 @@ const MODES = [
 ];
 function renderModes() {
   let n = 0;
-  $('#modeRow').innerHTML = MODES.map(m => `<div class="fmt ${m.soon ? 'lock' : ''}" data-mode="${m.k}"><div class="art" style="background-image:url(${artUrl(m.art)})"></div>${m.soon ? '<span class="tg">Coming soon</span>' : `<span class="tg hot">${++n}</span>`}
+  $('#modeRow').innerHTML = MODES.map(m => `<div class="fmt ${m.soon ? 'lock' : ''}" data-mode="${m.k}">${tileBg(m.art)}${m.soon ? '<span class="tg">Coming soon</span>' : `<span class="tg hot">${++n}</span>`}
     <div class="txt"><h3 class="disp">${esc(m.name)}</h3><p>${esc(m.blurb)}</p></div></div>`).join('');
 }
 $('#modeRow').addEventListener('click', e => { const t = e.target.closest('[data-mode]'); if (!t) return; const m = MODES.find(x => x.k === t.dataset.mode); if (!m || m.soon) { S.play('error'); return; } S.unlock(); show(m.go); });
@@ -1661,7 +1663,7 @@ function rndPool(f) {
   return { main, extra, mons: main.filter(isMon), st: main.filter(r => !isMon(r)), used };
 }
 function rndThemes(f) {
-  const P = rndPool(f), out = [], add = (k, name, blurb, mon, st) => { const ms = P.mons.filter(mon); if (ms.length >= 8) out.push({ k, name, blurb, mon, st, art: ms.slice().sort((a, b) => (+b.atk || 0) - (+a.atk || 0))[0].id }); };
+  const P = rndPool(f), out = [], add = (k, name, blurb, mon, st) => { const ms = P.mons.filter(mon); if (ms.length >= 8) { const srt = ms.slice().sort((a, b) => (+b.atk || 0) - (+a.atk || 0)); out.push({ k, name, blurb, mon, st, art: (srt.find(x => TILE_ART.has(+x.id)) || srt[0]).id }); } };
   for (const [r, nm] of Object.entries(RND_TYPE)) add('t:' + r, nm + ' only', `Every monster is a ${r}. Spells and Traps are anything.`, x => x.r === r);
   for (const a of ['DARK', 'LIGHT', 'EARTH', 'WATER', 'FIRE', 'WIND']) add('a:' + a, a + ' only', `Every monster is ${a}. Spells and Traps are anything.`, x => x.a === a);
   add('normal', 'Vanilla', 'Only Normal monsters, the yellow cards with no effect. Spells and Traps are anything.', x => x.k === 'normal');
@@ -1684,12 +1686,12 @@ function renderRandom(anim) {
     const el = $('#rndBody'), f = RND.f; $('#s-random').dataset.step = !f ? 'fmt' : RND.deck ? 'done' : 'theme';
     if (!f) { $('#rndTitle').textContent = 'Random and Jank';
       el.innerHTML = `<p class="dintro">A legal 40-card deck built at random from every playable card in the format, or a jank pile with a theme. Pick a format first.</p>
-        <div class="fmt-row drow">${[['goat', 'Goat', 73915051, 'Summer 2005 cards and banlist.'], ['edison', 'Edison', 44508094, 'April 2010 cards and banlist. Synchros in the Extra Deck.']].map(([k, n, a, b], i) => `<div class="fmt" data-go2="${k}"><div class="art" style="background-image:url(${artUrl(a)})"></div><span class="tg hot">${i + 1}</span><div class="txt"><h3 class="disp">${n}</h3><p>${b}</p></div></div>`).join('')}</div>`;
+        <div class="fmt-row drow">${[['goat', 'Goat', 73915051, 'Summer 2005 cards and banlist.'], ['edison', 'Edison', 44508094, 'April 2010 cards and banlist. Synchros in the Extra Deck.']].map(([k, n, a, b], i) => `<div class="fmt" data-go2="${k}">${tileBg(a)}<span class="tg hot">${i + 1}</span><div class="txt"><h3 class="disp">${n}</h3><p>${b}</p></div></div>`).join('')}</div>`;
       el.onclick = e => { const t = e.target.closest('[data-go2]'); if (!t) return; S.play('click'); RND = { f: t.dataset.go2, themes: rollThemes(t.dataset.go2), deck: null }; renderRandom(true); }; return; }
     if (!RND.deck) { $('#rndTitle').textContent = 'Pick a deck';
-      const opts = [{ k: 'random', name: 'Fully random', blurb: 'Any playable cards, 16 to 20 monsters. Anything can happen.', art: 'back' }, ...RND.themes];
+      const opts = [{ k: 'random', name: 'Fully random', blurb: 'Any playable cards, 16 to 20 monsters. Anything can happen.', art: (FM.goat.cards.find(c => c.n === 'Graceful Dice') || { id: 70781052 }).id }, ...RND.themes];
       el.innerHTML = `<div class="dsub"><span class="dpool">${f === 'goat' ? 'Goat' : 'Edison'} · three jank themes, rolled for you</span></div>
-        <div class="fmt-row drow rndrow">${opts.map((t, i) => `<div class="fmt ${anim && !REDUCED ? 'dopt in' : ''}" style="animation-delay:${i * 70}ms" data-go2="${esc(t.k)}"><div class="art" style="background-image:url(${t.art === 'back' ? 'img/back.webp' : artUrl(t.art)})"></div><span class="tg ${i ? '' : 'hot'}">${i ? 'Jank' : 'Random'} · ${i + 1}</span><div class="txt"><h3 class="disp">${esc(t.name)}</h3><p>${esc(t.blurb)}</p></div></div>`).join('')}</div>
+        <div class="fmt-row drow rndrow">${opts.map((t, i) => `<div class="fmt ${anim && !REDUCED ? 'dopt in' : ''}" style="animation-delay:${i * 70}ms" data-go2="${esc(t.k)}">${tileBg(t.art)}<span class="tg ${i ? '' : 'hot'}">${i ? 'Jank' : 'Random'} · ${i + 1}</span><div class="txt"><h3 class="disp">${esc(t.name)}</h3><p>${esc(t.blurb)}</p></div></div>`).join('')}</div>
         <div class="row"><button class="gb" id="rReroll">New themes<span class="shine"></span></button><button class="gb" id="rFmt">Change format<span class="shine"></span></button></div>`;
       el.onclick = e => { const t = e.target.closest('[data-go2]');
         if (t) { const th = RND.themes.find(x => x.k === t.dataset.go2) || null; RND.deck = buildRandom(f, th); S.play('shuffle'); renderRandom(true); return; }
@@ -1746,16 +1748,17 @@ function sealedBar() {   // the Deck Builder's bottom bar while building a seale
   $('#sAuto').onclick = () => { sealedAuto(x); B.deck = x.deck; saveSD(x); S.play('shuffle'); renderPool(); renderDeckSide(); };
   $('#sClear').onclick = () => { B.deck.main = []; B.deck.extra = []; keep(); S.play('set'); renderPool(); renderDeckSide(); };
   $('#sPacks').onclick = () => show('sealed');
+  $('#sRestart').onclick = () => sealedRestart();
   $('#sDuel').onclick = () => { keep(); const d = B.deck, probs = deckProblems(d.fmt, d); if (probs.length) { S.play('error'); toast(probs[0]); return; }
     const a = MY().filter(m => m.id !== d.id); a.unshift({ id: d.id, fmt: d.fmt, name: (d.name || 'Sealed deck').trim().slice(0, 40), main: [...d.main], extra: [...d.extra], kind: 'Sealed', pool: x.pool }); saveMY(a); S.play('summon');
     const f = d.fmt; SEL.fmt = f; show('deck'); SEL[f].you = 'my:' + d.id; PK.you = true; if (MOBILE) SEL.mtab = 'opp'; else pickingOpp = true; saveSel(); renderDecks(); };
 }
 function renderSealed(anim) {
   readyP.then(() => {
-    const x = SD(), el = $('#sealBody'); $('#s-sealed').dataset.step = !x ? 'pools' : x.opened < SEALED_PACKS ? 'open' : 'pulls';
+    const x = SD(), el = $('#sealBody'); $('#sRestartTop').hidden = !x; $('#s-sealed').dataset.step = !x ? 'pools' : x.opened < SEALED_PACKS ? 'open' : 'pulls';
     if (!x) { $('#sealTitle').textContent = 'Sealed';
       el.innerHTML = `<p class="dintro">Open ${SEALED_PACKS} packs, then build a deck of at least 40 cards from what you pulled. Each pack has 9 cards: 6 Common, 2 Rare and 1 foil, a Super Rare 5 times in 6 or an Ultra Rare 1 in 6. Ratings come from how strong each card is in the format.</p>
-        <div class="dgroups">${[...new Set(Object.values(DPOOLS).filter(P => !P.hidden).map(P => P.group))].map(g => `<div class="dgrp"><div class="ph">${esc(g)}</div><div class="fmt-row drow">${Object.entries(DPOOLS).filter(([, P]) => P.group === g && !P.hidden).map(([k, P]) => `<div class="fmt" data-spool="${k}"><div class="art" style="background-image:url(${artUrl(P.art)})"></div><span class="tg ${P.tag === 'Learn Retro mix' ? 'hot' : ''}">${esc(P.tag)}</span><div class="txt"><h3 class="disp">${esc(P.name)}</h3><p>${esc(P.blurb)}</p></div></div>`).join('')}</div></div>`).join('')}</div>`;
+        <div class="dgroups">${[...new Set(Object.values(DPOOLS).filter(P => !P.hidden).map(P => P.group))].map(g => `<div class="dgrp"><div class="ph">${esc(g)}</div><div class="fmt-row drow">${Object.entries(DPOOLS).filter(([, P]) => P.group === g && !P.hidden).map(([k, P]) => `<div class="fmt" data-spool="${k}">${tileBg(P.art)}<span class="tg ${P.tag === 'Learn Retro mix' ? 'hot' : ''}">${esc(P.tag)}</span><div class="txt"><h3 class="disp">${esc(P.name)}</h3><p>${esc(P.blurb)}</p></div></div>`).join('')}</div></div>`).join('')}</div>`;
       el.onclick = e => { const p = e.target.closest('[data-spool]'); if (!p) return; S.play('shuffle'); startSealed(p.dataset.spool); renderSealed(true); }; return; }
     const P = DPOOLS[x.pool], f = x.fmt, T = draftTiers(x.pool);
     if (x.opened < SEALED_PACKS) {
@@ -1787,3 +1790,8 @@ function renderSealed(anim) {
   });
 }
 function cardZoomRead(f, id) { const r = rec(f, id); if (!r) return; deckList(f, { name: r.n, main: [id], extra: [] }, cardMeta(r)); }
+
+// Start over (Zack, 2026-11-25): a button in the top corner of Draft and Sealed whenever a run is in progress, and in the sealed Deck Builder
+function draftRestart() { ask('Start over? This draft and its picks are lost.', 'Start over').then(y => { if (y) { saveDR(null); dSel = null; S.play('destroy'); renderDraft(true); } }); }
+function sealedRestart() { ask('Start over? These packs and the deck you built from them are lost.', 'Start over').then(y => { if (y) { saveSD(null); B.sealed = null; B.deck = null; S.play('destroy'); if (cur === 'sealed') renderSealed(true); else show('sealed'); } }); }
+$('#dRestartTop').onclick = draftRestart; $('#sRestartTop').onclick = sealedRestart;
