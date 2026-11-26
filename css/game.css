@@ -1267,3 +1267,26 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 @keyframes deckIn{0%{opacity:0;translate:0 60px;scale:.85;filter:blur(6px) brightness(1.8)}60%{filter:blur(0) brightness(1.2)}100%{opacity:1;translate:0 0;scale:1;filter:none}}
 .ddone.reveal .dinfo{animation:infoIn .6s .55s cubic-bezier(.2,.8,.2,1) both}
 @keyframes infoIn{0%{opacity:0;translate:30px 0}100%{opacity:1;translate:0 0}}
+/* ===== lighter animations (Zack, 2026-11-25: "lighten the load wherever possible") =====
+   Glows and flashes fade a fixed glow layer in and out (opacity only) instead of animating a filter, which repainted the card every frame. */
+@keyframes pRevSR{0%{transform:translateY(-30px);opacity:0}12%{transform:none;opacity:1}20%{transform:rotate(-2deg)}28%{transform:rotate(2.5deg)}36%{transform:rotate(-3deg)}44%{transform:rotate(3deg)}52%{transform:rotate(-2deg)}
+  58%{transform:scale(1.04)}75%{transform:scaleX(0) scale(1.04)}90%{transform:scale(1.08)}100%{transform:none}}
+@keyframes pRevUR{0%{transform:translateY(-40px);opacity:0}8%{transform:none;opacity:1}14%{transform:rotate(-2deg) scale(1.01)}20%{transform:rotate(3deg) scale(1.02)}26%{transform:rotate(-4deg) scale(1.03)}32%{transform:rotate(4deg) scale(1.04)}
+  38%{transform:rotate(-5deg) scale(1.05)}44%{transform:rotate(5deg) scale(1.06)}50%{transform:rotate(-5deg) scale(1.07)}56%{transform:rotate(4deg) scale(1.08)}62%{transform:scale(1.08)}78%{transform:scaleX(0) scale(1.08)}84%{transform:scale(1.22)}92%{transform:scale(.97)}100%{transform:none}}
+.pull.rv-sr::before,.pull.rv-ur::before{content:"";position:absolute;left:0;right:0;top:0;aspect-ratio:421/614;border-radius:8px;pointer-events:none;opacity:0;z-index:0}
+.pull.rv-sr::before{box-shadow:0 0 28px 8px rgba(162,122,232,.75);animation:glowSR var(--dur) var(--d) both}
+.pull.rv-ur::before{box-shadow:0 0 44px 12px rgba(255,194,74,.85);animation:glowUR var(--dur) var(--d) both}
+@keyframes glowSR{0%,15%{opacity:0}45%{opacity:.7}80%{opacity:1}100%{opacity:.55}}
+@keyframes glowUR{0%,12%{opacity:0}50%{opacity:.8}84%{opacity:1}100%{opacity:.6}}
+.pull .fc{position:relative;z-index:1}
+/* the deck fade: no blur (the most expensive thing to animate), just opacity and movement */
+@keyframes deckIn{0%{opacity:0;translate:0 60px;scale:.85}100%{opacity:1;translate:0 0;scale:1}}
+/* the foil shimmer passes three times on the opening pack or box, then rests */
+.cfp::after,.bx-front::after{animation-iteration-count:3}
+/* the wheel's bulbs blink by fading (opacity) instead of repainting their color and glow */
+@keyframes bulb{50%{opacity:.25}}
+/* long lists draw only what's on screen */
+.mcell{content-visibility:auto;contain-intrinsic-size:auto 400px}
+.mgrid.boxes .mcell{contain-intrinsic-size:auto 260px}
+.pulls .pl{content-visibility:auto;contain-intrinsic-size:auto 180px}
+.tscroll .fmt{content-visibility:auto;contain-intrinsic-size:auto 210px}

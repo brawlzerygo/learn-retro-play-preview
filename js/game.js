@@ -1,8 +1,8 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=130';
-import * as S from './sfx.js?v=130';
+import { Table } from './table.js?v=133';
+import * as S from './sfx.js?v=133';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -143,7 +143,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=130');
+const W = new Worker('js/worker.js?v=133');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -162,13 +162,14 @@ function subBack() {
   if (cur === 'sealed' && sPick) { sPick = false; renderSealed(true); return true; }
   if (cur === 'draft' && !dMenu) { const x = DR(); dMenu = true; dSel = null; if (x && DPOOLS[x.pool].classic) return (renderThemePick(x.pool), true); dPick = false; renderDraft(true); return true; }
   if (cur === 'draft' && dPick) { dPick = false; renderDraft(true); return true; }
+  if (cur === 'random' && rollStop) { rollStop(); renderRandom(true); return true; }   // the roll -> the theme list it came from
   if (cur === 'random' && RND.f) { if (RND.deck) RND.deck = null; else RND = { f: null }; renderRandom(true); return true; }
   return false;
 }
 async function goBack() { if (subBack()) { S.play('nav'); return; } if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; if (BACK[cur]) show(BACK[cur]); }
 $('#gBack').onclick = () => { S.unlock(); goBack(); };
 $('#mTabs').onclick = async e => { const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === cur) return; S.unlock(); if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; show(b.dataset.tab); };
-function show(s) { const prevScr = cur; if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') { if (prevScr !== 'deck') { PK = { you: false, cpu: false }; pickingOpp = false; SEL.mtab = 'you'; } renderDecks(); } if (s === 'format') renderFormats(); if (s === 'mode') renderModes(); if (s === 'random') { RND = { f: null }; renderRandom(true); } if (s === 'build') { if (!B.enterSealed && B.sealed) { B.sealed = null; B.deck = null; } BACK.build = B.sealed ? 'sealed' : 'title'; $('#gBack').classList.add('on'); B.enterSealed = false; B.howto = undefined; readyP.then(openBuilder); } if (s === 'sealed') { sMenu = !(prevScr === 'build' && B.sealed); renderSealed(true); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'draft') { dSel = null; dMenu = true; renderDraft(true); } if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
+function show(s) { if (s !== 'random' && typeof rollStop === 'function') rollStop(); const prevScr = cur; if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') { if (prevScr !== 'deck') { PK = { you: false, cpu: false }; pickingOpp = false; SEL.mtab = 'you'; } renderDecks(); } if (s === 'format') renderFormats(); if (s === 'mode') renderModes(); if (s === 'random') { RND = { f: null }; renderRandom(true); } if (s === 'build') { if (!B.enterSealed && B.sealed) { B.sealed = null; B.deck = null; } BACK.build = B.sealed ? 'sealed' : 'title'; $('#gBack').classList.add('on'); B.enterSealed = false; B.howto = undefined; readyP.then(openBuilder); } if (s === 'sealed') { sMenu = !(prevScr === 'build' && B.sealed); renderSealed(true); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'draft') { dSel = null; dMenu = true; renderDraft(true); } if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); }
 // browsers keep a page silent until the first click, tap or key press (hovering doesn't count): turn sound on at the very first one, anywhere
 for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, () => S.unlock(), { capture: true, passive: true });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { S.unlock(); show(b.dataset.go); } const h = e.target.closest('[data-href]'); if (h) open(h.dataset.href, '_blank'); });
@@ -1910,24 +1911,24 @@ function contCard(P, theme, where, mode) {
 
 // pack and box art: our own Learn Retro designs, colored by the pack's theme, Type or Attribute (no Konami pack art)
 function packCode(P, pt) { return 'LR-' + (/\s/.test(P.name) ? (P.name.match(/\b[A-Z]/g) || ['X']).join('').slice(0, 3) : P.name.slice(0, 4).toUpperCase()) + (pt && pt.k !== 'core' ? '-' + pt.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() : ''); }
-const artSrc = id => TILE_ART.has(+id) ? `assets/art/${id}.webp` : artUrl(id);
+const artSrc = (id, small) => TILE_ART.has(+id) ? `assets/art/${small ? 's/' : ''}${id}.webp` : artUrl(id);   // small: 300 px copies for the pack page's small packs and boxes
 // Classic Foil packs and boxes (Zack, 2026-11-25: "i love classic foil"): our own 2002-style booster, a silver foil wrapper with a band in the
 // pack's color, crimped ends, the art in a chrome frame, a name plate and a starburst for the card count. Drawn at 260x420 (pack) and 420x280
 // (box front) and scaled to fit (--k), so the web and the PWA share one design.
 function packHTML(P, pt, anim, n) { return `<div class="pack ${anim && !REDUCED ? 'in' : ''}" id="sPack">${packFace(P, pt, n)}</div>`; }
-function packFace(P, pt, n) {
+function packFace(P, pt, n, small) {
   const kind = pt.k === 'core' ? 'Core pack' : pt.sub, name = pt.k === 'core' ? P.name : pt.name;
   return `<div class="cfp" style="--pc:${pt.col}"><div class="cf-brush"></div><div class="cf-band"></div><div class="cf-crimp t"></div><div class="cf-tear">Tear here</div><div class="cf-logo">Learn<b>Retro</b></div>
-    <div class="cf-win">${pt.art ? `<div class="art" style="background-image:url(${artSrc(pt.art)})"></div>` : '<div class="art mys">?</div>'}<i class="rv tl"></i><i class="rv tr"></i><i class="rv bl"></i><i class="rv br"></i></div><div class="cf-seal">LR</div>
+    <div class="cf-win">${pt.art ? `<div class="art" style="background-image:url(${artSrc(pt.art, small)})"></div>` : '<div class="art mys">?</div>'}<i class="rv tl"></i><i class="rv tr"></i><i class="rv bl"></i><i class="rv br"></i></div><div class="cf-seal">LR</div>
     <div class="cf-burst">${n || '?'}<br>cards</div><div class="cf-plate"><h3>${esc(name)}</h3><div>${esc(kind)} · ${esc(P.name)}</div></div>
     <div class="cf-foot"><span>${pt.art ? packCode(P, pt) : 'LR-????'}</span><span>${esc(P.name)}</span></div><div class="cf-crimp b"></div></div>`;
 }
 function boxHTML(P, anim, b) { return `<div class="bbox ${anim && !REDUCED ? 'in' : ''}" id="sBox">${boxFace(P, b)}</div>`; }
-function boxFace(P, b) {
+function boxFace(P, b, small) {
   b = b || { name: 'Booster box', art: P.art, col: '#ff6a1f' };
   const cards = b.cards ? `${SEALED_PACKS} packs · ${b.cards} cards` : `${SEALED_PACKS} packs`;
   return `<div class="cfb" style="--pc:${b.col}"><div class="bx-shadow"></div><div class="bx-top"><i></i><b>Learn<em>Retro</em></b></div><div class="bx-side"><span>Booster box · ${SEALED_PACKS} packs</span></div>
-    <div class="bx-front"><div class="cf-brush"></div><div class="cf-band"></div><div class="cf-win">${b.art ? `<div class="art" style="background-image:url(${artSrc(b.art)})"></div>` : '<div class="art mys">?</div>'}<i class="rv tl"></i><i class="rv tr"></i><i class="rv bl"></i><i class="rv br"></i></div><div class="cf-seal">LR</div>
+    <div class="bx-front"><div class="cf-brush"></div><div class="cf-band"></div><div class="cf-win">${b.art ? `<div class="art" style="background-image:url(${artSrc(b.art, small)})"></div>` : '<div class="art mys">?</div>'}<i class="rv tl"></i><i class="rv tr"></i><i class="rv bl"></i><i class="rv br"></i></div><div class="cf-seal">LR</div>
       <div class="bx-lid"></div><div class="cf-logo">Learn<b>Retro</b></div><div class="bx-label">${esc(b.name).replace(/ box$/, '<br>box')}</div>
       <div class="cf-plate"><h3>${esc(P.name)}</h3><div>${cards}</div></div><div class="cf-burst">10<br>packs</div></div></div>`;
 }
@@ -1966,11 +1967,11 @@ function renderPackPick(pk) {
   const boxCards = b => { if (b.mystery) return null; const ks = b.packs(); return ks.reduce((a, k) => a + packSlots(types.find(t => t.k === k) || types[0]).length, 0); };
   const t = total();
   const packCell = pt => { const n = sMix.n[pt.k] || 0, cap = PACK_CAP[pt.str || 0];
-    return `<div class="mcell ${n ? 'on' : ''}" data-pack="${esc(pt.k)}"><div class="mpack">${packFace(P, pt, packSlots(pt).length)}</div>
+    return `<div class="mcell ${n ? 'on' : ''}" data-pack="${esc(pt.k)}"><div class="mpack">${packFace(P, pt, packSlots(pt).length, true)}</div>
       <div class="mtag">${pt.str ? `<span class="pstr s${pt.str}">${pt.str === 2 ? 'Very strong' : 'Strong'} · max ${cap}</span>` : `<span class="mk">${esc(pt.k === 'core' ? 'Core pack' : pt.sub)}</span>`}</div>
       <p>${esc(pt.blurb)}</p>
       <div class="pcount"><button class="pm" data-dec="${esc(pt.k)}" ${n ? '' : 'disabled'}>−</button><b>${n}</b><button class="pm" data-inc="${esc(pt.k)}" ${n >= cap || t >= SEALED_PACKS ? 'disabled' : ''}>+</button></div></div>`; };
-  const boxCell = b => { const n = boxCards(b); return `<div class="mcell box" data-box="${esc(b.k)}"><div class="mbox">${boxFace(P, { ...b, cards: n })}</div><p>${esc(b.blurb)}</p></div>`; };
+  const boxCell = b => { const n = boxCards(b); return `<div class="mcell box" data-box="${esc(b.k)}"><div class="mbox">${boxFace(P, { ...b, cards: n }, true)}</div><p>${esc(b.blurb)}</p></div>`; };
   const x = SD(), cont = x && x.pool === pk ? contCard(P, '', !x.boxOpen ? `${x.box || 'Box'}, not opened yet` : x.opened < SEALED_PACKS ? `Pack ${x.opened + 1} of ${SEALED_PACKS}` : 'Packs open, deck in progress', 'Sealed') : '';
   $('#sealBody').innerHTML = `<div class="tscroll">${cont}<p class="dintro">Open a box, or mix your own ${SEALED_PACKS} packs. Strong packs have fewer cards and a limit per mix.</p>
       <div class="dgrp"><div class="ph big">Packs<span>Mix your own ${SEALED_PACKS}: tap a pack to add it</span></div><div class="mgrid packs">${types.map(packCell).join('')}</div></div>
@@ -1978,7 +1979,13 @@ function renderPackPick(pk) {
       <div class="dgrp"><div class="ph big">Theme boxes<span>Built around one theme, balanced to the same power</span></div><div class="mgrid boxes">${boxes.filter(b => b.k.startsWith('tb:')).map(boxCell).join('')}</div></div></div>
     <div class="mixbar"><div class="mx-n"><b>${t}</b> of ${SEALED_PACKS} packs · ${cards()} cards</div><div class="dprog">${Array.from({ length: SEALED_PACKS }, (_, i) => `<i class="${i < t ? 'f' : ''}"></i>`).join('')}</div>
       <button class="gb" id="mixClear" ${t ? '' : 'disabled'}>Clear<span class="shine"></span></button><button class="gb pri" id="mixGo" ${t === SEALED_PACKS ? '' : 'disabled'}>${t === SEALED_PACKS ? 'Open your packs' : `Pick ${SEALED_PACKS - t} more`}<span class="shine"></span></button></div>`;
-  const redraw = () => { const sc = $('#sealBody .tscroll'), top = sc ? sc.scrollTop : 0, wy = scrollY; renderPackPick(pk); const s2 = $('#sealBody .tscroll'); if (s2) s2.scrollTop = top; scrollTo(0, wy); };
+  // a tap changes only the counters and the bar (rebuilding ~32 detailed packs and boxes on every tap made phones work hard)
+  const redraw = () => { const tt = total();
+    for (const pt of types) { const cell = $(`#sealBody .mcell[data-pack="${CSS.escape(pt.k)}"]`); if (!cell) continue; const n = sMix.n[pt.k] || 0, cap = PACK_CAP[pt.str || 0];
+      cell.classList.toggle('on', n > 0); cell.querySelector('.pcount b').textContent = n; cell.querySelector('[data-dec]').disabled = !n; cell.querySelector('[data-inc]').disabled = n >= cap || tt >= SEALED_PACKS; }
+    const bar = $('#sealBody .mixbar'); bar.querySelector('.mx-n').innerHTML = `<b>${tt}</b> of ${SEALED_PACKS} packs · ${cards()} cards`;
+    bar.querySelectorAll('.dprog i').forEach((i, j) => i.classList.toggle('f', j < tt)); $('#mixClear').disabled = !tt;
+    const g = $('#mixGo'); g.disabled = tt !== SEALED_PACKS; g.innerHTML = (tt === SEALED_PACKS ? 'Open your packs' : `Pick ${SEALED_PACKS - tt} more`) + '<span class="shine"></span>'; };
   const newRun = async () => !SD() || await ask('Start new packs? Your unfinished sealed run is lost.', 'Start new');
   $('#sealBody').onclick = async e => {
     if (e.target.closest('[data-cont]')) { sMenu = false; sPick = false; S.play('click'); return renderSealed(true); }
@@ -2012,6 +2019,7 @@ const SHOW = { 1: [0, 0], 6: [0, 180], 3: [0, -90], 4: [0, 90], 2: [-90, 0], 5: 
 const ease = t => 1 - Math.pow(1 - t, 3);
 function confetti(host, n = 26) { const cols = ['#ff6a1f', '#ffd23f', '#47c47a', '#3a9ee8', '#9b5de5', '#fff']; for (let i = 0; i < n; i++) { const c = document.createElement('i'); c.className = 'cfti'; const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 180;
   c.style.cssText = `--x:${Math.cos(a) * d}px;--y:${Math.sin(a) * d - 80}px;--r:${Math.random() * 720 - 360}deg;background:${cols[i % cols.length]};animation-delay:${Math.random() * 80}ms`; host.appendChild(c); setTimeout(() => c.remove(), 1600); } }
+var rollStop = null;   // var, not let: show() checks it before this line has run
 function rollFullyRandom(f) {
   const forced = +new URLSearchParams(location.search).get('roll');
   const el = $('#rndBody'), themes = RND.themes, roll = forced >= 1 && forced <= 6 ? forced : 1 + Math.floor(Math.random() * 6);
@@ -2019,7 +2027,9 @@ function rollFullyRandom(f) {
   const pick = cat[1].length ? cat[1][Math.floor(Math.random() * cat[1].length)] : null;
   let done = false, raf = 0; const timers = [];
   const later = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
-  const finish = () => { if (done) return; done = true; timers.forEach(clearTimeout); cancelAnimationFrame(raf); RND.deck = buildRandom(f, pick); RND.deck.rolled = { roll, cat: cat[0] }; renderRandom(true); };
+  const stop = () => { done = true; timers.forEach(clearTimeout); cancelAnimationFrame(raf); rollStop = null; };
+  rollStop = stop;   // leaving mid-roll (Back, a tab) stops its timers and frame loop
+  const finish = () => { if (done) return; stop(); RND.deck = buildRandom(f, pick); RND.deck.rolled = { roll, cat: cat[0] }; renderRandom(true); };
   if (REDUCED) return finish();
   const gd = (FM.goat.cards.find(c => c.n === 'Graceful Dice') || {}).id;
   $('#rndTitle').textContent = 'Roll for your deck';
