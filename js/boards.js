@@ -11,7 +11,7 @@
 
    Boards: arena (Arena Lights), rewind (Rewind), rune (Runestone). Pick with ?mat=<id> or Settings (lrplay:set mat). */
 import * as THREE from '../vendor/three.module.min.js';
-import { ICONS } from './icons.js?v=166';
+import { ICONS } from './icons.js?v=167';
 
 const B = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 const CW = 0.6, CH = 0.875, ZW = CW + 0.08, ZH = CH + 0.08;
@@ -598,17 +598,6 @@ export class Board {
       this.reels = [-2.3, 2.3].map(x => { const r = new THREE.Mesh(new THREE.CircleGeometry(0.25, 48), new THREE.MeshBasicMaterial({ map: this.reelTex(), transparent: true })); r.rotation.x = -Math.PI / 2; r.position.copy(B(x, 0, 0.0016)); this.root.add(r); return r; });
       const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.0), new THREE.MeshBasicMaterial({ map: glowTex(256, 256, 60, 120), color: 0xff5b1f, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
       glow.rotation.x = -Math.PI / 2; glow.position.copy(B(0, 0, 0.0014)); glow.visible = false; this.root.add(glow); this.flares[1].push(glow); this.flares[-1].push(glow);
-      // the den's CRT behind the computer's side: a blue PLAY screen that flashes on big summons and hits, glowing on the floor
-      { const x = -2.5, y = SH / 2 + 1.05, cam = this.T.camera.position;
-        const tv = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.9, 0.9), new THREE.MeshLambertMaterial({ color: 0x2e2824 })); tv.position.copy(B(x, y, 0.45)); tv.rotation.y = -0.15; this.root.add(tv);
-        const c = document.createElement('canvas'); c.width = 320; c.height = 240; const g = c.getContext('2d');
-        g.fillStyle = '#1b38b8'; g.fillRect(0, 0, 320, 240); g.fillStyle = '#e8eeff'; g.font = '700 44px "Atkinson Hyperlegible", sans-serif'; g.fillText('PLAY', 30, 70); g.beginPath(); g.moveTo(150, 36); g.lineTo(186, 54); g.lineTo(150, 72); g.closePath(); g.fill();
-        g.font = '700 24px "Atkinson Hyperlegible", sans-serif'; g.fillText('SP  0:42:10', 30, 210); for (let yy = 0; yy < 240; yy += 4) { g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(0, yy, 320, 2); }
-        const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
-        const screen = (map, o) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 0.62), new THREE.MeshBasicMaterial(Object.assign({ map, transparent: true, depthWrite: false }, o))); m.position.copy(B(x + 0.05, y - 0.46, 0.47)); m.lookAt(cam.x, m.position.y + (cam.y - m.position.y) * 0.25, cam.z); this.root.add(m); return m; };
-        screen(tx, {}); const fl = screen(null, { color: 0xffffff, opacity: 0, blending: THREE.AdditiveBlending }); fl.visible = false;
-        const pool = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.6), new THREE.MeshBasicMaterial({ map: glowTex(256, 192, 60, 90), color: 0x3a6bff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false })); pool.rotation.x = -Math.PI / 2; pool.position.copy(B(x, y - 0.95, 0.003)); this.root.add(pool);
-        this.wfx.push(kind => { if (kind !== 'big' && kind !== 'hit') return; fl.visible = true; this.T.tween(500, k => { fl.material.opacity = 0.8 * (k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85); }).then(() => { fl.material.opacity = 0; fl.visible = false; }); }); }
     } else {
       // standing stones at the corners: their carved rune lights for the turn player and flares on big summons
       const stone = new THREE.MeshLambertMaterial({ color: 0x3a4044 }); this.stones = { 1: [], '-1': [] };
