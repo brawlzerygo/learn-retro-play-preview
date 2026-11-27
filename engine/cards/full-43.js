@@ -76,7 +76,8 @@ const lockInstall = { type: 'trig', loc: 'any', res: noop,
 // Revoke Fusion: the Fusion Material Monsters a Fusion names
 // the printed recipe (tx): the PSCT line (ps) of some Fusions leaves the materials out
 const matNames = fx => [...((D(fx).tx || D(fx).ps || '').split(/\r?\n/)[0].matchAll(/"([^"]+)"/g))].map(m => m[1]);
-const revokeHand = (g, p, fx) => { const ns = matNames(fx); return g.p[p].hand.filter(x => isMon(x) && ns.includes(D(x).n) && D(x).k !== 'ritual' && canSS(g, p, x)); };
+// names compared without case: Air Neos prints "Elemental Hero Neos" for Elemental HERO Neos
+const revokeHand = (g, p, fx) => { const ns = matNames(fx).map(n => n.toLowerCase()); return g.p[p].hand.filter(x => isMon(x) && ns.includes(D(x).n.toLowerCase()) && D(x).k !== 'ritual' && canSS(g, p, x)); };
 const revokeFx = (g, p) => g.p[p].extra.filter(fx => D(fx).k === 'fusion' && revokeHand(g, p, fx).length > 0);
 // Roll Out!: the monsters a Union monster's text lets it equip to
 const isUnion = c => isMon(c) && /Union/.test(D(c).ab || '');
@@ -96,6 +97,8 @@ function roadMats(g, p, sx) {
   }
   return out;
 }
+// 0 DEF, not "?" (ruling)
+const zeroDef = x => /^\s*0\s*$/.test(String(D(x).def));
 const isEI = x => /^Earthbound Immortal/.test(name(x));
 
 E.addScripts({
@@ -145,8 +148,8 @@ E.addScripts({
     cost: function* (g, c, p) { log(g, `${PN(g, p)} revealed Iron Core of Koa'ki Meiru.`); },
     res: function* (g, c, p) { destroy(g, stOf(g, opp(p)).filter(x => x.pos === 'set'), { by: p, src: c }); } }] },
   'Recurring Nightmare': { effs: [{ type: 'act',
-    cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK' && num(D(x).def) === 0).length >= 2,
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which 2 DARK monsters with 0 DEF to your hand?', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK' && num(D(x).def) === 0), 2, 2, 'good'); },
+    cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK' && zeroDef(x)).length >= 2,
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which 2 DARK monsters with 0 DEF to your hand?', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK' && zeroDef(x)), 2, 2, 'good'); },
     res: function* (g, c, p, L2) { for (const x of L2.t.filter(x => x.zone === 'gy')) { move(g, x, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${D(x).n} to the hand.`); } } }] },
   'Recycling Batteries': { effs: [{ type: 'act',
     cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && race(x) === 'Thunder' && baseAtk(x) <= 1500).length >= 2,
@@ -208,10 +211,11 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.to === 'gy' && ev.c !== c && ev.prevCtrl === c.ctrl && ev.snap && /roid/.test(ev.snap.name),
     res: function* (g, c, p, L2) { const x = L2.ev.c; if (x.zone !== 'gy') return; move(g, x, isExtraD(D(x)) ? 'extra' : 'hand', { reason: 'effect', by: p });
       log(g, `${D(x).n} returned to ${isExtraD(D(x)) ? 'the Extra Deck' : 'the hand'}.`); } }] },
-  // ENGINE: no Arcana Force monster has a coin-toss script yet; the reversal is kept as a flag (c.flags.coinReversed) for them.
+  // The Arcana Force scripts (full-29.js) keep their coin result in c.flags.arc ('H' or 'T'); this swaps it while the monster stays
+  // face-up (a move clears the flags). PARTIAL: The Chariot turned to Tails this way does not change control.
   'Reversal of Fate': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && /^Arcana Force/.test(name(x))),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Select which Arcana Force monster?', monsOf(g, p).filter(x => faceUp(x) && /^Arcana Force/.test(name(x))), 1, 1, 'good'); },
-    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { t.flags.coinReversed = !t.flags.coinReversed; log(g, `${name(t)}'s coin toss result is now the opposite.`); } } }] },
+    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { if (t.flags.arc) t.flags.arc = t.flags.arc === 'H' ? 'T' : 'H'; t.flags.coinReversed = !t.flags.coinReversed; g.seq++; log(g, `${name(t)}'s coin toss result is now the opposite.`); } } }] },
   // ENGINE: no response window right after a destruction, so it is an optional trigger from the hand (your turn) or while Set.
   'Reverse of Neos': { effs: [lateAct({ qp: true, label: 'Special Summon Elemental HERO Neos', tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'move' && ev.destroyed && ev.wasField && ev.snap && ev.snap.faceUp && ev.prevCtrl === c.owner && D(ev.c).k === 'fusion' && /Neos/.test(ev.snap.name),
@@ -438,12 +442,15 @@ E.addScripts({
       if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
     res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
   // ENGINE: no response window right after a destruction, so it is an optional trigger while Set.
-  // PARTIAL: the 3 locked zones are the first 3 free ones, and the lock only stops a Set or an activation from the hand when every
-  // free zone is locked (the engine picks the zone a card lands in). The Dinosaur is chosen when it destroys itself.
+  // PARTIAL: the lock is kept as a count (see the forbid below), since the engine picks the zone a card lands in. The Dinosaur is
+  // chosen when it destroys itself.
   'Seismic Shockwave': {
     cont: { forbid: (g, src, a) => { if (!src.f43zones || !a.c || a.p !== opp(src.ctrl)) return false;
       const fromHandST = (a.type === 'setST' || (a.type === 'activate' && a.eff && a.eff.type === 'act' && a.c.zone === 'hand')) && isST(a.c) && D(a.c).sub !== 'Field';
-      if (!fromHandST) return false; const st = g.p[a.p].st; return st.every((z, i) => z || src.f43zones.includes(i)); } },
+      if (!fromHandST) return false;
+      // PARTIAL: the engine picks the zone a card goes to, so the lock is kept as a count: the opponent keeps at least as many
+      // empty zones as were locked.
+      return g.p[a.p].st.filter(z => !z).length <= src.f43zones.length; } },
     effs: [lateAct({ keep: true, label: 'Lock 3 of your opponent’s Spell and Trap Zones',
       on: (g, ev, c) => !g.inDS && ev.type === 'move' && ev.destroyed && ev.to === 'gy' && ev.wasField && ev.snap && ev.snap.faceUp && ev.prevCtrl === c.ctrl && ev.snap.race === 'Dinosaur',
       res: function* (g, c, p) { const st = g.p[opp(p)].st; c.f43zones = st.map((z, i) => z ? -1 : i).filter(i => i >= 0).slice(0, 3); c.f43n = 0; g.seq++;

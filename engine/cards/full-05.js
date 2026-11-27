@@ -233,8 +233,9 @@ E.addScripts({
       cond: g => allField(g).length > 0,
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which card?', allField(g), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
+  // Original 2004/2010 text: no once-per-turn on the End Phase Spell return (added by later errata).
   'Dark Magician of Chaos': { effs: [
-    { type: 'trig', opt: true, label: 'Add a Spell from the GY',
+    { type: 'trig', label: 'Add a Spell from the GY',
       on: (g, ev, c) => { if (evSummoned(ev, c) && ev.how !== 'flip') { c.flags.dmoc = g.turnNo; c.flags.banishOnLeave = true; } if (ev.type === 'flip' && ev.c === c) c.flags.banishOnLeave = true; return ev.type === 'phase' && ev.ph === 'end' && c.flags.dmoc === g.turnNo; },
       cond: (g, c, p) => g.p[p].gy.some(isSpell),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which Spell from your GY to your hand?', g.p[p].gy.filter(isSpell), 1, 1, 'good'); },

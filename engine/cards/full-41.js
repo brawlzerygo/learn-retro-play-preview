@@ -125,6 +125,8 @@ E.addScripts({
   'Man Beast of Ares': { effs: [{ type: 'trig', res: noop,
     on: (g, ev, c) => {
       if (g.chain.length >= 2 || (g.resolvingL && g.resolvingL.link >= 2)) c.flags.f41chain = true;
+      // a resolved Spell/Trap link leaving for the GY while another link still waits: the chain had 2 or more links
+      else if (g.chain.length >= 1 && ev.type === 'move' && ev.reason === 'rule' && ev.from === 'st' && ev.to === 'gy') c.flags.f41chain = true;
       else if (c.flags.f41chain && !g.chain.length && !g.resolvingL) { c.flags.f41chain = false; addMod(g, c, { atk: 500 }); log(g, 'Man Beast of Ares gained 500 ATK.'); }
       return false; } }] },
 
@@ -324,11 +326,11 @@ E.addScripts({
       L2.data.n = atk(g, x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n} (${L2.data.n} ATK).`); },
     res: function* (g, c, p, L2) { const xs = fieldMons(g).filter(m => faceUp(m) && def(g, m) <= L2.data.n); if (xs.length) destroy(g, xs, { by: p }); } }] },
 
-  // Port of full-25.js's Goat "Morphing Jar #2". Tokens vanish, Fusions and Synchros go to the Extra Deck, and neither counts.
+  // Port of full-25.js's Goat "Morphing Jar #2". This card stays on the field and does not count (Edison rulings). Tokens vanish, Fusions and Synchros go to the Extra Deck, and neither counts.
   'Morphing Jar 2': { effs: [flip('Shuffle every monster into the Deck', {
     res: function* (g, c, p) {
       const n = [0, 0]; const grp = g.group;
-      for (const m of fieldMons(g)) { const tok = D(m).k === 'token', ex = isExtraD(D(m)); const o = m.owner; move(g, m, 'deck', { reason: 'effect', by: p, group: grp }); if (!tok && !ex) n[o]++; }
+      for (const m of fieldMons(g)) { if (m === c) continue; const tok = D(m).k === 'token', ex = isExtraD(D(m)); const o = m.owner; move(g, m, 'deck', { reason: 'effect', by: p, group: grp }); if (!tok && !ex) n[o]++; }
       for (const q of [0, 1]) shuffleDeck(g, q);
       log(g, 'Every monster on the field was shuffled into the Deck.');
       for (const q of [g.tp, opp(g.tp)]) {
@@ -380,7 +382,9 @@ E.addScripts({
     cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, opp(p)).some(m => faceUp(m) && m.pos === 'atk' && !has(g, m, 'cantAttack')),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Take control of which Attack Position monster?', monsOf(g, opp(p)).filter(m => faceUp(m) && m.pos === 'atk' && !has(g, m, 'cantAttack')), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || t.pos !== 'atk' || t.ctrl === p) return;
-      if (takeControl(g, p, t, true)) { t.flags.f41mind = t.owner; t.attacks = 0; if (g.aw && g.aw.a === c) { negateAttack(g); log(g, `${name(t)} attacks instead of Mutant Mindmaster.`); } } } },
+      if (takeControl(g, p, t, true)) { t.flags.f41mind = t.owner; t.attacks = 0;
+        // PARTIAL: "It can't attack your opponent directly": with no monster to attack it can't attack at all
+        addRule(g, (g2, a) => a.type === 'attack' && a.c === t && t.flags.f41mind != null && !monsOf(g2, opp(t.ctrl)).length, { end: g.turnNo }); if (g.aw && g.aw.a === c) { negateAttack(g); log(g, `${name(t)} attacks instead of Mutant Mindmaster.`); } } } },
     { type: 'trig', loc: 'any', res: noop, on: (g, ev) => { if (ev.type === 'phase' && ev.ph === 'bpEnd') for (const m of fieldMons(g)) if (m.flags.f41mind != null) { const o = m.flags.f41mind; m.flags.f41mind = null; giveBack(g, m, o); } return false; } }] },
 
   'Mythical Beast Cerberus': { self: { atk: (g, c) => 500 * ctr(c, 'spell') },

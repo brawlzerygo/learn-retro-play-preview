@@ -279,9 +279,11 @@ function destroy(g, cards, o = {}) {
     // so "unaffected by Traps" monsters like Wildheart were still destroyed)
     const src = o.src || (!o.battle && !o.rule && g.resolvingL ? g.resolvingL.c : null);
     if (!o.battle && src && faceUp(c) && isST(src) && has(g, c, isSpell(src) ? 'unaffectedSpells' : 'unaffectedTraps')) continue;
-    move(g, c, o.banish ? 'ban' : 'gy', { reason: o.battle ? 'battle' : 'effect', destroyed: true, battle: !!o.battle, killer: o.killer, by: o.by, group, noLater: true });
     out.push(c);
   }
+  // cards destroyed together leave together: every protection is checked first, while all of them are still on the field
+  // (2026-11-26: a Dark Hole that removed The Lady in Wight or Orichalcos Shunoros first also destroyed what they protect)
+  for (const c of out) move(g, c, o.banish ? 'ban' : 'gy', { reason: o.battle ? 'battle' : 'effect', destroyed: true, battle: !!o.battle, killer: o.killer, by: o.by, group, noLater: true });
   flushLater(g, group);
   if (out.length && !o.quietLog) log(g, `${out.map(x => x.snapName || name(x)).join(', ')} ${out.length > 1 ? 'were' : 'was'} destroyed${o.banish ? ' and banished' : ''}.`);
   return out;
@@ -833,9 +835,8 @@ function* damageStep(g, a, t) {
   let killA = false, killT = false, dmgTo = null, dmg = 0;
   const tDef = t && t.pos !== 'atk';
   if (!t) { dmgTo = op; dmg = A; }
-  else if (t.pos === 'atk') { const T = stat(g, t, 'atk'); if (A > T) { killT = true; dmgTo = op; dmg = A - T; } else if (A < T) { killA = true; dmgTo = tp; dmg = T - A; } else if (A > 0 || T === 0) { killA = killT = A > 0 || true; if (A === 0 && T === 0) killA = killT = true; } }
+  else if (t.pos === 'atk') { const T = stat(g, t, 'atk'); if (A > T) { killT = true; dmgTo = op; dmg = A - T; } else if (A < T) { killA = true; dmgTo = tp; dmg = T - A; } else if (A > 0) { killA = killT = true; } }   // equal ATK: both destroyed, but two 0 ATK monsters both survive (2026-11-26)
   else { const Dv = stat(g, t, 'def'); if (A > Dv) { killT = true; if (pierce(a)) { dmgTo = op; dmg = A - Dv; } } else if (A < Dv) { dmgTo = tp; dmg = Dv - A; } }
-  if (t && t.pos === 'atk' && A === stat(g, t, 'atk') && A === 0) { killA = killT = true; }
   if (dmgTo != null && noDmg(dmgTo, a, t)) dmg = 0;
   if (dmg > 0) damage(g, dmgTo, dmg, { battle: true, src: dmgTo === op ? a : t, srcP: 1 - dmgTo, direct: !t });
   const victims = [];

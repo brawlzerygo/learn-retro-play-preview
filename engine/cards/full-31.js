@@ -206,10 +206,11 @@ E.addScripts({
     ddUse('m'), ddUse('gy'), ddUse('ban'), ddUse('hand')] },
   'Destiny HERO - Disk Commander': { effs: [lockEff,
     { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c) { if (ev.to === 'gy') c.f31gyT = g.turnNo; if (ev.to === 'm' && ev.from === 'gy') c.flags.fromGY = true; } return false; } },
-    { type: 'trig', label: 'Draw 2 cards (once per Duel)',
-      on: (g, ev, c) => evSummoned(ev, c) && ev.byEffect && !!c.flags.fromGY && !(g.f31disk && g.f31disk[c.ctrl]),
-      cond: (g, c, p) => g.p[p].deck.length > 0 && !(g.f31disk && g.f31disk[p]),
-      cost: function* (g, c, p) { (g.f31disk || (g.f31disk = {}))[p] = true; },
+    // Original 2006/2010 text: "When this card is Special Summoned from the Graveyard, draw 2 cards." No once-per-Duel
+    // limit (added by later errata), and the draw is mandatory.
+    { type: 'trig', mand: true, label: 'Draw 2 cards',
+      on: (g, ev, c) => evSummoned(ev, c) && ev.byEffect && !!c.flags.fromGY,
+      cond: (g, c, p) => g.p[p].deck.length > 0,
       res: function* (g, c, p) { draw(g, p, 2); } }] },
   // Special Summoned from the hand by Tributing 3 monsters including a Destiny HERO. In the opponent's next Standby Phase, if
   // it is still face-up: halve their LP (mandatory).

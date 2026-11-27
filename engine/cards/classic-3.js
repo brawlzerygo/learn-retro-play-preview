@@ -209,11 +209,15 @@ E.addScripts({
   'Maha Vailo': { self: { atk: (g, c) => 500 * allField(g).filter(x => x.zone === 'st' && x.equipTo === c.u).length } },
 
   // ENGINE: a Trap can't be activated from the hand. PARTIAL: the effect Sets 1 Trap from your hand, and it can be activated this turn.
-  'Makyura the Destructor': { effs: [{ type: 'trig', loc: 'gy', opt: true, label: 'Ready a Trap from the hand',
-    on: (g, ev, c) => fromFieldToGY(ev, c) && ev.from === 'm',
+  // Original 2005 text: "When this card is destroyed and sent to the Graveyard, you can activate Trap Cards from your hand
+  // during the turn it was destroyed." So: only when destroyed, any number of Traps, no once-per-turn (all later errata).
+  'Makyura the Destructor': { effs: [{ type: 'trig', loc: 'gy', label: 'Ready Traps from the hand',
+    on: (g, ev, c) => fromFieldToGY(ev, c) && ev.from === 'm' && !!ev.destroyed,
     cond: (g, c, p) => freeST(g, p) >= 0 && g.p[p].hand.some(isTrap),
-    res: function* (g, c, p) { if (freeST(g, p) < 0) return; const [x] = yield* pick(g, p, 'Which Trap do you want to be able to activate this turn?', g.p[p].hand.filter(isTrap), 1, 1, 'good');
-      if (!x) return; move(g, x, 'st', { ctrl: p, pos: 'set', reason: 'set' }); x.turnIn = g.turnNo - 1; log(g, `${PN(g, p)} Set a Trap from the hand. It can be activated this turn.`); } }] },
+    res: function* (g, c, p) { const n = 5 - g.p[p].st.filter(Boolean).length; if (n <= 0) return;
+      const xs = yield* pick(g, p, 'Which Traps do you want to be able to activate this turn?', g.p[p].hand.filter(isTrap), 1, Math.min(n, g.p[p].hand.filter(isTrap).length), 'good');
+      let k = 0; for (const x of xs) { if (freeST(g, p) < 0) break; move(g, x, 'st', { ctrl: p, pos: 'set', reason: 'set' }); x.turnIn = g.turnNo - 1; k++; }
+      if (k) log(g, `${PN(g, p)} Set ${k === 1 ? 'a Trap' : k + ' Traps'} from the hand. They can be activated this turn.`); } }] },
 
   'Mudora': { self: { atk: (g, c) => 200 * g.p[c.ctrl].gy.filter(x => isMon(x) && race(x) === 'Fairy').length } },
 

@@ -378,8 +378,9 @@ E.addScripts({
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
   'Lightsworn Barrier': { effs: [actNoop,
     { type: 'quick', loc: 'st', label: 'Send the top 2 cards: negate the attack',
-      cond: (g, c, p) => !!g.aw && !!g.aw.t && g.aw.t.ctrl === p && isLS(g.aw.t) && g.aw.a.ctrl !== p && g.p[p].deck.length >= 2,
-      cost: function* (g, c, p) { const xs = g.p[p].deck.slice(-2).reverse(); for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${xs.map(x => D(x).n).join(', ')} from the Deck to the GY.`); },
+      // once per attack: it answers the attack being targeted, so it can't be chained to itself again and again
+      cond: (g, c, p) => !!g.aw && !!g.aw.t && g.aw.t.ctrl === p && isLS(g.aw.t) && g.aw.a.ctrl !== p && g.p[p].deck.length >= 2 && !(g.aw.f40lb || []).includes(c.u),
+      cost: function* (g, c, p) { g.aw.f40lb = (g.aw.f40lb || []).concat(c.u); const xs = g.p[p].deck.slice(-2).reverse(); for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${xs.map(x => D(x).n).join(', ')} from the Deck to the GY.`); },
       target: function* (g, c, p, L2) { L2.t = [g.aw.a]; },
       res: function* (g, c, p, L2) { const a = L2.t[0]; if (g.aw && g.aw.a === a && onField(a)) negateAttack(g); } }] },
   'Lightsworn Sabre': { cont: { atk: (g, src, m) => src.equipTo === m.u ? 700 : 0 },

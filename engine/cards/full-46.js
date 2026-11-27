@@ -257,8 +257,10 @@ E.addScripts({
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[opp(p)].gy.some(x => isMon(x) && race(x) === 'Dragon'),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Dragon from your opponent\'s GY?', g.p[opp(p)].gy.filter(x => isMon(x) && race(x) === 'Dragon'), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
-  // PARTIAL: the 3 Tributes can be any monsters (ENGINE: no per-monster Tribute filter). "Win the Match" is a duel win here.
-  'Victory Dragon': { self: { tribExact: 3 }, effs: [lockInstall] },
+  // Tribute Summon only with 3 Dragons: offered only while you control 3 or more Dragon monsters.
+  // PARTIAL: "Win the Match" is a duel win here. The engine's Tribute pick can't be limited to Dragons, so with 3 Dragons and other monsters a non-Dragon can still be picked.
+  'Victory Dragon': { self: { tribExact: 3 }, effs: [lockInstall, { type: 'trig', loc: 'any', res: noop,
+    on: (g) => { if (!g.f46vd) { g.f46vd = true; addRule(g, (g2, a) => (a.type === 'ns' || a.type === 'set') && !!a.c && named(a.c, 'Victory Dragon') && monsOf(g2, a.p).filter(x => race(x) === 'Dragon').length < 3); } return false; } }] },
   // The Option Token follows Victory Viper's ATK/DEF through Victory Viper's own continuous effect, and leaves with it.
   // PARTIAL: if Victory Viper is turned face-down the token stays (as 0/0).
   'Victory Viper XX03': {

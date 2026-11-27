@@ -10,6 +10,27 @@ const { pick, tgt, yn, choose, move, destroy, ss, draw, damage, pay, search, neg
 const atk = L.atk, def = L.def;
 
 /* ----- helpers ----- */
+// A battle worked out in the card (attack redirect, as full-03.js battleInstead). t is face-up.
+function battleHere(g, a, t) {
+  negateAttack(g);
+  if (!a || !t || a.zone !== 'm' || t.zone !== 'm' || !faceUp(a) || !faceUp(t)) return;
+  log(g, `${name(a)} battles ${name(t)} instead.`);
+  const A = atk(g, a), ac = a.ctrl, tc = t.ctrl;
+  const noDmg = q => [a, t].some(x => x.ctrl === q && faceUp(x) && has(g, x, 'noBattleDamage')) || g.p[q].noBattleDamage === g.turnNo;
+  const kill = xs => { const ok = xs.filter(x => !has(g, x, 'noBattleDestroy')); if (ok.length) destroy(g, ok, { battle: true, killer: ok.length === 1 ? (ok[0] === a ? t : a) : undefined }); };
+  if (t.pos === 'atk') {
+    const T = atk(g, t);
+    if (A > T) { if (!noDmg(tc)) damage(g, tc, A - T, { battle: true, src: a, srcP: ac }); kill([t]); }
+    else if (A < T) { if (!noDmg(ac)) damage(g, ac, T - A, { battle: true, src: t, srcP: tc }); kill([a]); }
+    else if (A > 0 || T === 0) kill([a, t]);
+  } else {
+    const Dv = def(g, t);
+    if (A > Dv) { if (has(g, a, 'piercing') && !noDmg(tc)) damage(g, tc, A - Dv, { battle: true, src: a, srcP: ac }); kill([t]); }
+    else if (A < Dv && !noDmg(ac)) damage(g, ac, Dv - A, { battle: true, src: t, srcP: tc });
+  }
+}
+
+
 const named = (c, n) => D(c).n === n;
 const noop = function* () {};
 const actNoop = { type: 'act', res: noop };
@@ -72,11 +93,10 @@ E.addScripts({
       cond: (g, c, p) => g.tp === p && !g.inDS && g.aw && g.aw.a === c && g.aw.t && onField(g.aw.t) && g.aw.t.pos !== 'atk' && c.flags.f38exa !== g.aw.group,
       cost: function* (g, c) { c.flags.f38exa = g.aw.group; },
       res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: -400, end: true }); c.flags.f38pierce = g.turnNo; g.seq++; log(g, 'Exarion Universe lost 400 ATK and inflicts piercing damage this turn.'); } }] },
-  // Once per Duel. The cards are swapped, not sent (no "sent to the GY" effects); Extra Deck monsters go back to the Extra Deck.
+  // Original 2010 text: no once-per-Duel limit (added by later errata). The cards are swapped, not sent (no "sent to the GY" effects); Extra Deck monsters go back to the Extra Deck.
   'Exchange of the Spirit': { effs: [{ type: 'act',
-    cond: (g, c, p) => g.p[0].gy.length >= 15 && g.p[1].gy.length >= 15 && g.p[p].lp > 1000 && !(g.f38xchg && g.f38xchg[p]),
+    cond: (g, c, p) => g.p[0].gy.length >= 15 && g.p[1].gy.length >= 15 && g.p[p].lp > 1000,
     cost: function* (g, c, p) { pay(g, p, 1000); },
-    after: (g, c, p) => { g.f38xchg = g.f38xchg || {}; g.f38xchg[p] = true; },
     res: function* (g) {
       for (const P of g.p) { const dk = P.deck.slice(), gy = P.gy.slice(); P.deck = []; P.gy = [];
         for (const x of dk) { x.zone = 'gy'; P.gy.push(x); }
@@ -178,7 +198,9 @@ E.addScripts({
       const [x] = yield* pick(g, p, 'Put which Warrior on top of your Deck?', cs, 1, 1, 'good'); shuffleDeck(g, p); if (x) { move(g, x, 'deckTop', { reason: 'effect' }); log(g, `${PN(g, p)} put a Warrior on top of the Deck.`); } } }] },
   // Port of goat-4.js "Fiend Skull Dragon". PARTIAL: the Trap negation is an optional Spell Speed 3 response (ENGINE: no
   // automatic negation hook).
-  'Fiend Skull Dragon (Archfiend)': { cont: { negates: (g, src, c) => isFlipMon(c) },
+  // The recipe names "Lesser Fiend"; the card data calls it "Lesser Fiend (Archfiend)". No substitutes.
+  'Fiend Skull Dragon (Archfiend)': { mats: [x => D(x).n === 'Cave Dragon', x => D(x).n === 'Lesser Fiend (Archfiend)'],
+    cont: { negates: (g, src, c) => isFlipMon(c) },
     effs: [{ type: 'quick', speed: 3, ds: true, label: 'Negate the Trap targeting it',
       cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && isTrap(t.c) && (t.t || []).includes(c) && faceUp(c)); },
       target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
@@ -425,8 +447,15 @@ E.addScripts({
     { type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon this card',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner && c.flags.f38gernia != null && c.flags.f38gernia < g.turnNo,
       res: function* (g, c, p) { c.flags.f38gernia = null; if (c.zone === 'gy') ss(g, p, c, 'atk'); } }] },
-  // ENGINE: attack redirect ("change the target to this card"); the attack() target is local to the engine.
-  'Ghost Gardna': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'A monster loses 1000 ATK',
+  // ENGINE: attack redirect ("change the target to this card"): attack() keeps its target local, so the declared attack is
+  // negated and the attacker battles Ghost Gardna here (as full-03.js battleInstead). PARTIAL: no Damage Step window for that battle.
+  'Ghost Gardna': { effs: [
+    { type: 'trig', when: true, label: 'Change the attack target to this card',
+      on: (g, ev, c) => ev.type === 'attack' && !!ev.t && ev.t !== c && ev.t.ctrl === c.ctrl && faceUp(ev.t) && !!ev.a && ev.a.ctrl !== c.ctrl,
+      cond: (g, c) => !!g.aw && !g.aw.blocked && faceUp(c),
+      res: function* (g, c, p, L2) { const a = L2.ev.a; if (!g.aw || g.aw.a !== a || g.aw.blocked || !onField(c) || !faceUp(c)) return; g.aw.blocked = true;
+        log(g, `${PN(g, p)} changed the attack target to Ghost Gardna.`); battleHere(g, a, c); } },
+    { type: 'trig', loc: 'gy', mand: true, label: 'A monster loses 1000 ATK',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.to === 'gy',
     cond: (g, c, p) => oppFaceUp(g, p).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which monster loses 1000 ATK?', oppFaceUp(g, p), 1, 1, 'bad'); },

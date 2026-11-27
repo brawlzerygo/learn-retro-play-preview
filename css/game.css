@@ -1484,3 +1484,15 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 .bigprev .bpcap .disp{font-size:44px;color:#fff}
 @keyframes bpin{from{opacity:0}}
 @keyframes bpup{from{opacity:0;transform:translateY(18px) scale(.98)}}
+/* version and release notes, bottom right of the home screen (Zack, 2026-11-26) */
+.verbar{position:absolute;right:60px;bottom:84px;z-index:4;display:flex;align-items:center;gap:16px;font:700 24px 'Barlow Condensed';letter-spacing:.06em;color:var(--mute)}
+.vnotes{border:0;background:none;padding:6px 0;font:800 24px 'Barlow Condensed';font-style:italic;letter-spacing:.06em;text-transform:uppercase;color:var(--acc);cursor:pointer}
+.vnotes:hover{color:var(--acc-hi);text-decoration:underline;text-underline-offset:4px}
+.relnotes{width:860px;inset:0;margin:auto;height:max-content;max-height:960px;translate:none}
+.rnlist{max-height:620px;overflow:auto;padding-right:8px;font:400 18px/1.5 'Atkinson Hyperlegible',sans-serif;color:#dfe3e8}
+.rnlist section+section{margin-top:22px;padding-top:18px;border-top:1px solid rgba(255,255,255,.1)}
+.rnhead{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.rnhead b{font:800 26px 'Barlow Condensed';font-style:italic;color:var(--acc)}
+.rnhead span{color:var(--mute);font-size:16px}
+.rnhead i{font-style:normal;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;background:rgba(255,255,255,.1);padding:2px 8px;border-radius:999px}
+.rnlist ul{margin:0;padding-left:22px}.rnlist li+li{margin-top:6px}

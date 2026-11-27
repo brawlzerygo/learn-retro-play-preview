@@ -891,3 +891,9 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .bigprev img{width:100%;height:0;flex:1;min-height:0;object-fit:contain}
 #stage.m .bigprev .bpcap{flex-direction:column;align-items:center;gap:2px;font-size:14px}
 #stage.m .bigprev .bpcap .disp{font-size:28px}
+/* version and release notes: in the home column under the save note (2026-11-26) */
+#stage.m #s-title .verbar{order:6;position:relative;right:auto;bottom:auto;justify-content:center;margin-top:4px;font-size:14px;gap:10px}
+#stage.m .vnotes{font-size:15px;padding:8px 4px;min-height:36px}
+#stage.m .relnotes{width:auto;max-height:none}
+#stage.m .rnlist{max-height:60vh;font-size:15px}
+#stage.m .rnhead b{font-size:22px}

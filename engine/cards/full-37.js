@@ -52,7 +52,11 @@ const LOCKS = {
   'Doomkaiser Dragon Assault Mode': (g, a) => !((['hand', 'deck'].includes(a.c.zone) && stOf(g, a.p).some(x => faceUp(x) && named(x, 'Assault Mode Activate'))) || proper(a)),
 };
 const lockEff = { type: 'trig', loc: 'any', res: noop, on: (g, ev) => {
-  if (!g.f37lock) { g.f37lock = true; addRule(g, (g2, a) => { if (a.type !== 'ss' || !a.c || a.c.id == null) return false; const d = D(a.c); const f = d && LOCKS[d.n]; return !!f && f(g2, a); }); }
+  if (!g.f37lock) { g.f37lock = true; addRule(g, (g2, a) => {
+    // Diabolos: no Normal Summon or Set without 2 DARK monsters to Tribute (the engine's Tribute pick can't be limited to DARK)
+    if ((a.type === 'ns' || a.type === 'set') && a.c && a.c.id != null && D(a.c).n === 'Diabolos, King of the Abyss')
+      return monsOf(g2, a.p).filter(m => attr(m) === 'DARK' && !m.flags.noTribute).length < 2;
+    if (a.type !== 'ss' || !a.c || a.c.id == null) return false; const d = D(a.c); const f = d && LOCKS[d.n]; return !!f && f(g2, a); }); }
   if (ev.type === 'summon') for (const x of ev.cs) if (x) x.f37proper = true;
   return false; } };
 
@@ -121,13 +125,39 @@ function takesDamage(g, p) {
   if (t.pos === 'atk') return A > stat(g, t, 'atk');
   return A > stat(g, t, 'def') && has(g, b.a, 'piercing');
 }
+// A battle worked out in the card (as full-03.js battleInstead): the engine's attack() keeps its target local.
+// ENGINE: attack redirect. PARTIAL: no Damage Step windows in this battle. Both monsters must be face-up.
+function cardBattle(g, a, t) {
+  if (!a || !t || a.zone !== 'm' || t.zone !== 'm' || !faceUp(a) || !faceUp(t)) return;
+  log(g, `${name(a)} battles ${name(t)}.`);
+  const A = stat(g, a, 'atk'), ac = a.ctrl, tc = t.ctrl;
+  const noDmg = q => [a, t].some(x => x.ctrl === q && faceUp(x) && has(g, x, 'noBattleDamage')) || g.p[q].noBattleDamage === g.turnNo;
+  if (t.pos === 'atk') {
+    const T = stat(g, t, 'atk');
+    if (A > T) { if (!noDmg(tc)) damage(g, tc, A - T, { battle: true, src: a, srcP: ac }); destroy(g, [t], { battle: true, killer: a }); }
+    else if (A < T) { if (!noDmg(ac)) damage(g, ac, T - A, { battle: true, src: t, srcP: tc }); destroy(g, [a], { battle: true, killer: t }); }
+    else if (A > 0 || T === 0) destroy(g, [a, t], { battle: true });
+  } else {
+    const Dv = stat(g, t, 'def');
+    if (A > Dv) { if (has(g, a, 'piercing') && !noDmg(tc)) damage(g, tc, A - Dv, { battle: true, src: a, srcP: ac }); destroy(g, [t], { battle: true, killer: a }); }
+    else if (A < Dv && !noDmg(ac)) damage(g, ac, Dv - A, { battle: true, src: t, srcP: tc });
+  }
+}
 const ATTRS = ['DARK', 'LIGHT', 'EARTH', 'WATER', 'FIRE', 'WIND'];
 const isGB = x => /^Gladiator Beast/.test(name(x));
 
 E.addScripts({
   /* ----- Dark ----- */
-  // ENGINE: gain() has no hook to turn an LP gain into damage, so this card's effect can't apply yet.
-  'Darklord Nurse Reficule': { effs: [] },
+  // ENGINE: gain() has no hook. PARTIAL (as full-19.js Bad Reaction to Simochi): while this card is face-up, an LP gain of the
+  // opponent is seen at the next game event, undone, and dealt as damage.
+  'Darklord Nurse Reficule': { effs: [{ type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => {
+    if (c.zone !== 'm' || !faceUp(c)) { c.flags.f37lp = null; return false; }
+    const o = opp(c.ctrl), P = g.p[o], was = c.flags.f37lp; c.flags.f37lp = { o, lp: P.lp };
+    if (!was || was.o !== o || P.lp <= was.lp || g.f37nurse) return false;
+    const d = P.lp - was.lp; g.f37nurse = true;
+    try { P.lp -= d; log(g, `Darklord Nurse Reficule turned ${PN(g, o)}'s ${d} LP gain into damage.`); damage(g, o, d, { src: c, srcP: c.ctrl }); }
+    finally { g.f37nurse = false; c.flags.f37lp = { o, lp: P.lp }; }
+    return false; } }] },
   // "If" (no missed timing); it activates even if this card was also destroyed in that battle.
   'Darknight Parshath': { self: { atk: (g, c) => 100 * g.p[c.ctrl].gy.filter(x => isMon(x) && attr(x) === 'DARK').length },
     effs: [{ type: 'trig', loc: 'any', label: 'Banish a DARK: draw 1 card',
@@ -150,12 +180,13 @@ E.addScripts({
   'Deck Lockdown': { cont: { forbid: (g, src, a) => a.type === 'search' || (a.type === 'ss' && !!a.c && a.c.zone === 'deck') },
     effs: [{ type: 'act', res: function* (g, c) { startCount(c); log(g, 'Neither player can add cards from the Deck to the hand or Special Summon from the Deck.'); } },
       countdown('standby', true, 2, 'Destroy Deck Lockdown')] },
-  // ENGINE: attack redirect: the Dragon is Special Summoned, but the attacker gets a replay instead of battling it.
+  // The declared attack is negated and the attacker battles the summoned Dragon here (see cardBattle).
   'Decoy Dragon': { effs: [{ type: 'trig', mand: true, tags: { ss: 1 }, label: 'Special Summon a Level 7+ Dragon',
     on: (g, ev, c) => ev.type === 'attack' && ev.t === c && ev.p !== c.ctrl,
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && race(x) === 'Dragon' && lv(x) >= 7 && canSS(g, p, x)),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Level 7 or higher Dragon?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Dragon' && lv(x) >= 7 && canSS(g, p, x)), 1, 1, 'good'); },
-    res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
+    res: function* (g, c, p, L2) { const t = L2.t[0]; if (!t || t.zone !== 'gy' || !ss(g, p, t, 'atk')) return; const a = L2.ev.a;
+      if (a && onField(a) && a.ctrl !== p) { negateAttack(g); log(g, `The attack target changed to ${name(t)}.`); cardBattle(g, a, t); } } }] },
   'Decoyroid': { cont: { grant: (g, src, c, flag) => flag === 'noAttackTarget' && c.ctrl === src.ctrl && c !== src && faceUp(c) && name(c) !== 'Decoyroid' } },
   'Deep Diver': { effs: [
     { type: 'trig', loc: 'gy', res: noop, on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy') c.f37dd = g.turnNo; return false; } },
@@ -265,7 +296,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which monster with an A-Counter?', fieldMons(g).filter(m => faceUp(m) && ctr(m, 'A') > 0), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || ctr(t, 'A') < 1) return; if (destroy(g, [t], { by: p, src: c }).length) { damage(g, opp(p), 1000, { src: c, srcP: p }); damage(g, p, 1000, { src: c, srcP: p }); } } }] },
   'Dharc the Dark Charmer': charmer('DARK'),
-  // ENGINE: no per-summon Tribute check, so the Tributes aren't forced to be DARK, and no hook for "can't be Tributed by card
+  // ENGINE: no per-summon Tribute check: it needs 2 DARK monsters to be offered, but the Tribute pick itself isn't limited to DARK; no hook for "can't be Tributed by card
   // effects". PARTIAL: the engine has no window before the normal draw, so the look happens at the end of your own turn
   // (the same top card the opponent draws next), once per turn.
   'Diabolos, King of the Abyss': { effs: [lockEff,
@@ -486,7 +517,10 @@ E.addScripts({
     target: function* (g, c, p, L2) {
       const [eq] = yield* pick(g, p, 'Move which Equip Card?', stOf(g, p).filter(x => faceUp(x) && isSpell(x) && D(x).sub === 'Equip' && monsOf(g, p).some(m => m.u === x.equipTo && m.pos === 'atk')), 1, 1, 'good');
       L2.data.eq = eq; L2.data.from = eq && eq.equipTo; yield* tgt(g, p, L2, 'Equip it to which Attack Position monster?', monsOf(g, opp(p)).filter(m => m.pos === 'atk'), 1, 1, 'bad'); },
-    res: function* (g, c, p, L2) { const eq = L2.data.eq, t = live(L2)[0]; if (!eq || !onField(eq) || !t || t.pos !== 'atk') return; eq.equipTo = t.u; g.seq++; log(g, `${name(eq)} was equipped to ${name(t)}.`); } }] },
+    res: function* (g, c, p, L2) { const eq = L2.data.eq, t = live(L2)[0]; if (!eq || !onField(eq) || !t || t.pos !== 'atk') return; eq.equipTo = t.u; g.seq++; log(g, `${name(eq)} was equipped to ${name(t)}.`);
+      // then the previously equipped monster and the selected one battle; the turn player's monster attacks (see cardBattle)
+      const m = monsOf(g, p).find(x => x.u === L2.data.from); if (!m || m.pos !== 'atk' || !onField(t) || t.pos !== 'atk') return;
+      if (g.tp === p) cardBattle(g, m, t); else cardBattle(g, t, m); } }] },
   // Linked both ways: when this card leaves the field the monster is destroyed and banished; when the monster is destroyed,
   // this card is destroyed.
   'Escape from the Dark Dimension': { effs: [

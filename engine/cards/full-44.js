@@ -67,6 +67,18 @@ const LOCKS = {
 };
 // Simorgh, Bird of Divinity: enough face-up WIND monsters to Tribute (1 while a face-up Simorgh, Bird of Ancestry lowers the cost)
 const divinityTributes = (g, p) => { const need = allField(g).some(x => x.zone === 'm' && faceUp(x) && named(x, 'Simorgh, Bird of Ancestry') && !negd(g, x)) ? 1 : 2; return monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'WIND').length >= need; };
+// Sky Scourge Invicil: mark Spell/Trap chain links negated while a face-up Invicil with that effect applies (not GY effects).
+function invicilScan(g) {
+  if (!g.chain || !g.chain.length) return;
+  const invs = fieldMons(g).filter(x => faceUp(x) && named(x, 'Sky Scourge Invicil') && x.flags.f44inv && !negd(g, x));
+  const sp = invs.some(x => x.flags.f44inv.sp), tr = invs.some(x => x.flags.f44inv.tr);
+  for (const L2 of g.chain) {
+    if (L2.eff.loc === 'gy' || !isST(L2.c)) continue;
+    const hit = (sp && isSpell(L2.c)) || (tr && isTrap(L2.c));
+    if (hit && !L2.negated) { L2.negated = true; L2.f44inv = true; log(g, `Sky Scourge Invicil negates the effect of ${name(L2.c)}.`); }
+    else if (!hit && L2.f44inv) { L2.negated = false; L2.f44inv = false; }
+  }
+}
 const lockInstall = { type: 'trig', loc: 'any', res: noop,
   on: (g, ev, c) => {
     if (!g.f44lock) { g.f44lock = true; addRule(g, (g2, a) => {
@@ -151,11 +163,15 @@ E.addScripts({
   // Mandatory. If an opponent's card discarded it, they also put exactly 2 cards from their hand on the bottom of their Deck
   // (only after Sillva is Special Summoned, and only with 2 or more cards in hand).
   'Sillva, Warlord of Dark World': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon it',
-    on: (g, ev, c) => dwDiscard(g, ev, c),
+    // Whose card discarded it is read when it happens: the resolving card's controller (some discard helpers set `by` to the
+    // player who discarded, e.g. Dark World Dealings), else `by`, else the turn player. A discard paid as a cost is your own card's.
+    on: (g, ev, c) => { if (!dwDiscard(g, ev, c)) return false;
+      c.flags.f44opp = ev.reason === 'cost' ? false : g.resolvingL ? g.resolvingL.p !== c.owner : byOpp(g, ev, c); return true; },
     cond: (g, c, p) => freeM(g, p) >= 0,
     res: function* (g, c, p, L2) {
+      const byO = !!c.flags.f44opp; c.flags.f44opp = false;
       if (c.zone !== 'gy' || !ss(g, p, c, 'atk')) return;
-      if (!L2.ev || !byOpp(g, L2.ev, c)) return;
+      if (!byO) return;
       const o = opp(p), h = g.p[o].hand; if (h.length < 2) return;
       const xs = yield* pick(g, o, 'Put which 2 cards from your hand on the bottom of your Deck?', h, 2, 2, 'cost');
       for (const x of xs) toBottom(g, x); log(g, `${PN(g, o)} put 2 cards from the hand on the bottom of the Deck.`); } }] },
@@ -222,11 +238,15 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish which face-up monster?', fieldMons(g).filter(x => x !== c && faceUp(x)), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${D(t).n} was banished.`); } } }] },
   // The effect is noted when it is Tribute Summoned (not Set) with a LIGHT Fairy and/or DARK Fiend Tribute.
-  // ENGINE: negation only stops the lasting effects of face-up Spells/Traps; a Normal or Quick-Play Spell/Trap (or a Continuous
-  // card's activated effect) still resolves, since the engine only checks negation at resolution for monsters.
+  // Lasting effects of face-up Spells/Traps are negated through cont.negates. Effects on the chain (a Normal Spell, a Trap's
+  // activation) are negated by a chain scan run from the response menus (as Imperial Order in full-23.js): every Spell/Trap
+  // link not activated in the GY is marked negated while Invicil applies, and unmarked if it stops applying before resolving.
+  // ENGINE: no hook when a link is added; the scan runs in each response window, which always follows a new link.
   'Sky Scourge Invicil': {
     cont: { negates: (g, src, x) => !src.flags.negated && !!src.flags.f44inv && ((src.flags.f44inv.sp && isSpell(x)) || (src.flags.f44inv.tr && isTrap(x))) },
-    effs: [lockInstall, { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => {
+    effs: [lockInstall,
+      { type: 'quick', speed: 3, ds: true, negSummon: true, label: 'Check the chain', cond: g => { invicilScan(g); return false; }, res: noop },
+      { type: 'trig', loc: 'any', res: noop, on: g => { invicilScan(g); return false; } }, { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => {
       if (evSummoned(ev, c, ['tribute'])) {
         const ts = ev.tribs || [];
         const sp = ts.some(t => attr(t) === 'LIGHT' && race(t) === 'Fairy'), tr = ts.some(t => attr(t) === 'DARK' && race(t) === 'Fiend');

@@ -91,8 +91,8 @@ function* effectNormalSummon(g, p, x) {
 // Clear World: Spells activated while you control a WIND monster cost 500 LP. ENGINE: no activation cost hook, so the LP is
 // paid as the Spell is played from the hand, or (a Set Normal or Quick-Play Spell) as it leaves the field after resolving.
 // PARTIAL: a Set Continuous, Equip or Field Spell flipped face-up isn't charged.
-function cwWind(g, ev) {
-  if (ev.type !== 'move' || !isSpell(ev.c)) return;
+function cwWind(g, ev, src) {
+  if (ev.type !== 'move' || !isSpell(ev.c) || ev.c === src) return; // Clear World's own activation is not charged (it is not applying yet)
   g.f36cw = g.f36cw || {};
   let who = null;
   if (ev.reason === 'activate' && ev.from === 'hand') { who = ev.c.ctrl; g.f36cw[ev.c.u] = true; }
@@ -221,7 +221,7 @@ E.addScripts({
       return false; } },
     effs: [actNoop,
       { type: 'trig', loc: 'fz', mand: true, label: 'Pay 500 LP or destroy Clear World',
-        on: (g, ev, c) => { cwWind(g, ev); return ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl; },
+        on: (g, ev, c) => { cwWind(g, ev, c); return ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl; },
         res: function* (g, c, p) { if (!onField(c)) return;
           if (g.p[p].lp > 500 && (yield* choose(g, p, 'Clear World: pay 500 LP or destroy it?', ['Pay 500 LP', 'Destroy Clear World'])) === 0) pay(g, p, 500);
           else destroy(g, [c], { by: p, rule: true }); } },
@@ -424,22 +424,30 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Place a Spell Counter on which card?', allField(g).filter(x => spellCtrOk(g, c, x)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !spellCtrOk(g, c, t)) return; addCtr(g, t, 'spell', 1); log(g, `${name(t)} got a Spell Counter.`);
       if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 600, end: true }); log(g, 'Crusader of Endymion gained 600 ATK.'); } } }] },
-  // Port of classic-5.js, from the Edison text: the opponent takes no damage at all until the end of the next turn.
-  'Crush Card Virus': { cont: { loc: 'gy', dmg: (g, src, p, n) => g.ccv && g.ccv.p === p && g.turnNo <= g.ccv.until ? 0 : n },
-    effs: [{ type: 'act', tags: { destroy: 1 },
+  // Original 2010 text: "Tribute 1 DARK monster with an ATK of 1000 or less. Check your opponent's monsters on the field and
+  // the cards in their hand, and destroy all monsters with 1500 or more ATK. Your opponent checks all cards they draw for
+  // 3 turns (your opponent's turns), and destroys any monster with 1500 or more ATK." The modern rewrite (no damage until
+  // the next turn, destroy up to 3 from the Deck) came later. If it is activated in the opponent's turn, that turn counts.
+  // PARTIAL: the draw check runs as the card is drawn, without a chain link.
+  'Crush Card Virus': { effs: [{ type: 'act', tags: { destroy: 1 },
       cond: (g, c, p) => monsOf(g, p).some(m => attr(m) === 'DARK' && stat(g, m, 'atk') <= 1000),
       cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute a DARK monster with 1000 or less ATK', monsOf(g, p).filter(m => attr(m) === 'DARK' && stat(g, m, 'atk') <= 1000), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
       res: function* (g, c, p) {
-        const o = opp(p); g.ccv = { p: o, until: g.turnNo + 1 }; log(g, `${PN(g, o)} takes no damage until the end of the next turn.`);
+        const o = opp(p);
         const h = g.p[o].hand; log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand: ${h.length ? h.map(x => D(x).n).join(', ') : 'empty'}.`);
         destroy(g, monsOf(g, o).filter(m => stat(g, m, 'atk') >= 1500), { by: p, src: c });
         const hx = h.filter(x => isMon(x) && baseAtk(x) >= 1500);
         for (const x of hx) move(g, x, 'gy', { reason: 'effect', destroyed: true, by: p });
         if (hx.length) log(g, `${hx.map(x => D(x).n).join(', ')} ${hx.length > 1 ? 'were' : 'was'} destroyed in the hand.`);
-        const dk = g.p[o].deck.filter(x => isMon(x) && baseAtk(x) >= 1500);
-        if (dk.length) { const xs = yield* pick(g, o, 'Destroy up to 3 monsters with 1500 or more ATK in your Deck?', dk, 0, 3, 'cost');
-          for (const x of xs) move(g, x, 'gy', { reason: 'effect', destroyed: true, by: o });
-          if (xs.length) log(g, `${PN(g, o)} destroyed ${xs.map(x => D(x).n).join(', ')} in the Deck.`); shuffleDeck(g, o); } } }] },
+        (g.ccvDraw || (g.ccvDraw = [])).push({ src: c.u, p: o, by: p, until: g.turnNo + (g.tp === o ? 4 : 5) });
+        log(g, `${PN(g, o)}'s draws are checked for the next 3 of their turns.`); } },
+    { type: 'trig', loc: 'any', res: function* () {}, on: (g, ev, c) => {
+      if (ev.type !== 'move' || ev.reason !== 'draw' || ev.to !== 'hand' || ev.ccvSeen || !g.ccvDraw) return false;
+      const e = g.ccvDraw.find(x => x.src === c.u && x.p === ev.c.owner && g.tp === x.p && g.turnNo <= x.until);
+      if (!e || ev.c.zone !== 'hand') return false; ev.ccvSeen = true; const x = ev.c;
+      if (isMon(x) && baseAtk(x) >= 1500) { move(g, x, 'gy', { reason: 'effect', destroyed: true, by: e.by }); log(g, `${PN(g, e.p)} drew ${D(x).n}, and Crush Card Virus destroyed it.`); }
+      else log(g, `${PN(g, e.p)} drew ${D(x).n} and showed it to Crush Card Virus.`);
+      return false; } }] },
   // The extra Normal Summon/Set doesn't use your normal one (ruling). Banishing is the cost; only in your Main Phase.
   'Cry Havoc!': { effs: [actNoop,
     { type: 'ign', loc: 'st', label: 'Banish a monster: Normal Summon a Normal Monster',

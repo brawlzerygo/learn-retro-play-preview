@@ -245,14 +245,11 @@ E.addScripts({
   'Witch Doctor of Sparta': { effs: [{ type: 'trig', mand: true, label: '500 damage',
     on: (g, ev, c) => ev.type === 'summon' && ev.cs.some(x => x !== c && cameFromDeck(g, x, ev.group)),
     res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
-  // Port of classic-2.js, with the Edison text's once per turn for the name (hard once per turn, per player).
+  // Original 2010 text: "When this card is sent from the field to the Graveyard, add 1 monster with 1500 or less DEF".
+  // No once-per-turn and no lock on the added card's name (both added by later errata).
   'Witch of the Black Forest': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Add a monster with 1500 or less DEF',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to === 'gy',
-    cond: (g, c, p) => !(g.wbf && g.wbf[p] === g.turnNo),
-    ok: (g, c, p) => !(g.wbf && g.wbf[p] === g.turnNo),
-    cost: function* (g, c, p) { (g.wbf || (g.wbf = [null, null]))[p] = g.turnNo; },
-    res: function* (g, c, p) { const x = yield* search(g, p, m => isMon(m) && num(D(m).def) <= 1500 && D(m).def !== '?', 'Add which monster with 1500 or less DEF?');
-      if (x) { const n = D(x).n; addRule(g, (g2, a) => a.type === 'activate' && a.p === p && D(a.c).n === n, { end: g.turnNo }); } } }] },
+    res: function* (g, c, p) { yield* search(g, p, m => isMon(m) && num(D(m).def) <= 1500 && D(m).def !== '?', 'Add which monster with 1500 or less DEF?'); } }] },
 
   /* ----- numbers ----- */
   '3-Hump Lacooda': { effs: [{ type: 'ign', label: 'Tribute 2 Lacooda: draw 3',

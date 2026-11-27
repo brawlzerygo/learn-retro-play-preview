@@ -226,8 +226,11 @@ E.addScripts({
     { type: 'trig', loc: 'gy', mand: true, label: 'Draw 2 cards and banish it',
       on: (g, ev, c) => fromFieldToGY(ev, c) && !!ev.snap && !!ev.snap.flags && !!ev.snap.flags.f45tt,
       res: function* (g, c, p) { draw(g, p, 2); if (c.zone === 'gy') { move(g, c, 'ban', { reason: 'effect', by: p }); log(g, 'Tongue Twister was banished.'); } } }] },
-  // ENGINE: synCombos has no per-material limit, so "can't be Synchro Material except for a Warrior" isn't enforced.
-  'Torapart': { effs: [watch((g, ev, c) => {
+  // The material limit is a Summon rule (as batch-1's synLegal): a non-Warrior Synchro whose every material combo needs
+  // Torapart can't be Synchro Summoned. PARTIAL: when other combos exist, the engine's combo list may still offer one with it.
+  'Torapart': { cont: { forbid: (g, src, a) => a.type === 'ss' && a.how === 'synchro' && !!a.c && a.c.zone === 'extra' && a.p === src.ctrl && src.zone === 'm' && faceUp(src)
+      && race(a.c) !== 'Warrior' && (() => { const cs = synCombos(g, a.p, a.c); return cs.length > 0 && cs.every(m => m.includes(src)); })() },
+    effs: [watch((g, ev, c) => {
     if (!g.f45toraRule) toraLock(g);
     if (ev.type === 'summon' && ev.how === 'synchro' && g.events.some(e => e.type === 'move' && e.c === c && e.reason === 'synchro' && e.group === ev.group)) for (const x of ev.cs) if (x) x.flags.f45tora = true;
     if (ev.type === 'attack' && ev.a && ev.a.flags.f45tora && c.zone === 'gy' && g.events.some(e => e.type === 'move' && e.c === c && e.reason === 'synchro')) g.f45tl = { a: ev.a, p: ev.p };

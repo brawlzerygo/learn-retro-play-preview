@@ -138,7 +138,8 @@ E.addScripts({
     target: function* (g, c, p, L2) { L2.data.a = g.aw.a; },
     res: function* (g, c, p, L2) { if (g.attackNegated) return; const a = L2.data.a; endBattle(g);
       if (a && onField(a)) { addCtr(g, a, 'venom', 1); log(g, `${name(a)} got a Venom Counter.`); } } }] },
-  'Amphibious Bugroth': { effs: [] },
+  // The listed material Defender of the Sea matches no card in the pool. The TCG printing reads Ground Attacker Bugroth + Mother Grizzly.
+  'Amphibious Bugroth': { mats: [c => D(c).n === 'Ground Attacker Bugroth', c => ['Mother Grizzly', 'Defender of the Sea'].includes(D(c).n)], effs: [] },
   'Amulet of Ambition': {
     cont: { atk: (g, src, m) => { if (src.equipTo !== m.u) return 0; const o = foe(g, m); return o && lv(o) > lv(m) ? 500 * (lv(o) - lv(m)) : 0; } },
     effs: [equipAct(normalNow, 'Equip to which Normal Monster?'),

@@ -5,6 +5,7 @@ import { Table } from './table.js?v=167';
 import * as S from './sfx.js?v=167';
 import * as FX from './fx.js?v=167';
 import { Board, layoutOf, matChoice } from './boards.js?v=167';
+import { NOTES, verLabel } from './notes.js?v=167';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -2241,6 +2242,18 @@ async function checkUpdate() {
   } catch (e) { /* offline */ }
 }
 if (!/localhost|127\.0\.0\.1/.test(location.hostname)) { setTimeout(checkUpdate, 1500); document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); }); }
+
+// version and release notes in the home screen's corner (Zack, 2026-11-26: "change our version logic to a decimal - so this one being 1.67";
+// "a 'latest release notes' page thats clickable in the bottom right next to the version"). ?v= stays a whole number (the cache key
+// and the update check); players see it as v1.67. Notes live in js/notes.js, newest first.
+function releaseNotes() {
+  S.play('click'); const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 69; const p = document.createElement('div'); p.className = 'pn dlg relnotes'; p.style.zIndex = 70;
+  p.innerHTML = `<h3 class="disp">What's new</h3><div class="rnlist">${NOTES.map(n => `<section><div class="rnhead"><b>${verLabel(n.v)}</b><span>${esc(n.date)}</span>${n.v === MYV ? '<i>You have this</i>' : ''}</div><ul>${n.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')}</div><div class="btns"><button class="gb pri" data-y>Close<span class="shine"></span></button></div>`;
+  stage.append(v, p); const key = e => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(); } };
+  const done = () => { v.remove(); p.remove(); document.removeEventListener('keydown', key, true); };
+  document.addEventListener('keydown', key, true); v.onclick = done; p.onclick = e => { if (e.target.closest('[data-y]')) done(); };
+}
+$('#verNum').textContent = verLabel(MYV || NOTES[0].v); $('#verNotes').onclick = releaseNotes;
 
 // work-in-progress note on the title screen; hidden for good once closed
 { const w = $('#wipNote'); if (w && localStorage.getItem('lrplay:wip') !== '1') { w.hidden = false; $('#wipX').onclick = () => { w.hidden = true; localStorage.setItem('lrplay:wip', '1'); }; } }

@@ -293,16 +293,11 @@ E.addScripts({
     cond: (g, c, p, x) => { const n = Math.floor(lastBattleDamage(g, p) / 500); return n >= 1 && nFreeM(g, p) >= n; },
     cost: function* (g, c, p, L2) { L2.data.n = Math.floor(lastBattleDamage(g, p) / 500); },
     res: function* (g, c, p, L2) { const n = Math.min(L2.data.n || 0, nFreeM(g, p)); if (n > 0) tokens(g, p, { n: 'Sinister Seed Token', a: 'DARK', r: 'Plant', lv: 1, atk: 100, def: 100 }, n, 'def'); } })] },
-  // Edison: once per turn, and 1 Sinister Serpent in your GY is banished in the opponent's next End Phase.
+  // Original 2010 text: "During your Standby Phase, if this card is in your Graveyard, you can return it to your hand."
+  // No once-per-turn and no banish in the opponent's End Phase (both added by later errata).
   'Sinister Serpent': { effs: [
     { type: 'trig', loc: 'gy', label: 'Add it to your hand', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner,
-      cond: (g, c, p) => !(g.f14serp && g.f14serp[p] === g.turnNo),
-      res: function* (g, c, p) { (g.f14serp || (g.f14serp = {}))[p] = g.turnNo; if (c.zone !== 'gy') return; move(g, c, 'hand', { reason: 'effect', by: p }); log(g, `${PN(g, p)} added Sinister Serpent to the hand.`);
-        (g.f14serpBan || (g.f14serpBan = [])).push({ p, turn: g.turnNo + 1 }); } },
-    { type: 'trig', loc: 'any', mand: true, label: 'Banish a Sinister Serpent',
-      on: (g, ev, c) => { if (!(ev.type === 'phase' && ev.ph === 'end' && g.f14serpBan)) return false; const e = g.f14serpBan.find(x => x.turn === g.turnNo && x.p === c.owner && (!x.by || x.by === c.u)); if (!e) return false; e.by = c.u; return true; },
-      res: function* (g, c) { const p = c.owner; const es = g.f14serpBan.filter(x => x.turn === g.turnNo && x.p === p && x.by === c.u); g.f14serpBan = g.f14serpBan.filter(x => !es.includes(x));
-        for (let i = 0; i < es.length; i++) { const cs = g.p[p].gy.filter(x => named(x, 'Sinister Serpent')); if (!cs.length) break; const [x] = yield* pick(g, p, 'Banish which Sinister Serpent from your GY?', cs, 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'effect' }); log(g, `${PN(g, p)} banished Sinister Serpent.`); } } } }] },
+      res: function* (g, c, p) { if (c.zone !== 'gy') return; move(g, c, 'hand', { reason: 'effect', by: p }); log(g, `${PN(g, p)} added Sinister Serpent to the hand.`); } }] },
   'Sinister Sprocket': { effs: [{ type: 'trig', loc: 'gy', tags: { destroy: 1 }, label: 'Destroy a face-up Spell or Trap',
     on: (g, ev, c) => ev.type === 'summon' && ev.how === 'synchro' && attr(ev.cs[0]) === 'DARK' && c.zone === 'gy' && g.events.some(e => e.type === 'move' && e.c === c && e.reason === 'synchro' && e.group === ev.group),
     cond: g => stOnField(g).some(faceUp),

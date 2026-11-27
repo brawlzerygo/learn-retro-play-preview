@@ -1,0 +1,21 @@
+// Release notes, newest first (Zack, 2026-11-26: a "latest release notes" page next to the version in the home screen's corner).
+// v is the build number from ?v= (167 shows as 1.67). Written for players: what changed in the game, plain words, no code.
+export const NOTES = [
+  { v: 167, date: 'Nov 26, 2026', items: [
+    'Every Edison and Goat legal card is now in the Deck Builder: 3,673 cards for Edison and 1,691 for Goat.',
+    'Every card was checked a second time against its own text, and over 30 cards that didn\'t work as written were fixed.',
+    'Cards play the way they did in their format, without limits added years later: Witch of the Black Forest, Sinister Serpent, Dark Magician of Chaos, Makyura the Destructor, Exchange of the Spirit, D.D. Survivor and Destiny HERO - Disk Commander. Crush Card Virus works like the original card.',
+    'New duel boards. Pick one in Settings > Table, with a preview: Rewind, Runestone, Dragon, Spellcaster, Fiend, Light and Dark. Each one reacts to the plays in your duel.',
+    'Card Shop is retired. If you had it picked, you\'ll now see Rewind.',
+    'The cards in each hand now lie level instead of fanned.',
+    'Phones: buttons near the bottom of short screens work again (some players couldn\'t pick Gladiator Beast Darius in a draft).',
+    'The version number and these notes now sit in the corner of the home screen.',
+  ] },
+  { v: 160, date: 'Nov 26, 2026', items: [
+    'The Extra Deck works: Synchro Summons and contact Fusions can now be picked.',
+    'Graveyard and banished effects can be used, like Vayu, Plaguespreader Zombie and Necro Gardna. A pile that has a play lights up, and opening it shows the play.',
+    'Phantom of Chaos now copies the effect of the monster it copies, like Norleras.',
+    'The Edison deck list no longer comes up empty after you pick a filter in Goat.',
+  ] },
+];
+export const verLabel = v => 'v' + (v / 100).toFixed(2);
