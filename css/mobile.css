@@ -9,7 +9,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .gb.sm{height:40px;font-size:16px;padding:0 13px}
 #stage.m .gb svg{width:20px;height:20px}
 #stage.m .disp,#stage.m .htitle{letter-spacing:.005em}
-#stage.m .menubg{background-image:url(../assets/scenes/shop-m3.jpg);background-size:cover;filter:blur(5px) brightness(.34);transform:scale(1.05)}
+#stage.m .menubg{background-size:cover;background-position:center;filter:none;transform:none}
 
 /* the tab bar and Back */
 #mTabs{display:none}
@@ -366,7 +366,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
    ===================================================================================================== */
 #stage.ml{--sab:max(env(safe-area-inset-bottom,0px),6px);--sal:max(env(safe-area-inset-left,0px),10px);--sar:max(env(safe-area-inset-right,0px),10px)}
 #stage.ml #scene{background:url(../assets/scenes/shop.jpg) var(--gox,0px) var(--goy,0px)/var(--gw) var(--gh) no-repeat,url(../assets/scenes/shop.jpg) center/cover;background-color:#2b170c}
-#stage.ml .menubg{background-image:url(../assets/scenes/shop.jpg)}
+
 /* left column */
 #stage.ml .lp{width:176px;height:50px;padding:0 10px 0 8px;gap:8px}
 #stage.ml .lp.op{left:var(--sal);right:auto;top:8px}
@@ -925,3 +925,12 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .bpt .ck svg{width:13px;height:13px}
 #stage.m .bpt.on{outline-width:3px}
 #stage.m .bpuse{margin:16px 20px 0;height:60px;justify-content:center;font-size:26px;flex:none}
+/* menu backgrounds on phones: the upright crops (2026-11-27) */
+#stage.m #s-title .menubg{background-image:url(../assets/menu/shop-counter-m.jpg)}
+#stage.m #s-settings .menubg{background-image:url(../assets/menu/back-room-m.jpg)}
+#stage.m #s-mode .menubg,#stage.m #s-results .menubg{background-image:url(../assets/menu/kitchen-table-m.jpg)}
+#stage.m #s-random .menubg,#stage.m #s-sealed .menubg,#stage.m #s-draft .menubg{background-image:url(../assets/menu/pack-desk-m.jpg)}
+#stage.m #s-format .menubg{background-image:url(../assets/menu/locals-night-m.jpg)}
+#stage.m #s-deck .menubg,#stage.m #s-load .menubg{background-image:url(../assets/menu/regional-hall-m.jpg)}
+#stage.m #s-build .menubg{background-image:url(../assets/menu/binder-m.jpg)}
+#stage.m #s-stats .menubg{background-image:url(../assets/menu/trophy-shelf-m.jpg)}

@@ -16,7 +16,7 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
 .hidden{display:none!important}
 
 /* atmosphere behind the menus */
-.menubg{position:absolute;inset:0;background:url(../assets/scenes/shop.jpg) center/cover;filter:blur(6px) brightness(.38) saturate(.9);transform:scale(1.04)}
+.menubg{position:absolute;inset:0;background:url(../assets/menu/shop-counter.jpg) center/cover}
 .lamp{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 58% 52% at 50% 44%,rgba(255,190,130,.13),transparent 70%),radial-gradient(ellipse at 50% 50%,transparent 45%,rgba(0,0,0,.7))}
 .dust{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(circle,rgba(255,220,180,.55) 1px,transparent 1.6px),radial-gradient(circle,rgba(255,220,180,.3) 1px,transparent 1.6px);background-size:190px 230px,310px 270px;opacity:.28;animation:drift 50s linear infinite;mask:radial-gradient(ellipse 55% 50% at 50% 40%,#000,transparent)}
 @keyframes drift{to{background-position:0 -230px,0 -270px}}
@@ -357,7 +357,7 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
   --shape:none;--disp:'Barlow Condensed','Atkinson Hyperlegible',sans-serif;--ui:'Barlow Condensed','Atkinson Hyperlegible',sans-serif;--ui-ls:.06em;background:#07080b}
 .disp{font-family:'Barlow Condensed',sans-serif;font-style:italic;font-weight:900;text-transform:uppercase;letter-spacing:-.005em;line-height:.9}
 .cap{font-family:'Barlow Condensed',sans-serif;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
-.menubg{filter:none;transform:none;background:url(../assets/scenes/shop.jpg) center/cover;filter:brightness(.42) saturate(1.05)}
+.menubg{filter:none;transform:none}
 .lamp,.dust{display:none}
 .rays{position:absolute;right:-200px;top:-200px;width:1300px;height:1500px;pointer-events:none;mix-blend-mode:screen;
   background:conic-gradient(from 200deg at 60% 40%,transparent 0 8deg,rgba(255,140,60,.09) 8deg 14deg,transparent 14deg 30deg,rgba(255,140,60,.07) 30deg 34deg,transparent 34deg 60deg,rgba(255,255,255,.05) 60deg 63deg,transparent 63deg)}
@@ -1530,3 +1530,14 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 .bpkeys kbd{display:inline-block;min-width:34px;padding:3px 8px;margin-right:8px;background:#2a211b;border:1px solid rgba(255,255,255,.18);font:800 16px 'Barlow Condensed';color:#fff;text-align:center}
 .bpkeys .r{margin-left:auto}
 #stage.touch .bpkeys{display:none}
+/* menu backgrounds (Zack, 2026-11-27: ink and wash, "shop counter, binder a, and the rest for the other screens"): one scene per
+   screen, assets/menu/<name>.jpg (web) and -m.jpg (phones), made with tools/style_treat.py from drafts in mockups/menu-scenes/drafts.
+   Each loads only when its screen first shows (screens are display:none until then). */
+#s-title .menubg{background-image:url(../assets/menu/shop-counter.jpg)}
+#s-settings .menubg{background-image:url(../assets/menu/back-room.jpg)}
+#s-mode .menubg,#s-results .menubg{background-image:url(../assets/menu/kitchen-table.jpg)}
+#s-random .menubg,#s-sealed .menubg,#s-draft .menubg{background-image:url(../assets/menu/pack-desk.jpg)}
+#s-format .menubg{background-image:url(../assets/menu/locals-night.jpg)}
+#s-deck .menubg,#s-load .menubg{background-image:url(../assets/menu/regional-hall.jpg)}
+#s-build .menubg{background-image:url(../assets/menu/binder.jpg)}
+#s-stats .menubg{background-image:url(../assets/menu/trophy-shelf.jpg)}
