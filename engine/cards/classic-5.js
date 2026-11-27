@@ -17,6 +17,7 @@ const umiUp = g => allField(g).some(x => faceUp(x) && UMIS.includes(D(x).n));
 const toDef = (g, c) => { if (!onField(c) || c.zone !== 'm' || c.pos !== 'atk') return; c.pos = 'def'; g.seq++; log(g, `${name(c)} was changed to Defense Position.`); };
 const toAtk = (g, c) => { if (!onField(c) || c.zone !== 'm' || c.pos === 'atk') return; c.pos = 'atk'; g.seq++; log(g, `${name(c)} was changed to Attack Position.`); };
 const mainPhase = g => g.phase === 'main1' || g.phase === 'main2';
+const spellImmune = (g, c) => { const sc = (E.format() !== 'edison' && E.SCRIPTS[D(c).n]) || E.SCRIPTS[D(c).n]; const f = sc && sc.self && sc.self.unaffectedSpells; try { return !!(typeof f === 'function' ? f(g, c) : f); } catch (e) { return false; } };
 const burnText = c => { const t = tx(c).replace(/[^.]*battle damage[^.]*\.?/gi, ''); return /inflict[^.]*damage|damage to (both|each|your)|takes? [^.]*damage/i.test(t); };
 
 /* A Trap that answers a moment with no response window in the engine (a battle destruction, a Set):
@@ -324,7 +325,8 @@ E.addScripts({
   'Vengeful Bog Spirit': { effs: [{ type: 'act', res: function* () {} }],
     cont: { forbid: (g, src, a) => a.type === 'attack' && a.c && (a.c.turnIn === g.turnNo && a.c.summonType || g.events.some(e => e.type === 'summon' && e.turn === g.turnNo && e.cs.includes(a.c))) } },
   'Umi': { effs: [{ type: 'act', res: function* () {} }],
-    cont: { atk: (g, src, c) => umiMod(c), def: (g, src, c) => umiMod(c) } },
+    // a monster unaffected by Spells (Torpedo Fish under Umi) gets no Umi bonus; reads its own flag only, so stats can't loop
+    cont: { atk: (g, src, c) => spellImmune(g, c) ? 0 : umiMod(c), def: (g, src, c) => spellImmune(g, c) ? 0 : umiMod(c) } },
   'Thousand Knives': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && named(m, 'Dark Magician')) && monsOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which monster?', monsOf(g, opp(p)), 1, 1, 'bad'); },

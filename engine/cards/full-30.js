@@ -307,7 +307,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
   'Counter Gem': { effs: [
-    { type: 'act', cond: (g, c, p) => g.p[p].gy.some(isCBMon) && g.p[p].st.some(x => x && x !== c),
+    { type: 'act', cond: (g, c, p) => g.p[p].gy.some(isCBMon),   // other Spell/Trap cards are not needed to activate it
       res: function* (g, c, p) {
         const xs = g.p[p].st.filter(x => x && x !== c); const grp = g.group;
         for (const x of xs) move(g, x, 'gy', { reason: 'effect', by: p, group: grp, noLater: true });

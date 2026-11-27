@@ -416,13 +416,13 @@ E.addScripts({
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which Equip Card to the GY?', allField(g).filter(x => x.zone === 'st' && x.equipTo === c.u), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
     res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
   // Activate only when a Field Spell Card is activated: negate that Field Spell this turn.
-  // ENGINE: a Spell's continuous effects can't be negated, so the Field Spell's activation is negated (it stays on the field
-  // with no effect from its activation) and its effects can't be activated this turn; its static effects still apply.
-  'World Suppression': { effs: [{ type: 'act',
+  // The Field Spell stays on the field; this turn its lasting effects don't apply (a static negation read from this card in
+  // the GY) and its effects can't be activated.
+  'World Suppression': { cont: { loc: 'gy', negates: (g, src, m) => (g.f29ws || []).some(w => w.u === m.u && w.turn === g.turnNo) }, effs: [{ type: 'act',
     cond: (g, c, p, x) => !!x.top && x.top.cardAct && isSpell(x.top.c) && D(x.top.c).sub === 'Field' && !x.top.negated,
     target: function* (g, c, p, L2) { L2.data.T = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { const T = L2.data.T; if (!T) return; T.negated = true; const fu = T.c.u, turn = g.turnNo;
-      log(g, `${D(T.c).n} is negated this turn.`); addRule(g, (g2, a) => a.type === 'activate' && a.c && a.c.u === fu && g2.turnNo === turn, { end: turn }); } }] },
+      (g.f29ws || (g.f29ws = [])).push({ u: fu, turn }); g.seq++; log(g, `${D(T.c).n} is negated this turn.`); addRule(g, (g2, a) => a.type === 'activate' && a.c && a.c.u === fu && g2.turnNo === turn, { end: turn }); } }] },
   'Wynn the Wind Charmer': charmer('WIND'),
   'Xing Zhen Hu': {
     cont: { forbid: (g, src, a) => a.type === 'activate' && (src.flags.xing || []).includes(a.c.u) && a.c.zone === 'st' },
