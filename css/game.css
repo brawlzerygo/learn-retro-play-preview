@@ -1535,9 +1535,9 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
    Each loads only when its screen first shows (screens are display:none until then). */
 #s-title .menubg{background-image:url(../assets/menu/shop-counter.jpg)}
 #s-settings .menubg{background-image:url(../assets/menu/back-room.jpg)}
-#s-mode .menubg,#s-results .menubg{background-image:url(../assets/menu/kitchen-table.jpg)}
+#s-format .menubg,#s-results .menubg{background-image:url(../assets/menu/kitchen-table.jpg)}
 #s-random .menubg,#s-sealed .menubg,#s-draft .menubg{background-image:url(../assets/menu/pack-desk.jpg)}
-#s-format .menubg{background-image:url(../assets/menu/locals-night.jpg)}
+#s-mode .menubg{background-image:url(../assets/menu/locals-night.jpg)}
 #s-deck .menubg,#s-load .menubg{background-image:url(../assets/menu/regional-hall.jpg)}
 #s-build .menubg{background-image:url(../assets/menu/binder.jpg)}
 #s-stats .menubg{background-image:url(../assets/menu/trophy-shelf.jpg)}

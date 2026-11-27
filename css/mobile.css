@@ -928,9 +928,9 @@ html.m.hs #stage.m{position:absolute}
 /* menu backgrounds on phones: the upright crops (2026-11-27) */
 #stage.m #s-title .menubg{background-image:url(../assets/menu/shop-counter-m.jpg)}
 #stage.m #s-settings .menubg{background-image:url(../assets/menu/back-room-m.jpg)}
-#stage.m #s-mode .menubg,#stage.m #s-results .menubg{background-image:url(../assets/menu/kitchen-table-m.jpg)}
+#stage.m #s-format .menubg,#stage.m #s-results .menubg{background-image:url(../assets/menu/kitchen-table-m.jpg)}
 #stage.m #s-random .menubg,#stage.m #s-sealed .menubg,#stage.m #s-draft .menubg{background-image:url(../assets/menu/pack-desk-m.jpg)}
-#stage.m #s-format .menubg{background-image:url(../assets/menu/locals-night-m.jpg)}
+#stage.m #s-mode .menubg{background-image:url(../assets/menu/locals-night-m.jpg)}
 #stage.m #s-deck .menubg,#stage.m #s-load .menubg{background-image:url(../assets/menu/regional-hall-m.jpg)}
 #stage.m #s-build .menubg{background-image:url(../assets/menu/binder-m.jpg)}
 #stage.m #s-stats .menubg{background-image:url(../assets/menu/trophy-shelf-m.jpg)}
