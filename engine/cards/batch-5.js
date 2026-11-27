@@ -255,8 +255,8 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && attr(x) === 'WATER' && baseAtk(x) <= 1500),
     res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'WATER' && baseAtk(x) <= 1500); const [x] = yield* pick(g, p, 'Special Summon a WATER with 1500 or less ATK from your Deck', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
-  // ENGINE: lv() has no hook for continuous Level changes, so "reduce the Level of WATER monsters by 1" is not applied (the ATK/DEF part is).
-  'A Legendary Ocean': { cont: { atk: (g, src, c) => attr(c) === 'WATER' ? 200 : 0, def: (g, src, c) => attr(c) === 'WATER' ? 200 : 0 },
+  'A Legendary Ocean': { cont: { atk: (g, src, c) => attr(c) === 'WATER' ? 200 : 0, def: (g, src, c) => attr(c) === 'WATER' ? 200 : 0,
+    lv: (g, src, c) => attr(c) === 'WATER' ? -1 : 0, lvHand: true },
     effs: [{ type: 'act', res: function* () {} }] },
   // Its name counts as "Umi" for Codarus (isUmi in this file); the engine's name() is not changed.
   'Forgotten Temple of the Deep': { effs: [{ type: 'act', res: function* () {} },

@@ -134,12 +134,8 @@ E.addScripts({
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => morphMon(x) && lv(x) === 4); if (!cs.length) return; const [x] = yield* pick(g, p, 'Special Summon which Morphtronic?', cs, 1, 1, 'good');
         if (x && ss(g, p, x)) { x.flags.scopenBy = c.u; x.flags.scopenT = g.turnNo; } } },
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.scopenBy === c.u && x.flags.scopenT === g.turnNo),
-      res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.flags.scopenBy === c.u && x.flags.scopenT === g.turnNo), { by: p }); } },
-    // PARTIAL: the Level 4 in face-up Defense Position is refreshed on every game event; a plain position change shows it at the next event
-    { type: 'trig', loc: 'any', on: (g, ev, c) => {
-      const want = c.zone === 'm' && c.pos === 'def' && !negd(g, c);
-      if (want && !c.flags.scopenLv) { c.flags.lv = 4; c.flags.scopenLv = true; } else if (!want && c.flags.scopenLv) { c.flags.lv = null; c.flags.scopenLv = false; }
-      return false; }, res: function* () {} }] },
+      res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.flags.scopenBy === c.u && x.flags.scopenT === g.turnNo), { by: p }); } } ],
+    self: { lv: (g, c) => c.pos === 'def' ? 4 : 0 } },
   'Morphtronic Slingen': { // ENGINE: the Defense Position "destroy another Morphtronic instead" needs a destruction replacement hook
     effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Tribute a Morphtronic: destroy a card',
       cond: (g, c, p) => c.pos === 'atk' && monsOf(g, p).some(x => morphMon(x) && D(x).n !== 'Morphtronic Slingen') && allField(g).length > 1,

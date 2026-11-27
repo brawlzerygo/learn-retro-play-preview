@@ -36,6 +36,7 @@ function ssIgnoring(g, p, c, pos = 'atk') {
   if (forbid(g, { type: 'ss', c: { ...c, id: plain ? plain.id : c.id, flags: {} }, p, how: 'special' })) { log(g, `${name(c)} can’t be Special Summoned right now.`); return false; }
   const grp = g.group;
   move(g, c, 'm', { ctrl: p, pos, reason: 'summon', group: grp }); c.summonType = 'special'; c.attacks = 0;
+  E.askPosQueue(g, c, p, pos);   // the play client's position question, as ss() does
   log(g, `${PN(g, p)} Special Summoned ${name(c)}${pos === 'def' ? ' in Defense Position' : ''}.`);
   const ev = emit(g, { type: 'summon', cs: [c], how: 'special', p, byEffect: true }, grp);
   g.sw = { cs: [c], p, how: 'special', group: ev.group };

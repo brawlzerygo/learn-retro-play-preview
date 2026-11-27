@@ -169,12 +169,8 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Spell/Trap?', stOf(g, opp(p)), 1, 1, 'bad'); },
       after: (g, c) => { c.flags.f35noAtk = g.turnNo; },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
-  // PARTIAL: the Level is updated at each game event (ENGINE: no hook for ongoing Level changes in lv()).
-  'Apocatequil': { effs: [
-    { type: 'trig', res: noop, on: (g, ev, c) => {
-      const tun = monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && D(x).tu);
-      if (tun && !c.flags.lv) { c.flags.lv = 5; c.flags.f35apo = true; } else if (!tun && c.flags.f35apo) { c.flags.lv = null; c.flags.f35apo = false; }
-      return false; } },
+  'Apocatequil': { self: { lv: (g, c) => monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && D(x).tu) ? 5 : 0 },
+    effs: [
     { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon Oracle of the Sun',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && ev.to === 'gy',
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Oracle of the Sun')),

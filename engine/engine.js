@@ -61,7 +61,17 @@ const isHERO = c => /HERO/.test(name(c));
 const isEHERO = c => /^Elemental HERO/.test(name(c));
 const attr = c => D(c).a || '';
 const race = c => D(c).r || '';
-function lv(c) { if (c.flags.lv) return c.flags.lv; return num(D(c).lv); }
+/* Levels (2026-11-27, a player report: A Legendary Ocean didn't lower WATER Levels, so a Level 5 still needed a Tribute). A card knows its
+ game (mk sets c.g, not enumerable, so it never travels in messages), and lv() applies ongoing Level effects the way stat() applies ATK:
+ a face-up card's own self.lv(g, c) sets its Level (Morphtronic Scopen, Apocatequil), then every face-up cont.lv(g, src, c) adds to it
+ (A Legendary Ocean, Stygian Dirge, Synchro Boost) for monsters face-up on the field, or in the hand when cont.lvHand is set. Never under 1. */
+function lv(c) {
+  let L = c.flags.lv || num(D(c).lv); const g = c.g;
+  if (!g || !L || !(c.zone === 'hand' || (c.zone === 'm' && c.pos !== 'set'))) return L;
+  if (c.zone === 'm' && !c.flags.negated) { const sc = SC(c); if (sc && sc.self && sc.self.lv) { const v = sc.self.lv(g, c); if (v) L = v; } }
+  let d = 0; for (const [s, ct] of statics(g)) if (ct.lv && (c.zone === 'm' || ct.lvHand)) d += ct.lv(g, s, c) || 0;
+  return d ? Math.max(1, L + d) : L;
+}
 function baseAtk(c) { if (c.flags.baseAtk != null) return c.flags.baseAtk; return num(D(c).atk); }
 /* ---------- static effects (scripts' "self" and "cont") ----------
  A script can describe what is always true while its card is face-up:
@@ -133,7 +143,7 @@ const freeST = (g, p) => g.p[p].st.findIndex(z => !z);
 const nFreeM = (g, p) => g.p[p].m.filter(z => !z).length;
 E.fieldOf = fieldOf; E.monsOf = monsOf;
 
-function mk(g, id, owner) { return { u: g.nextU++, id, owner, ctrl: owner, zone: 'deck', pos: null, mods: [], flags: {}, used: {}, attacks: 0 }; }
+function mk(g, id, owner) { const c = { u: g.nextU++, id, owner, ctrl: owner, zone: 'deck', pos: null, mods: [], flags: {}, used: {}, attacks: 0 }; Object.defineProperty(c, 'g', { value: g }); return c; }
 function detach(g, c) {
   if (c.zone === 'm' || c.zone === 'st') { const a = g.p[c.ctrl][c.zone]; const i = a.indexOf(c); if (i >= 0) a[i] = null; }
   else if (c.zone === 'fz') { if (g.p[c.ctrl].fz === c) g.p[c.ctrl].fz = null; }
@@ -307,7 +317,12 @@ function cantBattleDestroy(g, c) {
  effect has resolved (askPositions), and inherent Special Summons (contact Fusion, a summon from the hand) ask before they happen, like
  Synchro Summons always have. Off by default, so tests and the Edison site's duel play as before. */
 const POS_RE = /Attack Position|Defense Position|face-down|face-up Defense|in Defense|in Attack/i;
-function askPosFor(g) { const L = g.resolvingL; if (!g.cfg.askPos || !L) return false; const d = D(L.c); return !POS_RE.test(d.ps || d.tx || ''); }
+// Only the sentences that Special Summon count (2026-11-27, a second report: a position named anywhere else in the text, like Red-Eyes
+// Zombie Dragon's or Infernity Necromancer's, used to skip the question). A text with no "Special Summon" sentence falls back to all of it.
+function namesPos(tx) { const ss = String(tx || '').split(/(?<=[.:;])\s+|\n/).filter(x => /Special Summon/i.test(x)); return (ss.length ? ss : [String(tx || '')]).some(x => POS_RE.test(x)); }
+E.namesPos = namesPos;
+function askPosFor(g) { const L = g.resolvingL; if (!g.cfg.askPos || !L) return false; const d = D(L.c); return !namesPos(d.ps || d.tx || ''); }
+E.askPosQueue = (g, c, p, pos) => { if (pos === 'atk' && askPosFor(g)) (g.posAsk = g.posAsk || []).push({ c, p }); };
 function* askPositions(g) {
   const q = g.posAsk; g.posAsk = null; if (!q) return;
   for (const { c, p } of q) { if (c.zone !== 'm' || c.pos !== 'atk' || c.ctrl !== p) continue;
@@ -718,7 +733,9 @@ function* mainPhase(g) {
     const k = (yield* ask(g, g.tp, 'idle', g.phase === 'main1' ? 'Main Phase 1' : 'Main Phase 2', opts))[0];
     if (k === 'bp') { g.goBattle = true; return; }
     if (k === 'end') return;
-    g.mainStart = false; { const sw = g.sw; beginOp(g); if (k.startsWith('a:')) g.sw = sw; } // a response to the last summon keeps it
+    // A new action ends the last summon's moment (2026-11-27, a player report: Bottomless Trap Hole was offered against a later card after
+    // both players had passed on the summon). The summon's own window (afterAction) already let the turn player act first, then the opponent.
+    g.mainStart = false; beginOp(g);
     yield* doIdle(g, k);
   }
 }
@@ -798,7 +815,7 @@ function* battlePhase(g) {
   for (let guard = 0; guard < 60 && !g.bpEnd; guard++) {
     const k = (yield* ask(g, g.tp, 'idle', 'Battle Phase', battleOpts(g)))[0];
     if (k === 'endbp') break;
-    { const sw = g.sw; beginOp(g); if (k.startsWith('a:')) g.sw = sw; }
+    beginOp(g);   // a new action ends the last summon's moment (see mainPhase)
     if (k.startsWith('a:')) { const [, u, ei] = k.split(':'); const c = [...g.p[g.tp].hand, ...allField(g), ...g.p[g.tp].gy, ...g.p[g.tp].ban].find(x => x.u === +u); yield* activate(g, g.tp, c, effsOf(c)[+ei], +ei); yield* respondLoop(g, 1 - g.tp); yield* resolveChain(g); yield* processTriggers(g); continue; }
     const [, au, tu] = k.split(':'); const a = fieldMons(g).find(x => x.u === +au); const t = tu === 'd' ? null : fieldMons(g).find(x => x.u === +tu);
     yield* attack(g, a, t);

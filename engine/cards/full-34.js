@@ -30,26 +30,8 @@ const noAtkSelf = { cantAttack: (g, c) => c.flags.f34noatk === g.turnNo };
 const markNoAtk = function* (g, c) { c.flags.f34noatk = g.turnNo; };
 
 
-/* Ongoing Level changes (Stygian Dirge -1 to the opponent's monsters, Synchro Boost +1 to the equipped monster).
- lv() has no ongoing hook, so the change is kept in flags.lv and refreshed on every game event (as batch-7 does for Scopen).
- PARTIAL: a change that happens without an event shows at the next event. */
+// Ongoing Level changes (Stygian Dirge -1 to the opponent's monsters, Synchro Boost +1 to the equipped monster) use the engine's cont.lv.
 const num = v => +v || 0;
-function refreshLv(g) {
-  const negd = L.negd || (() => false);
-  for (const m of fieldMons(g)) {
-    let d = 0;
-    if (faceUp(m)) for (const P of g.p) for (const x of P.st) if (x && faceUp(x) && !negd(g, x)) {
-      if (named(x, 'Stygian Dirge') && x.ctrl !== m.ctrl) d -= 1;
-      if (named(x, 'Synchro Boost') && x.equipTo === m.u) d += 1;
-    }
-    const had = m.flags.f34lvd || 0;
-    if (d === had) continue;
-    const natural = (m.flags.lv || num(D(m).lv)) - had;
-    m.flags.lv = (d === 0 && natural === num(D(m).lv)) ? null : Math.max(1, natural + d);
-    m.flags.f34lvd = d;
-  }
-}
-const lvWatch = { type: 'trig', loc: 'any', on: (g, ev, c) => { if (c.f34lvSeen !== g.seq) { c.f34lvSeen = g.seq; refreshLv(g); } return false; }, res: noop };
 
 /* Venom Counters. With a face-up Venom Swamp, a monster whose ATK falls to 0 from the counters is destroyed (checked by the
  cards of this file whenever they place counters). */
@@ -202,7 +184,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; const n = D(t).n; toBottom(g, t); log(g, `${n} was placed on the bottom of the Deck.`); } }] },
 
   /* ----- Stygian ----- */
-  'Stygian Dirge': { effs: [{ type: 'act', res: function* (g) { refreshLv(g); } }, lvWatch] },
+  'Stygian Dirge': { cont: { lv: (g, src, m) => m.ctrl !== src.ctrl ? -1 : 0 }, effs: [{ type: 'act', res: function* () {} }] },
   'Stygian Security': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon a Level 1 Fiend from your Deck',
     on: (g, ev, c) => sentByBattle(ev, c),
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && race(x) === 'Fiend' && lv(x) === 1 && canSS(g, p, x)),
@@ -275,10 +257,10 @@ E.addScripts({
     cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isSynchro(x)) && monsOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which monster?', monsOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
-  'Synchro Boost': { cont: { atk: (g, src, m) => src.equipTo === m.u ? 500 : 0 },
+  'Synchro Boost': { cont: { atk: (g, src, m) => src.equipTo === m.u ? 500 : 0, lv: (g, src, m) => src.equipTo === m.u ? 1 : 0 },
     effs: [{ type: 'act', cond: g => fieldMons(g).some(faceUp),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Equip to which face-up monster?', fieldMons(g).filter(faceUp), 1, 1, 'good'); },
-      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && onField(c)) equip(g, c, t); } }, lvWatch] },
+      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && onField(c)) equip(g, c, t); } }] },
   // Banishing the Synchro Monster is the cost; the new one has its effects negated.
   'Synchro Change': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isSynchro(x) && g.p[p].extra.some(y => isSynchro(y) && lv(y) === lv(x) && canSS(g, p, y))),
