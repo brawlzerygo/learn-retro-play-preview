@@ -9,7 +9,7 @@ html.m,html.m body{background:#0b0c10;overflow:hidden;height:100%}
 #stage.m .gb.sm{height:40px;font-size:16px;padding:0 13px}
 #stage.m .gb svg{width:20px;height:20px}
 #stage.m .disp,#stage.m .htitle{letter-spacing:.005em}
-#stage.m .menubg{background-size:cover;background-position:center;filter:none;transform:none}
+#stage.m .menubg{background-image:url(../assets/scenes/shop-m3.jpg);background-size:cover;filter:blur(5px) brightness(.34);transform:scale(1.05)}
 
 /* the tab bar and Back */
 #mTabs{display:none}
@@ -926,10 +926,10 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .bpt.on{outline-width:3px}
 #stage.m .bpuse{margin:16px 20px 0;height:60px;justify-content:center;font-size:26px;flex:none}
 /* menu backgrounds on phones: the upright crops (2026-11-27) */
-#stage.m #s-title .menubg{background-image:url(../assets/menu/shop-counter-m.jpg)}
-#stage.m #s-settings .menubg{background-image:url(../assets/menu/back-room-m.jpg)}
-#stage.m #s-random .menubg,#stage.m #s-sealed .menubg,#stage.m #s-draft .menubg{background-image:url(../assets/menu/pack-desk-m.jpg)}
-#stage.m #s-mode .menubg{background-image:url(../assets/menu/locals-night-m.jpg)}
-#stage.m #s-format .menubg,#stage.m #s-deck .menubg,#stage.m #s-load .menubg{background-image:url(../assets/menu/regional-hall-m.jpg)}
-#stage.m #s-build .menubg{background-image:url(../assets/menu/binder-m.jpg)}
-#stage.m #s-stats .menubg,#stage.m #s-results .menubg{background-image:url(../assets/menu/trophy-shelf-m.jpg)}
+#stage.m.menuart #s-title .menubg{background-image:url(../assets/menu/shop-counter-m.jpg);filter:none;transform:none;background-position:center}
+#stage.m.menuart #s-settings .menubg{background-image:url(../assets/menu/back-room-m.jpg);filter:none;transform:none;background-position:center}
+#stage.m.menuart #s-random .menubg,#stage.m.menuart #s-sealed .menubg,#stage.m.menuart #s-draft .menubg{background-image:url(../assets/menu/pack-desk-m.jpg);filter:none;transform:none;background-position:center}
+#stage.m.menuart #s-mode .menubg{background-image:url(../assets/menu/locals-night-m.jpg);filter:none;transform:none;background-position:center}
+#stage.m.menuart #s-format .menubg,#stage.m.menuart #s-deck .menubg,#stage.m.menuart #s-load .menubg{background-image:url(../assets/menu/regional-hall-m.jpg);filter:none;transform:none;background-position:center}
+#stage.m.menuart #s-build .menubg{background-image:url(../assets/menu/binder-m.jpg);filter:none;transform:none;background-position:center}
+#stage.m.menuart #s-stats .menubg,#stage.m.menuart #s-results .menubg{background-image:url(../assets/menu/trophy-shelf-m.jpg);filter:none;transform:none;background-position:center}
