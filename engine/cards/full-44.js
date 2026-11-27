@@ -429,8 +429,8 @@ E.addScripts({
   // face-down first). PARTIAL: a control change doesn't count as leaving your side.
   'Storming Wynn': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Tribute a WIND: Special Summon a WIND from your hand',
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && attr(x) === 'WIND') && g.p[p].hand.some(x => isMon(x) && attr(x) === 'WIND' && D(x).k !== 'ritual' && canSS(g, p, x)),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WIND monster?', monsOf(g, p).filter(x => x !== c && faceUp(x) && attr(x) === 'WIND'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && attr(x) === 'WIND') && g.p[p].hand.some(x => isMon(x) && attr(x) === 'WIND' && D(x).k !== 'ritual' && canSS(g, p, x)),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WIND monster?', monsOf(g, p).filter(x => x !== c && attr(x) === 'WIND'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WIND' && D(x).k !== 'ritual' && canSS(g, p, x)); if (!cs.length) return;
         const [x] = yield* pick(g, p, 'Special Summon which WIND monster from your hand?', cs, 1, 1, 'good');
         if (x && ss(g, p, x, 'atk')) { x.flags.f44wynn = c.u; if (onField(c) && faceUp(c)) (c.flags.f44wynnSet || (c.flags.f44wynnSet = [])).push(x.u); } } },

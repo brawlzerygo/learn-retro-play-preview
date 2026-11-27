@@ -298,8 +298,8 @@ E.addScripts({
         if (xs.length) log(g, `${xs.length} monster${xs.length > 1 ? 's were' : ' was'} shuffled into the Deck.`);
         if (onField(c) && faceUp(c)) { c.flags.baseAtk = 1000 * n; g.seq++; log(g, `Kasha's ATK became ${1000 * n}.`); } } }] },
   'Kid Guard': { effs: [{ type: 'act',
-    cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && monsOf(g, p).some(x => faceUp(x) && named(x, 'Hero Kid')),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Hero Kid?', monsOf(g, p).filter(x => faceUp(x) && named(x, 'Hero Kid')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Hero Kid.`); } },
+    cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && monsOf(g, p).some(x => named(x, 'Hero Kid')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Hero Kid?', monsOf(g, p).filter(x => named(x, 'Hero Kid')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Hero Kid.`); } },
     res: function* (g, c, p) { if (g.aw) negateAttack(g); yield* search(g, p, x => isMon(x) && /^Elemental HERO/.test(D(x).n), 'Add which Elemental HERO monster?'); } }] },
   // PARTIAL: no window during damage calculation; the 2000 applies through the whole Damage Step of a battle with a Warrior.
   'Kinetic Soldier (Cipher Soldier)': { self: {

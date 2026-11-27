@@ -149,8 +149,8 @@ E.addScripts({
         on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
         res: function* (g, c, p) { tokens(g, p, { n: 'Fireball Token', a: 'FIRE', r: 'Pyro', lv: 1, atk: 100, def: 100 }, 1, 'def'); } },
       { type: 'ign', label: 'Tribute a FIRE: +500 ATK',
-        cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && attr(x) === 'FIRE'),
-        cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which FIRE monster?', monsOf(g, p).filter(x => x !== c && faceUp(x) && attr(x) === 'FIRE'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+        cond: (g, c, p) => monsOf(g, p).some(x => x !== c && attr(x) === 'FIRE'),
+        cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which FIRE monster?', monsOf(g, p).filter(x => x !== c && attr(x) === 'FIRE'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
         res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
   // Only when an opponent's card effect discards it: Special Summon it, then destroy up to 2 targeted cards.
   'Goldd, Wu-Lord of Dark World': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1, destroy: 1 }, label: 'Special Summon it and destroy up to 2 cards',

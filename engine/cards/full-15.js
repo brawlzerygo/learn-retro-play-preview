@@ -344,8 +344,8 @@ E.addScripts({
       cost: function* (g, c, p) { move(g, c, 'extra', { reason: 'cost' }); log(g, `${PN(g, p)} returned Super Roboyarou to the Extra Deck.`); },
       res: function* (g, c, p) { const x = g.p[p].extra.find(y => named(y, 'Super Robolady')); if (x) ss(g, p, x, 'atk'); } }] },
   'Super Solar Nutrient': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => c.zone === 'hand' && monsOf(g, p).some(x => faceUp(x) && race(x) === 'Plant' && lv(x) <= 2),
-    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute 1 Level 2 or lower Plant monster', monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Plant' && lv(x) <= 2), 1, 1, 'cost'); L2.data.lv = lv(x); tribute(g, p, x); },
+    cond: (g, c, p) => c.zone === 'hand' && monsOf(g, p).some(x => race(x) === 'Plant' && lv(x) <= 2),
+    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute 1 Level 2 or lower Plant monster', monsOf(g, p).filter(x => race(x) === 'Plant' && lv(x) <= 2), 1, 1, 'cost'); L2.data.lv = lv(x); tribute(g, p, x); },
     res: function* (g, c, p, L2) { const max = (L2.data.lv || 0) + 3; const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => isMon(x) && race(x) === 'Plant' && lv(x) <= max && !['fusion', 'synchro', 'ritual'].includes(D(x).k));
       let t = null; if (cs.length && freeM(g, p) >= 0 && onField(c)) { [t] = yield* pick(g, p, `Special Summon a Level ${max} or lower Plant from your hand or Deck`, cs, 1, 1, 'good'); const fromDeck = t && t.zone === 'deck'; if (t && !ss(g, p, t, 'atk')) t = null; if (fromDeck) shuffleDeck(g, p); }
       if (t && onField(c)) link(g, c, t); else if (onField(c)) move(g, c, 'gy', { reason: 'rule' }); } }] },

@@ -88,7 +88,7 @@ E.addScripts({
   'Charubin the Fire Knight': { effs: [] },
   'Checkmate': { effs: [cleanup, { type: 'act',
     cond: (g, c, p) => monsOf(g, p).some(x => isArchfiend(x) && monsOf(g, p).some(t => t !== x && faceUp(t) && named(t, 'Terrorking Archfiend'))),
-    cost: function* (g, c, p) { const ms = monsOf(g, p); const [x] = yield* pick(g, p, 'Tribute 1 Archfiend monster', ms.filter(x => isArchfiend(x) && ms.some(t => t !== x && faceUp(t) && named(t, 'Terrorking Archfiend'))), 1, 1, 'cost');
+    cost: function* (g, c, p) { const ms = monsOf(g, p); const [x] = yield* pick(g, p, 'Tribute 1 Archfiend monster', ms.filter(x => isArchfiend(x) && ms.some(t => t !== x && named(t, 'Terrorking Archfiend'))), 1, 1, 'cost');
       if (x) { const n = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${n}.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Terrorking Archfiend can attack directly?', monsOf(g, p).filter(t => faceUp(t) && named(t, 'Terrorking Archfiend')), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { turnDirect(g, t); log(g, `${name(t)} can attack directly this turn.`); } } }] },

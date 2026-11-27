@@ -122,8 +122,8 @@ E.addScripts({
         for (const x of cands) if (ss(g, p, x, 'atk', { negate: true })) x.flags.cantAttack = true;
         shuffleDeck(g, p); } },
     { type: 'quick', ds: true, label: 'Tribute a Fish: negate', tags: { destroy: 1 },
-      cond: (g, c, p, x) => x.top && !x.top.negated && x.top.p !== undefined && x.top.t && x.top.t.includes(c) && monsOf(g, p).some(y => y !== c && faceUp(y) && isFish(y)),
-      cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [y] = yield* pick(g, p, 'Tribute a Fish', monsOf(g, p).filter(y => y !== c && faceUp(y) && isFish(y)), 1, 1, 'cost'); move(g, y, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${nm(y)}.`); },
+      cond: (g, c, p, x) => x.top && !x.top.negated && x.top.p !== undefined && x.top.t && x.top.t.includes(c) && monsOf(g, p).some(y => y !== c && isFish(y)),
+      cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [y] = yield* pick(g, p, 'Tribute a Fish', monsOf(g, p).filter(y => y !== c && isFish(y)), 1, 1, 'cost'); move(g, y, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${nm(y)}.`); },
       res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
   'Moray of Greed': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 3 && g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WATER').length >= 2,
     res: function* (g, c, p) { const w = g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WATER'); if (w.length < 2) return;

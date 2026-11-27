@@ -2,6 +2,9 @@
 // Keep each line a short general summary (Zack, 2026-11-27: no card-by-card detail). v is the version players see (167 shows as 1.67); the newest entry is the version on the home screen. The ?v= cache number can be
 // higher (a small change added to the current version's notes still needs new cache numbers). Written for players: what changed in the game, plain words, no code.
 export const NOTES = [
+  { v: 171, date: 'Nov 27, 2026', items: [
+    'Card and rules fixes: Tribute costs and Special Summon positions.',
+  ] },
   { v: 170, date: 'Nov 27, 2026', items: [
     'Card and rules fixes: Level changes, Special Summon positions and trap timing.',
     'A banner lets you know when a new version is ready.',

@@ -221,8 +221,8 @@ E.addScripts({
     cont: { atk: (g, src, c) => faceUp(c) && attr(c) === 'EARTH' ? 500 : 0, def: (g, src, c) => faceUp(c) && attr(c) === 'EARTH' ? -400 : 0 } },
   'Gaia Soul the Combustible Collective': { self: { piercing: true },
     effs: [{ type: 'ign', opt: true, label: 'Tribute Pyros for ATK',
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && race(x) === 'Pyro'),
-      cost: function* (g, c, p, L2) { const cs = monsOf(g, p).filter(x => x !== c && faceUp(x) && race(x) === 'Pyro'); const xs = yield* pick(g, p, 'Tribute up to 2 Pyro monsters', cs, 1, 2, 'cost');
+      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && race(x) === 'Pyro'),
+      cost: function* (g, c, p, L2) { const cs = monsOf(g, p).filter(x => x !== c && race(x) === 'Pyro'); const xs = yield* pick(g, p, 'Tribute up to 2 Pyro monsters', cs, 1, 2, 'cost');
         for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); L2.data.n = xs.length; },
       res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000 * L2.data.n }); log(g, `${name(c)} gained ${1000 * L2.data.n} ATK.`); } } },
       { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end',

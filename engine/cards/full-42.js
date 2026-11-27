@@ -387,8 +387,8 @@ E.addScripts({
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const xs = g.p[p].hand.filter(x => named(x, 'Phoenixian Cluster Amaryllis')); const [x] = yield* pick(g, p, 'Special Summon Phoenixian Cluster Amaryllis', xs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   // Cyber Laser Dragon's own lock (full-04.js) lets it be Special Summoned while this card is face-up and resolving.
   'Photon Generator Unit': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).filter(m => faceUp(m) && cyberDragon(m) && !m.flags.noTribute).length >= 2 && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].some(x => named(x, 'Cyber Laser Dragon')),
-    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 Cyber Dragons', monsOf(g, p).filter(m => faceUp(m) && cyberDragon(m) && !m.flags.noTribute), 2, 2, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); },
+    cond: (g, c, p) => monsOf(g, p).filter(m => cyberDragon(m) && !m.flags.noTribute).length >= 2 && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].some(x => named(x, 'Cyber Laser Dragon')),
+    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 Cyber Dragons', monsOf(g, p).filter(m => cyberDragon(m) && !m.flags.noTribute), 2, 2, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); },
     res: function* (g, c, p) {
       if (freeM(g, p) < 0) return;
       const xs = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => named(x, 'Cyber Laser Dragon')); if (!xs.length) return;

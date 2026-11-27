@@ -404,8 +404,8 @@ E.addScripts({
     res: function* (g, c, p, L2) { const q = opp(p); const xs = [...new Set(g.events.filter(e => e.group === L2.ev.group && e.type === 'move' && e.from === 'deck' && e.to === 'hand' && e.c.owner === q && e.c.zone === 'hand').map(e => e.c))];
       if (!xs.length) return; const [x] = yield* pick(g, q, 'Discard 1 of the cards you added', xs, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, q)} discarded ${name(x)}.`); } } })] },
   'Dreadscythe Harvester': { effs: [{ type: 'ign', label: 'Tribute an Insect: +500 ATK',
-    cond: (g, c, p) => monsOf(g, p).some(m => m !== c && faceUp(m) && race(m) === 'Insect'),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Insect?', monsOf(g, p).filter(m => m !== c && faceUp(m) && race(m) === 'Insect'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p) => monsOf(g, p).some(m => m !== c && race(m) === 'Insect'),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Insect?', monsOf(g, p).filter(m => m !== c && race(m) === 'Insect'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
   'Drill Synchron': { cont: { grant: (g, src, c, flag) => flag === 'piercing' && c.ctrl === src.ctrl && faceUp(c) && race(c) === 'Warrior' },
     effs: [{ type: 'trig', opt: true, when: true, label: 'Draw 1 card',
@@ -446,8 +446,8 @@ E.addScripts({
       if (ev.type === 'summon' && ev.how === 'synchro' && boyUsed(g, c, ev.group)) for (const x of ev.cs) if (x && onField(x)) { x.flags.negated = true; x.flags.banishOnLeave = true; g.seq++; }
       return false; } }] },
   'Edge Hammer': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && name(m) === 'Elemental HERO Bladedge') && monsOf(g, opp(p)).length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute Elemental HERO Bladedge', monsOf(g, p).filter(m => faceUp(m) && name(m) === 'Elemental HERO Bladedge'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p) => monsOf(g, p).some(m => name(m) === 'Elemental HERO Bladedge') && monsOf(g, opp(p)).length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute Elemental HERO Bladedge', monsOf(g, p).filter(m => name(m) === 'Elemental HERO Bladedge'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which monster?', monsOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || t.ctrl === p) return; const A = baseAtk(t); if (destroy(g, [t], { by: p, src: c }).length && A > 0) damage(g, opp(p), A, { src: c, srcP: p }); } }] },
   'Eliminating the League': { effs: [{ type: 'act', tags: { destroy: 1 },

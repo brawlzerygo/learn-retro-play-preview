@@ -267,8 +267,8 @@ E.addScripts({
     { type: 'trig', loc: 'st', mand: true, tags: { ss: 1 }, label: 'Return the banished monsters',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl && faceUp(c) && (c.flags.temple || []).length > 0,
       res: function* (g, c, p) { const us = c.flags.temple || []; c.flags.temple = []; for (const u of us) { const x = allCards(g, 'ban').find(y => y.u === u); if (!x) continue; if (freeM(g, p) >= 0) ss(g, p, x); else move(g, x, 'gy', { reason: 'rule' }); } } }] },
-  'Spiritual Water Art - Aoi': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => attr(x) === 'WATER' && faceUp(x)) && g.p[opp(p)].hand.length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WATER monster?', monsOf(g, p).filter(x => attr(x) === 'WATER' && faceUp(x)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+  'Spiritual Water Art - Aoi': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => attr(x) === 'WATER') && g.p[opp(p)].hand.length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WATER monster?', monsOf(g, p).filter(x => attr(x) === 'WATER'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     res: function* (g, c, p) { const h = g.p[opp(p)].hand; log(g, `${PN(g, p)} looked at ${PN(g, opp(p))}'s hand.`); if (!h.length) return; const [x] = yield* pick(g, p, 'Send which card from their hand to the GY?', h, 1, 1, 'bad'); if (x) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${D(x).n} was sent to the GY.`); } } }] },
 
   /* ----- Crystal Beast ----- */

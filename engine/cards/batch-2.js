@@ -172,8 +172,8 @@ E.addScripts({
       res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) { t.pos = t.pos === 'atk' ? 'def' : 'atk'; log(g, `${name(t)} changed to ${t.pos === 'atk' ? 'Attack' : 'Defense'} Position.`); } } }] },
   'XX-Saber Gottoms': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => attr(c) === 'EARTH', tunerAsNon: true }),
     effs: [{ type: 'ign', label: 'Tribute an X-Saber: random discard',
-      cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isXSaber(x)) && g.p[opp(p)].hand.length > 0,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute an X-Saber monster', monsOf(g, p).filter(x => faceUp(x) && isXSaber(x)), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+      cond: (g, c, p) => monsOf(g, p).some(x => isXSaber(x)) && g.p[opp(p)].hand.length > 0,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute an X-Saber monster', monsOf(g, p).filter(x => isXSaber(x)), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
       res: function* (g, c, p) { randomDiscard(g, opp(p)); } }] },
 
   /* ----- Amaryllis / Plants ----- */

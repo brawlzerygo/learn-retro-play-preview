@@ -290,7 +290,7 @@ E.addScripts({
       res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } }] },
   'Hand of the Six Samurai': { effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Tribute a Six Samurai: destroy a monster',
     cond: (g, c, p) => monsOf(g, p).some(x => x !== c && sixSam(x)) && fieldMons(g).length >= 2,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Six Samurai monster', monsOf(g, p).filter(x => sixSam(x) && faceUp(x)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Six Samurai monster', monsOf(g, p).filter(x => sixSam(x)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     target: function* (g, c, p, L) { const cs = fieldMons(g); if (cs.length) yield* tgt(g, p, L, 'Destroy which monster?', cs, 1, 1, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'The Six Samurai - Irou': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos === 'set',

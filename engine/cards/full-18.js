@@ -405,8 +405,8 @@ E.addScripts({
       return false; }, res: function* () {} }] },
   'Arcane Archer of the Forest': { self: { noAttackTarget: (g, c) => monsOf(g, c.ctrl).some(x => faceUp(x) && race(x) === 'Plant') },
     effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Tribute a Plant: destroy a Spell/Trap',
-      cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Plant') && stOnField(g).length > 0,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Plant monster', monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Plant'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+      cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Plant') && stOnField(g).length > 0,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Plant monster', monsOf(g, p).filter(x => race(x) === 'Plant'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Spell/Trap Card?', stOnField(g), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
   // Port of goat-7.js: you declare from the names in your own deck list (the known top card first under Convulsion of Nature).

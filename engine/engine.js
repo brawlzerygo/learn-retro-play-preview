@@ -322,12 +322,12 @@ const POS_RE = /Attack Position|Defense Position|face-down|face-up Defense|in De
 function namesPos(tx) { const ss = String(tx || '').split(/(?<=[.:;])\s+|\n/).filter(x => /Special Summon/i.test(x)); return (ss.length ? ss : [String(tx || '')]).some(x => POS_RE.test(x)); }
 E.namesPos = namesPos;
 function askPosFor(g) { const L = g.resolvingL; if (!g.cfg.askPos || !L) return false; const d = D(L.c); return !namesPos(d.ps || d.tx || ''); }
-E.askPosQueue = (g, c, p, pos) => { if (pos === 'atk' && askPosFor(g)) (g.posAsk = g.posAsk || []).push({ c, p }); };
+E.askPosQueue = (g, c, p, pos) => { if (pos !== 'set' && askPosFor(g)) (g.posAsk = g.posAsk || []).push({ c, p }); };
 function* askPositions(g) {
   const q = g.posAsk; g.posAsk = null; if (!q) return;
-  for (const { c, p } of q) { if (c.zone !== 'm' || c.pos !== 'atk' || c.ctrl !== p) continue;
+  for (const { c, p } of q) { if (c.zone !== 'm' || c.pos === 'set' || c.ctrl !== p) continue;
     const i = yield* choose(g, p, `${name(c)}: which position?`, ['Attack Position', 'Defense Position']);
-    if (i) { c.pos = 'def'; log(g, `${PN(g, p)} put ${name(c)} in Defense Position.`); } }
+    const pos = i ? 'def' : 'atk'; if (pos !== c.pos) { c.pos = pos; log(g, `${PN(g, p)} put ${name(c)} in ${i ? 'Defense' : 'Attack'} Position.`); } }
 }
 function ss(g, p, c, pos = 'atk', o = {}) { // Special Summon by an effect (no negation window of its own)
   const zi = freeM(g, p); if (zi < 0) return false;
@@ -336,7 +336,8 @@ function ss(g, p, c, pos = 'atk', o = {}) { // Special Summon by an effect (no n
   c.summonType = o.how || 'special'; c.attacks = 0;
   if (o.negate) c.flags.negated = true;
   if (o.banishOnLeave) c.flags.banishOnLeave = true;
-  if (pos === 'atk' && askPosFor(g)) (g.posAsk = g.posAsk || []).push({ c, p });
+  // a text that names no position asks, whatever the script defaulted to (2026-11-27: Destiny HERO - Malicious's script forced Defense)
+  if (pos !== 'set' && askPosFor(g)) (g.posAsk = g.posAsk || []).push({ c, p });
   log(g, `${PN(g, p)} Special Summoned ${pos === 'set' ? 'a monster face-down' : name(c)}${pos === 'def' ? ' in Defense Position' : ''}.`);
   const ev = emit(g, { type: 'summon', cs: [c], how: o.how || 'special', p, byEffect: true }, o.group);
   g.sw = { cs: [c], p, how: o.how || 'special', group: ev.group };
@@ -959,8 +960,8 @@ const SCRIPTS = {
   'Dimensional Prison': { effs: [{ type: 'act', cond: (g, c, p) => g.aw && g.aw.a.ctrl !== p,
     target: function* (g, c, p, L) { L.t = [g.aw.a]; },
     res: function* (g, c, p, L) { const t = live(L)[0]; if (t) { move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${D(t).n} was banished.`); } } }] },
-  'Icarus Attack': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Winged Beast') && allField(g).filter(x => x !== c).length >= 2,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Winged Beast', monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Winged Beast'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
+  'Icarus Attack': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Winged Beast' && allField(g).filter(y => y !== c && y !== x).length >= 2),   // 2 targets left after the Tribute, face-down Winged Beasts count
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Winged Beast', monsOf(g, p).filter(x => race(x) === 'Winged Beast'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which 2 cards?', allField(g).filter(x => x !== c), 2, 2, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'Legacy of Yata-Garasu': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 1, res: function* (g, c, p) { draw(g, p, 1); } }] },
