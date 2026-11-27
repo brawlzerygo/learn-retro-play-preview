@@ -45,7 +45,8 @@ export class Table {
     this.hot = 0; this.wake = () => { this.hot = performance.now() + 350; };
     { const sa = this.scene.add.bind(this.scene), sr = this.scene.remove.bind(this.scene); this.scene.add = (...a) => { this.wake(); return sa(...a); }; this.scene.remove = (...a) => { this.wake(); return sr(...a); }; }
     { const ld = this.loader.load.bind(this.loader); this.loader.load = (u, ok, pr, er) => ld(u, t => { this.wake(); if (ok) ok(t); }, pr, er); }
-    const READS = new Set(['constructor', 'url', 'slot', 'pileTop', 'screenToWorld', 'ndc', 'project', 'cardScreen', 'where', 'has', 'loop', 'step', 'wait', 'bindPointer', 'dispose']);
+    // canvasHidden runs every idle frame: if it woke the table, one lit glow kept it drawing at 60 fps with shadows (2026-11-26 audit)
+    const READS = new Set(['constructor', 'url', 'slot', 'pileTop', 'screenToWorld', 'ndc', 'project', 'cardScreen', 'where', 'has', 'loop', 'step', 'wait', 'bindPointer', 'dispose', 'canvasHidden', 'pose']);
     for (const k of Object.getOwnPropertyNames(Table.prototype)) if (!READS.has(k) && typeof this[k] === 'function') { const f = this[k]; this[k] = function (...a) { this.wake(); return f.apply(this, a); }; }
     this.cardGeo = new THREE.BoxGeometry(this.CW, 0.008, this.CH);
     this.edgeMat = new THREE.MeshLambertMaterial({ color: 0x0c0a09 });
@@ -64,7 +65,7 @@ export class Table {
     this.buildZones();
     this.loop = this.loop.bind(this); requestAnimationFrame(this.loop);
     this.lastFrame = performance.now(); this.tick = setInterval(() => { const now = performance.now(); if (now - this.lastFrame > 250) this.step(now); }, 100);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) for (const tw of this.tweens.splice(0)) { tw.fn(1); tw.res(); } });
+    this.onVis = () => { if (document.hidden) for (const tw of this.tweens.splice(0)) { tw.fn(1); tw.res(); } }; document.addEventListener('visibilitychange', this.onVis);
   }
 
   /* ---------- textures and meshes ---------- */
@@ -303,8 +304,10 @@ export class Table {
 
   // tweens advance here; a fallback clock calls it too when the browser stops sending frames (a background tab or window)
   step(now) { for (const tw of [...this.tweens]) { const k = Math.min(1, (now - tw.t0) / tw.dur); tw.fn(tw.e(k)); if (k >= 1) { this.tweens.splice(this.tweens.indexOf(tw), 1); tw.res(); } } }
-  canvasHidden() { const c = this.renderer.domElement; return document.hidden || !c.isConnected || c.offsetParent === null; }
-  dispose() { this.dead = true; clearInterval(this.tick); this.renderer.dispose(); }
+  // offsetParent can force a layout, so the answer is kept for half a second
+  canvasHidden() { if (document.hidden) return true; const now = performance.now(); if (now - (this.hidAt || 0) > 500) { const c = this.renderer.domElement; this.hidAt = now; this.hid = !c.isConnected || c.offsetParent === null; } return this.hid; }
+  // a rebuilt table (rotating a phone, changing the board) frees the old one: no listener keeps it alive, and its GPU memory goes at once
+  dispose() { this.dead = true; clearInterval(this.tick); document.removeEventListener('visibilitychange', this.onVis); this.renderer.dispose(); this.renderer.forceContextLoss(); }
   loop(t) {
     if (this.dead) return;
     requestAnimationFrame(this.loop);
@@ -313,7 +316,8 @@ export class Table {
     this.step(now);
     // nothing moving: skip the frame. Glows, rings and lit zones only shimmer, so they draw at 30 fps (20 on phones) without the shadow pass
     const busy = now < this.hot, ambient = this.glows.size || this.rings.length || this.zones.some(z => z.visible);
-    if (!busy) { if (!ambient || this.canvasHidden() || now - (this.lastDraw || 0) < (this.phone ? 50 : 33)) return; }
+    // (the clock check comes before canvasHidden, whose offsetParent read can force a layout: once per shimmer frame, not every frame)
+    if (!busy) { if (!ambient || now - (this.lastDraw || 0) < (this.phone ? 50 : 33) || this.canvasHidden()) return; }
     this.lastDraw = now; if (busy) this.renderer.shadowMap.needsUpdate = true;
     const pulse = 0.5 + 0.5 * Math.sin(now / 220);
     const T = now / 1000; for (const z of this.zones) if (z.visible) z.material.uniforms.uTime.value = T + z.userData.zone.i * 0.7;

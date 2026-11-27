@@ -5,6 +5,7 @@ export const NOTES = [
   { v: 168, date: 'Nov 26, 2026', items: [
     'Your hand fans out again, in a clean arc: the cards overlap evenly and tilt to follow the curve. The computer\'s hand fans the same way.',
     'A new table picker in Settings: see every table at once, look at one big, and pick it with one tap.',
+    'Lighter on phones and laptops: the duel table now rests while it waits for you instead of redrawing all the time, and the table pictures load smaller.',
   ] },
   { v: 167, date: 'Nov 26, 2026', items: [
     'Every Edison and Goat legal card is now in the Deck Builder: 3,673 cards for Edison and 1,691 for Goat.',

@@ -1,11 +1,12 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=170';
-import * as S from './sfx.js?v=170';
-import * as FX from './fx.js?v=170';
-import { Board, layoutOf, matChoice } from './boards.js?v=170';
-import { NOTES, verLabel } from './notes.js?v=170';
+import { Table } from './table.js?v=171';
+import * as S from './sfx.js?v=171';
+import * as FX from './fx.js?v=171';
+import { Board, layoutOf, matChoice } from './boards.js?v=171';
+import { NOTES, verLabel } from './notes.js?v=171';
+import { paintMenuBg } from './menubg.js?v=171';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -123,12 +124,13 @@ applyTheme();
 function renderSettings() {
   $('#setList').innerHTML = SETROWS.map((r, i) => { const v = SET[r.k] != null ? SET[r.k] : r.vals[0];
     const val = r.blocks ? `<span class="blocks">${r.vals.slice(1).map(x => `<i class="${x <= v ? 'f' : ''}"></i>`).join('')}</span><span class="vn">${v}</span>` : `<span class="vt">${r.lab(v)}</span>`;
-    return `<div class="vrow ${i === setRow ? 'on' : ''}" data-i="${i}"><span>${r.name}</span><span class="dots"></span>${r.k === 'table' ? `<span class="bthumb" data-prev="1" style="background-image:url(${prevImg(v)})"></span><span class="val tval"><span class="vt">${r.lab(v)}</span><span class="bchg" data-prev="1">Change</span></span></div>` : `<span class="val"><span class="arr" data-d="-1"><svg><use href="#i-tl"/></svg></span>${val}<span class="arr" data-d="1"><svg><use href="#i-tr"/></svg></span>${r.soon ? `<span class="soonv">${r.soon}</span>` : ''}</span></div>`}`; }).join('');
+    return `<div class="vrow ${i === setRow ? 'on' : ''}" data-i="${i}"><span>${r.name}</span><span class="dots"></span>${r.k === 'table' ? `<span class="bthumb" data-prev="1" style="background-image:url(${prevImg(v, 1)})"></span><span class="val tval"><span class="vt">${r.lab(v)}</span><span class="bchg" data-prev="1">Change</span></span></div>` : `<span class="val"><span class="arr" data-d="-1"><svg><use href="#i-tl"/></svg></span>${val}<span class="arr" data-d="1"><svg><use href="#i-tr"/></svg></span>${r.soon ? `<span class="soonv">${r.soon}</span>` : ''}</span></div>`}`; }).join('');
   $('#setDesc').textContent = SETROWS[setRow].desc + (SETROWS[setRow].k === 'table' ? ` ${TAP()[0].toUpperCase() + TAP().slice(1)} the row to see every table${MOBILE ? '' : ' (or press Enter)'}.` : '');
 }
 // the board preview (Zack, 2026-11-26: "a preview option in the settings so players can see a preview of the board"): a still of each table,
 // the phone one on phones (assets/scenes/prev-<id>[-m].jpg, frames from tools/record.mjs duel clips)
-const prevImg = v => `assets/scenes/prev-${v || 'rewind'}${MOBILE ? '-m' : ''}.jpg`;
+// small: the 640 px (web) / 300 px (phone) copies for thumbnails (prev-<id>[-m]-s.jpg, ffmpeg -q:v 4), so the picker doesn't load 7 full stills
+const prevImg = (v, small) => `assets/scenes/prev-${v || 'rewind'}${MOBILE ? '-m' : ''}${small ? '-s' : ''}.jpg`;
 // the board picker (Zack, 2026-11-26: "when someone is looking at the preview image, they can select that board... not sure if
 // arrows/cycling thru them is the best experience"; mock-up mockups/board-picker/): every table at once, the one you look at large
 // with its own Use button. Web: a grid on the right, arrows move, Enter uses, Esc closes. Phones: a swipe row and a pinned button.
@@ -154,7 +156,7 @@ function boardPicker() {
       <div class="bphero"><div class="bpimg" style="background-image:url(${prevImg(f)})">${inUse ? '<div class="bptag">In use</div>' : ''}</div>
         <div class="bpcap"><div><div class="bpnm">${esc(r.lab(f))}</div><div class="bpds">${esc(BOARD_INFO[f] || '')}</div></div>${MOBILE ? '' : btn}</div></div>
       <div class="bpgal"><div class="bplbl"><span>All tables · ${ids.length}</span><span>${MOBILE ? 'Swipe for more' : 'Now: ' + esc(r.lab(using))}</span></div>
-        <div class="bpgrid">${ids.map(id => `<div class="bpt${id === f ? ' on' : ''}" data-b="${id}" style="background-image:url(${prevImg(id)})">${id === using ? tick : ''}<b>${esc(r.lab(id))}</b></div>`).join('')}</div></div>
+        <div class="bpgrid">${ids.map(id => `<div class="bpt${id === f ? ' on' : ''}" data-b="${id}" style="background-image:url(${prevImg(id, 1)})">${id === using ? tick : ''}<b>${esc(r.lab(id))}</b></div>`).join('')}</div></div>
       ${MOBILE ? btn : `<div class="bpkeys"><span><kbd>&#8592;&#8594;</kbd>Look through</span><span><kbd>Enter</kbd>Use this table</span><span><kbd>Esc</kbd>Back</span><span class="r">Changes take effect next duel</span></div>`}`;
     const on = d.querySelector('.bpt.on'); if (on && MOBILE) on.scrollIntoView({ block: 'nearest', inline: 'center' });
   };
@@ -190,7 +192,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=170');
+const W = new Worker('js/worker.js?v=171');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -2293,7 +2295,7 @@ if (!/localhost|127\.0\.0\.1/.test(location.hostname)) { setTimeout(checkUpdate,
 // version and release notes in the home screen's corner (Zack, 2026-11-26: "change our version logic to a decimal - so this one being 1.67";
 // "a 'latest release notes' page thats clickable in the bottom right next to the version"). ?v= stays a whole number (the cache key
 // and the update check). Players see the newest entry in js/notes.js (Zack, 2026-11-26: small changes can "land in the whats new popup"
-// of the current version, so the cache number can move on while the version stays, e.g. ?v=170 still shows v1.68).
+// of the current version, so the cache number can move on while the version stays, e.g. ?v=171 still shows v1.68).
 function releaseNotes() {
   S.play('click'); const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 69; const p = document.createElement('div'); p.className = 'pn dlg relnotes'; p.style.zIndex = 70;
   p.innerHTML = `<h3 class="disp">What's new</h3><div class="rnlist">${NOTES.map(n => `<section><div class="rnhead"><b>${verLabel(n.v)}</b><span>${esc(n.date)}</span>${n === NOTES[0] ? '<i>You have this</i>' : ''}</div><ul>${n.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')}</div><div class="btns"><button class="gb pri" data-y>Close<span class="shine"></span></button></div>`;
@@ -2302,6 +2304,15 @@ function releaseNotes() {
   document.addEventListener('keydown', key, true); v.onclick = done; p.onclick = e => { if (e.target.closest('[data-y]')) done(); };
 }
 $('#verNum').textContent = verLabel(NOTES[0].v); $('#verNotes').onclick = releaseNotes;
+
+// menu background mock-ups (?menubg=rewind|vault|shadow|arena|circuit|holo; js/menubg.js): painted once, after the fonts load, into a
+// still picture that replaces the Card Shop backdrop behind every menu screen
+{ const mi = new URLSearchParams(location.search).get('menuimg');   // a finished picture instead (mockups/style-samples/), path under play/
+  if (mi && /^[\w\/.-]+\.(png|jpe?g|webp)$/.test(mi)) { const w = $('#wipNote'); if (w) w.remove(); const st = document.createElement('style'); st.textContent = `#stage .menubg{background:url(${mi}) center/cover!important;filter:none!important;transform:none!important}#stage .rays{display:none}`; document.head.append(st); } }
+{ const mb = new URLSearchParams(location.search).get('menubg');
+  if (mb) { const w = $('#wipNote'); if (w) w.remove(); }
+  if (mb) document.fonts.ready.then(() => { const c = paintMenuBg(mb, MOBILE ? SW * 2 : 1920, MOBILE ? SH * 2 : 1080); if (!c) return;
+    c.toBlob(b => { const st = document.createElement('style'); st.textContent = `#stage .menubg{background:url(${URL.createObjectURL(b)}) center/cover!important;filter:none!important;transform:none!important}${mb === 'rewind' ? '' : '#stage .rays{display:none}'}`; document.head.append(st); }, 'image/jpeg', 0.9); }); }
 
 // work-in-progress note on the title screen; hidden for good once closed
 { const w = $('#wipNote'); if (w && localStorage.getItem('lrplay:wip') !== '1') { w.hidden = false; $('#wipX').onclick = () => { w.hidden = true; localStorage.setItem('lrplay:wip', '1'); }; } }

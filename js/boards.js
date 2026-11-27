@@ -11,7 +11,7 @@
 
    Boards: arena (Arena Lights), rewind (Rewind), rune (Runestone). Pick with ?mat=<id> or Settings (lrplay:set mat). */
 import * as THREE from '../vendor/three.module.min.js';
-import { ICONS } from './icons.js?v=170';
+import { ICONS } from './icons.js?v=171';
 
 const B = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 const CW = 0.6, CH = 0.875, ZW = CW + 0.08, ZH = CH + 0.08;
