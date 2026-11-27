@@ -1467,6 +1467,7 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 @keyframes pileGlow{50%{box-shadow:0 0 0 6px rgba(255,122,48,.25),0 0 30px rgba(255,122,48,.95)}}
 @media (prefers-reduced-motion:reduce){.ct.act,.banb.act{animation:none}}
 .pilehint{color:var(--acc-hi);font-weight:700;margin-left:6px}
+.pilego{font:inherit;color:inherit;background:none;border:0;padding:0;text-decoration:underline;text-underline-offset:3px;cursor:pointer;pointer-events:auto}
 .dl.can .card{outline:3px solid var(--acc);outline-offset:2px;box-shadow:0 0 20px rgba(255,122,48,.6)}
 .dl.can{color:var(--ink)}
 .dlacts{display:flex;flex-direction:column;gap:6px;margin-top:8px}
