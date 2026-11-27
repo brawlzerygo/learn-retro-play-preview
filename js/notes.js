@@ -5,6 +5,8 @@ export const NOTES = [
   { v: 169, date: 'Nov 27, 2026', items: [
     'The computer plays much sharper on Advanced and Tournament: it no longer skips direct attacks, passes on attacks it would win, or misses lethal when it is holding a card it could respond with.',
     'It now judges each play by where the whole turn ends up, so it sees the damage a summon will deal and the damage it is open to next turn, and it stops going back and forth on Set cards in Goat.',
+    'You choose Attack or Defense Position when you Special Summon, unless the card says which: Monster Reborn, Polymerization, Cyber Dragon, contact Fusions and the rest.',
+    'Gaia Knight, the Force of Earth is a Synchro monster again: it goes in the Extra Deck in drafts and can be Synchro Summoned.',
   ] },
   { v: 168, date: 'Nov 26, 2026', items: [
     'Your hand fans out again, in a clean arc: the cards overlap evenly and tilt to follow the curve. The computer\'s hand fans the same way.',

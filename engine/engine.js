@@ -302,6 +302,18 @@ function cantBattleDestroy(g, c) {
   if (isBW(c) && g.tp !== c.ctrl && !g.silverwindUsed[c.ctrl] && monsOf(g, c.ctrl).some(x => faceUp(x) && D(x).n === 'Blackwing - Silverwind the Ascendant' && !x.flags.negated)) { g.silverwindUsed[c.ctrl] = true; return true; }
   return false;
 }
+/* Position choice (2026-11-27, a player report: "you can't choose the position of the monster you are Special Summoning"): with cfg.askPos
+ (the play client), a monster Special Summoned by an effect whose text names no position asks its controller Attack or Defense once the
+ effect has resolved (askPositions), and inherent Special Summons (contact Fusion, a summon from the hand) ask before they happen, like
+ Synchro Summons always have. Off by default, so tests and the Edison site's duel play as before. */
+const POS_RE = /Attack Position|Defense Position|face-down|face-up Defense|in Defense|in Attack/i;
+function askPosFor(g) { const L = g.resolvingL; if (!g.cfg.askPos || !L) return false; const d = D(L.c); return !POS_RE.test(d.ps || d.tx || ''); }
+function* askPositions(g) {
+  const q = g.posAsk; g.posAsk = null; if (!q) return;
+  for (const { c, p } of q) { if (c.zone !== 'm' || c.pos !== 'atk' || c.ctrl !== p) continue;
+    const i = yield* choose(g, p, `${name(c)}: which position?`, ['Attack Position', 'Defense Position']);
+    if (i) { c.pos = 'def'; log(g, `${PN(g, p)} put ${name(c)} in Defense Position.`); } }
+}
 function ss(g, p, c, pos = 'atk', o = {}) { // Special Summon by an effect (no negation window of its own)
   const zi = freeM(g, p); if (zi < 0) return false;
   if (forbid(g, { type: 'ss', c, p, how: o.how || 'special' })) { log(g, `${name(c)} can\u2019t be Special Summoned right now.`); return false; }
@@ -309,6 +321,7 @@ function ss(g, p, c, pos = 'atk', o = {}) { // Special Summon by an effect (no n
   c.summonType = o.how || 'special'; c.attacks = 0;
   if (o.negate) c.flags.negated = true;
   if (o.banishOnLeave) c.flags.banishOnLeave = true;
+  if (pos === 'atk' && askPosFor(g)) (g.posAsk = g.posAsk || []).push({ c, p });
   log(g, `${PN(g, p)} Special Summoned ${pos === 'set' ? 'a monster face-down' : name(c)}${pos === 'def' ? ' in Defense Position' : ''}.`);
   const ev = emit(g, { type: 'summon', cs: [c], how: o.how || 'special', p, byEffect: true }, o.group);
   g.sw = { cs: [c], p, how: o.how || 'special', group: ev.group };
@@ -482,7 +495,7 @@ function* resolveChain(g) {
       const d = D(L.c);
       const stillThere = L.eff.type !== 'act' || onField(L.c) || !['Continuous', 'Equip', 'Field'].includes(d.sub);
       const monGone = isMonD(d) && L.eff.type !== 'trig' && L.eff.needsSelf && !onField(L.c);
-      if (stillThere && !monGone && !(isMonD(d) && onField(L.c) && negd(g, L.c) && L.eff.loc !== 'gy' && L.eff.loc !== 'hand')) { const prevR = g.resolvingL; g.resolvingL = L; yield* L.eff.res(g, L.c, L.p, L); g.resolvingL = prevR; }
+      if (stillThere && !monGone && !(isMonD(d) && onField(L.c) && negd(g, L.c) && L.eff.loc !== 'gy' && L.eff.loc !== 'hand')) { const prevR = g.resolvingL; g.resolvingL = L; yield* L.eff.res(g, L.c, L.p, L); g.resolvingL = prevR; yield* askPositions(g); }
     }
     if (L.eff.type === 'act' && onField(L.c) && L.c.zone === 'st' && !['Continuous', 'Equip', 'Field'].includes(D(L.c).sub) && !L.keep) move(g, L.c, 'gy', { reason: 'rule' });
     if (L.eff.type === 'act' && onField(L.c) && D(L.c).sub === 'Equip' && !L.c.equipTo && !L.c.linkTo) move(g, L.c, 'gy', { reason: 'rule' });
@@ -714,7 +727,7 @@ function* doIdle(g, k) {
   const find = u => [...P.hand, ...P.extra, ...monsOf(g, p), ...stOf(g, p), ...P.gy, ...P.ban, ...fieldOf(g, 1 - p)].find(c => c.u === u);
   const c = find(u);
   if (kind === 'ns' || kind === 'set') return yield* normalSummon(g, p, c, kind === 'set');
-  if (kind === 'sp') { const pr = SC(c).proc; return yield* specialProc(g, p, c, pr.how || 'special', pr.cost ? (grp) => pr.cost(g, c, p, grp) : null, pr.pos || 'atk'); }
+  if (kind === 'sp') { const pr = SC(c).proc; let pos = pr.pos || 'atk'; if (!pr.pos && g.cfg.askPos) pos = (yield* choose(g, p, `${name(c)}: which position?`, ['Attack Position', 'Defense Position'])) ? 'def' : 'atk'; return yield* specialProc(g, p, c, pr.how || 'special', pr.cost ? (grp) => pr.cost(g, c, p, grp) : null, pos); }
   if (kind === 'syn') {
     const cs = synCombos(g, p, c); let mats = cs[0];
     if (cs.length > 1) { const i = yield* choose(g, p, `Synchro Summon ${name(c)} with which monsters?`, cs.map(m => m.map(name).join(' + '))); mats = cs[i]; }
@@ -723,7 +736,8 @@ function* doIdle(g, k) {
   }
   if (kind === 'cf') {
     const mats = cfCombos(g, p, c)[0];
-    return yield* specialProc(g, p, c, 'fusion', function* (grp) { for (const m of mats) move(g, m, 'gy', { reason: 'fusion', by: p, group: grp }); if (D(c).n === 'Chimeratech Fortress Dragon') c.flags.baseAtk = 1000 * mats.length; });
+    const pos = g.cfg.askPos && (yield* choose(g, p, `${name(c)}: which position?`, ['Attack Position', 'Defense Position'])) ? 'def' : 'atk';
+    return yield* specialProc(g, p, c, 'fusion', function* (grp) { for (const m of mats) move(g, m, 'gy', { reason: 'fusion', by: p, group: grp }); if (D(c).n === 'Chimeratech Fortress Dragon') c.flags.baseAtk = 1000 * mats.length; }, pos);
   }
   if (kind === 'flip') {
     const group = g.group; c.pos = 'atk'; c.posChanged = true; log(g, `${PN(g, p)} Flip Summoned ${name(c)}.`);

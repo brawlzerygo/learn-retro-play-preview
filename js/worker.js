@@ -198,7 +198,7 @@ self.onmessage = ({ data: m }) => {
       // a deck is a prebuilt deck's name, or a custom deck {name, main, extra} from the deck builder
       const D = self.FORMATS[fmt].decks; const deck = n => { const d = typeof n === 'string' ? D.find(x => x.name === n) : n; return { name: d.name, main: d.main.map(Number), extra: d.extra.map(Number) }; };
       buf = []; logAt = 0; pending = []; reviewed = []; turnLog = new Map(); curve = []; acts0 = 0;
-      g = E.newDuel({ decks: [deck(m.you), deck(m.cpu)], seed: m.seed, first: m.first || 0, names: ['You', 'Computer'], board: m.board || undefined });   // board: a preset position (the ?demo recordings)
+      g = E.newDuel({ decks: [deck(m.you), deck(m.cpu)], seed: m.seed, first: m.first || 0, names: ['You', 'Computer'], askPos: true, board: m.board || undefined });   // board: a preset position (the ?demo recordings)
       g.hooks = hooks;
       // the opening hands were dealt before the hooks were attached: send them as draws
       for (const p of [0, 1]) for (const c of g.p[p].hand) buf.unshift({ type: 'move', u: c.u, id: p === 0 ? cid(c) : null, from: 'deck', to: 'hand', owner: p, ctrl: p, reason: 'deal', zi: -1 });
