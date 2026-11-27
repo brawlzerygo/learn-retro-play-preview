@@ -1471,3 +1471,16 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 .dl.can{color:var(--ink)}
 .dlacts{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .dlacts .gb{font-size:14px;padding:6px 8px;white-space:normal;line-height:1.15}
+
+/* the board preview in Settings (boards.js; Zack, 2026-11-26) */
+.vrow .bthumb{position:relative;width:128px;height:72px;margin-right:26px;flex:none;background:#000 center/cover;outline:2px solid rgba(255,255,255,.25);transition:outline-color .15s,transform .15s;transform:skewX(-6deg)}
+.vrow .bthumb b{position:absolute;left:0;right:0;bottom:0;padding:2px 0;background:rgba(0,0,0,.72);font:800 15px 'Barlow Condensed';font-style:italic;letter-spacing:.06em;text-align:center;color:#fff}
+.vrow .bthumb:hover{outline-color:var(--acc);transform:skewX(-6deg) scale(1.05)}
+.bigprev{position:absolute;inset:0;z-index:400;display:flex;align-items:center;justify-content:center;background:rgba(4,5,8,.86);animation:bpin .2s ease-out;cursor:pointer}
+.bigprev.out{opacity:0;transition:opacity .16s}
+.bigprev .bpbox{display:flex;flex-direction:column;gap:14px;animation:bpup .24s cubic-bezier(.2,.8,.2,1)}
+.bigprev img{display:block;width:1440px;height:810px;object-fit:cover;outline:3px solid rgba(255,255,255,.2);box-shadow:0 30px 80px rgba(0,0,0,.8)}
+.bigprev .bpcap{display:flex;justify-content:space-between;align-items:baseline;color:rgba(255,255,255,.7);font:600 22px 'Atkinson Hyperlegible'}
+.bigprev .bpcap .disp{font-size:44px;color:#fff}
+@keyframes bpin{from{opacity:0}}
+@keyframes bpup{from{opacity:0;transform:translateY(18px) scale(.98)}}
