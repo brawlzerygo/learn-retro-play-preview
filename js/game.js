@@ -1,9 +1,9 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=159';
-import * as S from './sfx.js?v=159';
-import * as FX from './fx.js?v=159';
+import { Table } from './table.js?v=160';
+import * as S from './sfx.js?v=160';
+import * as FX from './fx.js?v=160';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -144,7 +144,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=159');
+const W = new Worker('js/worker.js?v=160');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -249,6 +249,7 @@ async function renderDecks() {
   if (MOBILE) pickingOpp = SEL.mtab === 'opp';
   $('#deckTitle').textContent = pickingOpp ? "Computer's deck" : 'Your deck';
   const tabs = ['all', 'my', ...TIERS[f]];
+  if (!tabs.includes(SEL.tier)) SEL.tier = 'all';   // a Goat tier (Tournament) picked before switching to Edison left the list empty
   $('#tierTabs').innerHTML = tabs.map(t => `<button class="gb sm ${SEL.tier === t ? 'on' : ''}" data-tier="${t}">${t === 'all' ? 'All' : t === 'my' ? 'My decks' : (TIERNAME[t] || t)}<span class="shine"></span></button>`).join('');
   $('#tierTabs').onclick = e => { const b = e.target.closest('[data-tier]'); if (b) { SEL.tier = b.dataset.tier; saveSel(); S.play('click'); renderDecks(); } };
   const tierIdx = d => d.tier === 'my' ? -1 : TIERS[f].indexOf(d.tier);
@@ -322,9 +323,12 @@ function cardMeta(r) {
   const mon = !['spell', 'trap'].includes(r.k);
   return mon ? [r.a, r.r, r.k === 'token' ? 'Token' : null, r.lv ? `Level ${r.lv}` : null, `${r.atk} / ${r.def}`].filter(Boolean).join(' · ') : `${r.k === 'spell' ? 'Spell' : 'Trap'}${r.sub && r.sub !== 'Normal' ? ' · ' + r.sub : ''}`;
 }
-const cardText = (f, r) => f === 'edison' && r.ps && !/^No rulings/.test(r.ps) ? r.ps : (r.tx || '');
+const cardText = (f, r) => f === 'edison' && r.ps && !/^No (rulings|Edison-Accurate)/.test(r.ps) ? r.ps : (r.tx || '');
 
 /* ---------- a pile on the table: every card in a Graveyard, the banished cards, your Extra Deck ---------- */
+// your plays on a card in this pile (Synchro Summon from the Extra Deck, a Graveyard effect): buttons under the card
+function pileActs(u) { const ops = D.pileOps || {}; for (const k of PILEKINDS) if (ops[k] && ops[k].has(u)) return `<div class="dlacts">${ops[k].get(u).map(o => `<button class="gb sm wide pri" data-pk="${esc(o.key)}">${esc(o.label)}<span class="shine"></span></button>`).join('')}</div>`; return ''; }
+function wirePileActs(p) { p.addEventListener('click', e => { const b = e.target.closest('[data-pk]'); if (!b) return; e.stopPropagation(); const o = D.prompt && D.prompt.opts.find(x => x.key === b.dataset.pk); closeDeckList(); if (o) choose(o); }, true); }
 function pileView(pi, kind) {
   if (!D || !D.view) return;
   if (kind === 'gy' || kind === 'ban') return gyView(pi, kind);
@@ -338,9 +342,9 @@ function pileView(pi, kind) {
   const v = document.createElement('div'); v.className = 'veil'; v.id = 'dlVeil'; v.style.zIndex = 59;
   const p = document.createElement('div'); p.className = 'pn dlist'; p.id = 'dlist';
   p.innerHTML = `<div class="head"><h3 class="disp">${esc(title)}</h3><span class="tg hot">${list.length} card${list.length > 1 ? 's' : ''}</span>${kind === 'gy' ? '<span class="mute" style="font-size:15px">Newest first</span>' : ''}<button class="gb sm" id="dlClose"><svg><use href="#i-x"/></svg>Close<span class="key">Esc</span><span class="shine"></span></button></div>
-    <div class="body"><div class="grid">${list.map(c => { const r = rec(D.fmt, c.id); return `<div class="dl" data-id="${c.id}"><div class="card" style="background-image:url(${artUrl(c.id)})"></div>${esc(r ? r.n : '')}</div>`; }).join('')}</div></div>
+    <div class="body"><div class="grid">${list.map(c => { const r = rec(D.fmt, c.id); return `<div class="dl ${pi === 0 && pileActs(c.u) ? 'can' : ''}" data-id="${c.id}"><div class="card" style="background-image:url(${artUrl(c.id)})"></div>${esc(r ? r.n : '')}${pi === 0 ? pileActs(c.u) : ''}</div>`; }).join('')}</div></div>
     <div class="pn peek hidden" id="dlPeek"></div>`;
-  $('#layer').append(v, p);
+  $('#layer').append(v, p); wirePileActs(p);
   v.onclick = closeDeckList; p.querySelector('#dlClose').onclick = closeDeckList;
   if (!MOBILE) p.addEventListener('click', e => peekOver(e, p, D.fmt));
 }
@@ -355,13 +359,13 @@ function gyView(pi, kind) {
     const list = [...P[kind]].reverse();
     p.innerHTML = `<div class="head"><h3 class="disp">${who} cards</h3><button class="gb sm" id="dlClose"><svg><use href="#i-x"/></svg>Close<span class="key">Esc</span><span class="shine"></span></button></div>
       <div class="gytabs"><button class="${kind === 'gy' ? 'on' : ''}" data-k="gy">Graveyard <b>${P.gy.length}</b></button><button class="${kind === 'ban' ? 'on ban' : ''}" data-k="ban">Banished <b>${P.ban.length}</b></button></div>
-      <div class="body">${list.length ? `<div class="grid">${list.map(c => { const r = rec(D.fmt, c.id); return `<div class="dl" data-id="${c.id}"><div class="card" style="background-image:url(${artUrl(c.id)})"></div>${esc(r ? r.n : '')}</div>`; }).join('')}</div>` : `<div class="mute" style="padding:20px 4px">No ${kind === 'gy' ? 'cards in the Graveyard' : 'banished cards'}.</div>`}</div>
+      <div class="body">${list.length ? `<div class="grid">${list.map(c => { const r = rec(D.fmt, c.id); return `<div class="dl ${pi === 0 && pileActs(c.u) ? 'can' : ''}" data-id="${c.id}"><div class="card" style="background-image:url(${artUrl(c.id)})"></div>${esc(r ? r.n : '')}${pi === 0 ? pileActs(c.u) : ''}</div>`; }).join('')}</div>` : `<div class="mute" style="padding:20px 4px">No ${kind === 'gy' ? 'cards in the Graveyard' : 'banished cards'}.</div>`}</div>
       <div class="pn peek hidden" id="dlPeek"></div>`;
     p.querySelector('#dlClose').onclick = closeDeckList;
     p.querySelector('.gytabs').onclick = e => { const b = e.target.closest('[data-k]'); if (b && b.dataset.k !== kind) { kind = b.dataset.k; S.play('click'); draw(); } };
     if (MOBILE) p.querySelector('.body').onclick = e => { const t = e.target.closest('[data-id]'); if (t) cardSheet(t.dataset.id); };
   };
-  draw(); $('#layer').append(v, p); v.onclick = closeDeckList; if (!MOBILE) p.addEventListener('click', e => peekOver(e, p, D.fmt));
+  draw(); $('#layer').append(v, p); wirePileActs(p); v.onclick = closeDeckList; if (!MOBILE) p.addEventListener('click', e => peekOver(e, p, D.fmt));
 }
 function peekOver(e, p, f) {
   if (MOBILE) return;   // phones read a card in its own sheet (a tap); the hover preview would stay behind with no way to close it (Zack, 2026-11-25)
@@ -756,7 +760,9 @@ async function startDuel() {
   const DEMO = f === 'goat' && new URLSearchParams(location.search).has('demo') ? [
     { hand: ['Black Luster Soldier - Envoy of the Beginning', 'Jinzo', 'Mystical Space Typhoon', 'Sinister Serpent'], m: ['Sangan'], gy: ['Shining Angel', 'Mystic Tomato'], turn: 2 },
     { m: ['Airknight Parshath', { n: 'Spirit Reaper', pos: 'def' }], st: [{ n: 'Sakuretsu Armor', pos: 'set' }], hand: ['Scapegoat', 'Book of Moon'] }] : null;
-  const first = DEMO ? 0 : Math.random() < 0.5 ? 0 : 1;
+  // ?board=<JSON [yours, theirs]> (testing only: reproduce a reported position, the engine's cfg.board format; you go first)
+  let BOARD = DEMO; try { const b = new URLSearchParams(location.search).get('board'); if (b) BOARD = JSON.parse(b); } catch (e) { toast('That board is not valid JSON.'); }
+  const first = BOARD ? 0 : Math.random() < 0.5 ? 0 : 1;
   const coin = $('#coin'); coin.className = 'coin ' + (first === 0 ? 'heads' : 'tails'); coin.style.animation = 'none'; void coin.offsetWidth; coin.style.animation = '';
   await sleep(1450); $('#loadTxt').textContent = first === 0 ? 'You go first' : 'The computer goes first'; S.play('turn');
   await sleep(1100);
@@ -775,7 +781,7 @@ async function startDuel() {
   D.hintsUsed = 0; hintButton();
   setPrompt(null);
   show('duel');
-  W.postMessage({ type: 'start', format: f, you: { name: youDeck.name, main: youDeck.main, extra: youDeck.extra }, cpu: { name: cpuDeck.name, main: cpuDeck.main, extra: cpuDeck.extra }, level: SEL.level, board: DEMO, seed: Math.floor(Math.random() * 2 ** 31), first, lite: MOBILE });
+  W.postMessage({ type: 'start', format: f, you: { name: youDeck.name, main: youDeck.main, extra: youDeck.extra }, cpu: { name: cpuDeck.name, main: cpuDeck.main, extra: cpuDeck.extra }, level: SEL.level, board: BOARD, seed: Math.floor(Math.random() * 2 ** 31), first, lite: MOBILE });
 }
 
 /* ---------- updates from the host, one at a time ---------- */
@@ -1081,7 +1087,7 @@ function inspect(id) {
   if (id == null) return; lastId = id; const r = rec(D.fmt, id); if (!r) return; const el = $('#inspect');
   const mon = !['spell', 'trap'].includes(r.k);
   const meta = mon ? [r.a, r.r, r.k === 'token' ? 'Token' : null, r.lv ? `Level ${r.lv}` : null, `${r.atk} / ${r.def}`].filter(Boolean).join(' · ') : `${r.k === 'spell' ? 'Spell' : 'Trap'}${r.sub && r.sub !== 'Normal' ? ' · ' + r.sub : ''}`;
-  const text = D.fmt === 'edison' && r.ps && !/^No rulings/.test(r.ps) ? r.ps : (r.tx || '');
+  const text = D.fmt === 'edison' && r.ps && !/^No (rulings|Edison-Accurate)/.test(r.ps) ? r.ps : (r.tx || '');
   el.innerHTML = `<div class="ph">Card</div><div class="card" style="background-image:url(${artUrl(id)})"></div><h4>${esc(r.n)}</h4><div class="meta">${esc(meta)}</div><p>${esc(text)}</p>`;
   el.classList.remove('hidden');
 }
@@ -1095,6 +1101,7 @@ function clearInteract() {
   if (table) table.prefer = null;
   $$('#hand .hc').forEach(c => c.classList.remove('play', 'pick', 'up')); table && (table.unglowAll(), table.lightZones([]));
   closeMenu(); $('#hand').classList.remove('low'); $('#dial').classList.remove('ready'); D.sel = null; D.zoneMode = null; D.picks = null;
+  D.pileOps = {}; for (const k in pileEls) pileEls[k].classList.remove('act'); $('#banMe').classList.remove('act');
   $$('#layer .dlg, #layer .veil, #layer .respond').forEach(e => e.remove());
   if (!D || !D.keepHint) $$('#layer .hintp').forEach(e => e.remove());
 }
@@ -1110,10 +1117,25 @@ function setPrompt(pr) {
   if (pr.type === 'yesno' || pr.type === 'choose') return promptChoose(pr);
 }
 function optsByU(pr) { const m = new Map(); for (const o of pr.opts) if (o.u != null) { if (!m.has(o.u)) m.set(o.u, []); m.get(o.u).push(o); } return m; }
+// plays on cards in your Extra Deck, Graveyard or banished pile (Synchro and Fusion Summons, Vayu, Plaguespreader, Necro Gardna...):
+// the pile lights up and its view lists each play under its card (2026-11-26 launch reports: these had no way to be picked)
+const PILEKINDS = ['extra', 'gy', 'ban'];
+function pileOpts(by) {
+  const out = {}; if (!D.view) return out;
+  for (const k of PILEKINDS) for (const c of D.view.p[0][k]) { const os = by.get(c.u); if (os && !(table && table.has(c.u))) (out[k] || (out[k] = new Map())).set(c.u, os); }
+  return out;
+}
+function markPiles(by) {
+  D.pileOps = pileOpts(by);
+  for (const k of PILEKINDS) { const el = pileEls['1:' + k]; if (el) el.classList.toggle('act', !!D.pileOps[k]); }
+  if (D.pileOps.ban && !$('#banMe').hidden) $('#banMe').classList.add('act');
+  const names = PILEKINDS.filter(k => D.pileOps[k]).map(k => k === 'extra' ? (D.fmt === 'goat' ? 'Fusion Deck' : 'Extra Deck') : k === 'gy' ? 'Graveyard' : 'banished cards');
+  return names.length ? ` <span class="pilehint">${TOUCH ? 'Tap' : 'Click'} your ${names.join(' or ')} to use ${names.length > 1 ? 'them' : 'it'}</span>` : '';
+}
 function promptIdle(pr) {
   const by = optsByU(pr); D.byU = by;
   const battle = pr.text === 'Battle Phase';
-  $('#prompt').innerHTML = MOBILE ? (battle ? 'Battle Phase: pick an attacker, or tap Phase to end it' : `${esc(pr.text)}: play a card, or tap Phase to move on`) : battle ? 'Battle Phase: pick a monster to attack with, or end the Battle Phase on the dial' : `${esc(pr.text)}: play a card, or use the phase dial to move on`;
+  $('#prompt').innerHTML = (MOBILE ? (battle ? 'Battle Phase: pick an attacker, or tap Phase to end it' : `${esc(pr.text)}: play a card, or tap Phase to move on`) : battle ? 'Battle Phase: pick a monster to attack with, or end the Battle Phase on the dial' : `${esc(pr.text)}: play a card, or use the phase dial to move on`) + markPiles(by);
   $$('#hand .hc').forEach(c => c.classList.toggle('play', by.has(+c.dataset.u)));
   for (const u of by.keys()) if (table.has(u)) table.glow(u, battle ? 0xff5030 : 0xff7a30);
   if (pr.opts.some(o => o.kind === 'phase')) $('#dial').classList.add('ready');
@@ -1127,7 +1149,9 @@ function promptRespond(pr) {
   $$('#hand .hc').forEach(c => c.classList.toggle('play', by.has(+c.dataset.u)));
   for (const u of by.keys()) if (table.has(u)) table.glow(u, 0x7fd3ff);
   const box = document.createElement('div'); box.className = 'pn amenu respond'; Object.assign(box.style, { right: '36px', bottom: '120px', position: 'absolute' });
-  box.innerHTML = `<div class="ph">Respond</div>` + pr.opts.filter(o => o.key !== 'pass').map((o, i) => `<button class="gb sm wide" data-k="${esc(o.key)}"><svg><use href="#i-bolt"/></svg><span class="lbl">${esc(o.label)}</span><span class="key">${i + 1}</span><span class="shine"></span></button>`).join('')
+  markPiles(by);   // a Graveyard effect (Necro Gardna) is in this list too, named, since its card isn't on the table
+  const inPile = o => PILEKINDS.some(k => D.pileOps[k] && D.pileOps[k].has(o.u));
+  box.innerHTML = `<div class="ph">Respond</div>` + pr.opts.filter(o => o.key !== 'pass').map((o, i) => `<button class="gb sm wide" data-k="${esc(o.key)}"><svg><use href="#i-bolt"/></svg><span class="lbl">${inPile(o) ? esc(nameOfU(o.u)) + ': ' : ''}${esc(o.label)}</span><span class="key">${i + 1}</span><span class="shine"></span></button>`).join('')
     + `<button class="gb sm wide pri" data-k="pass"><svg><use href="#i-pass"/></svg>${mine ? 'Continue' : 'Pass'}<span class="key">Space</span><span class="shine"></span></button>`;
   box.onclick = e => { const b = e.target.closest('[data-k]'); if (b) send([b.dataset.k]); };
   box.onmouseover = e => { const b = e.target.closest('[data-k]'); const o = b && pr.opts.find(x => x.key === b.dataset.k); if (o && o.id != null) inspect(o.id); };
@@ -1249,7 +1273,7 @@ function zoneFor(o) {
 }
 function placeInZone(zn) { const zm = D.zoneMode; if (!zm || zn.side !== 1 || zn.zone !== zm.z) return; table.lightZones([]); $('#hand').classList.remove('low'); D.zoneMode = null; send([zm.o.key], { u: zm.o.u, to: zm.z, zi: zn.i }); }
 function cancelZone() { $('#hand').classList.remove('low'); D.zoneMode = null; table.lightZones([]); S.play('click'); promptIdle(D.prompt); }
-function nameOfU(u) { const h = D.disp.p[0].hand.find(x => x.u === u); const r = h ? rec(D.fmt, h.id) : null; if (r) return r.n; const c = findU(u); const r2 = c && rec(D.fmt, c.id); if (r2) return r2.n; for (const x of D.view.p[0].extra) if (x.u === u) return (rec(D.fmt, x.id) || {}).n || 'card'; return 'this card'; }
+function nameOfU(u) { const h = D.disp.p[0].hand.find(x => x.u === u); const r = h ? rec(D.fmt, h.id) : null; if (r) return r.n; const c = findU(u); const r2 = c && rec(D.fmt, c.id); if (r2) return r2.n; for (const k of PILEKINDS) for (const x of D.view.p[0][k]) if (x.u === u) return (rec(D.fmt, x.id) || {}).n || 'card'; return 'this card'; }
 function send(keys, pz) { if (!D.prompt) return; S.play('click'); clearInteract(); D.prompt = null; setPrompt(null); W.postMessage({ type: 'act', keys, pz: pz || null }); }
 
 // the phase dial

@@ -1461,3 +1461,12 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 .wipx{flex:none;width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.08);color:#dfe3e8;display:grid;place-items:center;cursor:pointer}
 .wipx:hover{background:rgba(255,255,255,.16)}
 .wipx svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+/* plays from the Extra Deck, Graveyard or banished pile (2026-11-26): the pile's counter lights up, its view puts the plays under each card */
+.ct.act,.banb.act{background:#fff;color:#140a04;box-shadow:0 0 0 3px rgba(255,122,48,.45),0 0 22px rgba(255,122,48,.8);animation:pileGlow 1.4s ease-in-out infinite}
+@keyframes pileGlow{50%{box-shadow:0 0 0 6px rgba(255,122,48,.25),0 0 30px rgba(255,122,48,.95)}}
+@media (prefers-reduced-motion:reduce){.ct.act,.banb.act{animation:none}}
+.pilehint{color:var(--acc-hi);font-weight:700;margin-left:6px}
+.dl.can .card{outline:3px solid var(--acc);outline-offset:2px;box-shadow:0 0 20px rgba(255,122,48,.6)}
+.dl.can{color:var(--ink)}
+.dlacts{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.dlacts .gb{font-size:14px;padding:6px 8px;white-space:normal;line-height:1.15}

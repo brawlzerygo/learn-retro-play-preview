@@ -26,7 +26,9 @@ let CARDLIST = [];
 E.init = (cards, opts = {}) => {
   FMT = opts.format || 'edison'; CARDLIST = cards;
   DATA = new Map(); BYNAME = new Map();
-  for (const c of cards) { DATA.set(c.id, c); BYNAME.set(c.n, c); }
+  // edisonformat.net puts a placeholder ("No Edison-Accurate PSCT available...", "No rulings...") in ps for most cards: drop it, so every
+  // reader (Fusion and Synchro materials, summon rules, card scripts) falls back to the real text in tx (2026-11-26)
+  for (const c of cards) { if (c.ps && /^No (Edison-Accurate|rulings)/.test(c.ps)) delete c.ps; DATA.set(c.id, c); BYNAME.set(c.n, c); }
   for (const t of TOKENS) { DATA.set(t.id, t); BYNAME.set(t.n, t); }
 };
 const TOKENS = [
@@ -46,6 +48,12 @@ const isMon = c => isMonD(D(c));
 const onField = c => c.zone === 'm' || c.zone === 'st' || c.zone === 'fz';
 const faceUp = c => onField(c) && c.pos !== 'set';
 const SC = c => (FMT !== 'edison' && FSCRIPTS[FMT] && FSCRIPTS[FMT][D(c).n]) || SCRIPTS[D(c).n] || null;
+const scByName = n => (FMT !== 'edison' && FSCRIPTS[FMT] && FSCRIPTS[FMT][n]) || SCRIPTS[n] || null;
+/* a card's effects: its own, plus the monster effects it copied (c.flags.copyEffs = a card name: Phantom of Chaos and the like,
+   2026-11-26: a launch report found Phantom of Chaos couldn't use Sky Scourge Norleras's effect). Copied effects work from the
+   field only and keep their own conditions; summon rules and continuous effects aren't copied. */
+const effsOf = c => { const sc = SC(c), own = (sc && sc.effs) || []; const n = c && c.flags && c.flags.copyEffs; if (!n) return own;
+  const cs = scByName(n); const cp = ((cs && cs.effs) || []).filter(e => e.type !== 'act' && (e.loc || 'm') === 'm'); return cp.length ? own.concat(cp) : own; };
 function name(c) { const d = D(c); if (onField(c) && faceUp(c)) { if (d.n === 'Dupe Frog' && !c.flags.negated) return 'Des Frog'; } return d.n; }
 const isBW = c => /^Blackwing/.test(name(c));
 const isFrog = c => /Frog/.test(name(c));
@@ -184,8 +192,8 @@ function emit(g, ev, group) {
   for (const P of g.p) for (const z of ['m', 'st', 'fz', 'hand', 'gy', 'ban', 'deck', 'extra']) {
     const arr = z === 'fz' ? (P.fz ? [P.fz] : []) : P[z]; if (!arr) continue;
     for (const c of arr) {
-      if (!c) continue; const sc = SC(c); if (!sc || !sc.effs) continue;
-      sc.effs.forEach((eff, ei) => {
+      if (!c) continue; const es = effsOf(c); if (!es.length) continue;
+      es.forEach((eff, ei) => {
         if (eff.type !== 'trig') return;
         const loc = eff.loc || 'm';
         if (loc === 'any' ? false : loc === 'm' ? c.zone !== 'm' || !faceUp(c) && !eff.faceDownOk : loc !== c.zone || ((loc === 'st' || loc === 'fz') && !faceUp(c))) return;
@@ -410,10 +418,10 @@ function usable(g, p, c, eff, ei, mode) {
 function activatable(g, p, mode) {
   const out = [];
   const seen = new Set();
-  const consider = (c) => { if (!c || seen.has(c.u)) return; seen.add(c.u); const sc = SC(c); if (!sc || !sc.effs) return; sc.effs.forEach((eff, ei) => { if (usable(g, p, c, eff, ei, mode)) out.push({ c, eff, ei }); }); };
+  const consider = (c) => { if (!c || seen.has(c.u)) return; seen.add(c.u); const es = effsOf(c); if (!es.length) return; es.forEach((eff, ei) => { if (usable(g, p, c, eff, ei, mode)) out.push({ c, eff, ei }); }); };
   const P = g.p[p];
   P.hand.forEach(consider); P.st.forEach(consider); P.m.forEach(consider); P.gy.forEach(consider); if (P.fz) consider(P.fz); P.ban.forEach(consider);
-  for (const x of [...g.p[1 - p].st, ...g.p[p].st, g.p[1 - p].fz, g.p[p].fz]) if (x && faceUp(x) && SC(x) && SC(x).effs && SC(x).effs.some(e => e.anyPlayer)) { seen.delete(x.u); consider(x); }
+  for (const x of [...g.p[1 - p].st, ...g.p[p].st, g.p[1 - p].fz, g.p[p].fz]) if (x && faceUp(x) && effsOf(x).some(e => e.anyPlayer)) { seen.delete(x.u); consider(x); }
   return out;
 }
 function actLabel(g, a) { const sc = SC(a.c); const lab = a.eff.label || (a.eff.type === 'act' ? (a.c.zone === 'hand' || a.c.pos === 'set' ? 'Activate' : 'Activate') : 'Use effect'); return `${lab}: ${name(a.c)}`; }
@@ -712,7 +720,7 @@ function* doIdle(g, k) {
   if (kind === 'pos') { c.pos = c.pos === 'atk' ? 'def' : 'atk'; c.posChanged = true; log(g, `${PN(g, p)} changed ${name(c)} to ${c.pos === 'atk' ? 'Attack' : 'Defense'} Position.`); emit(g, { type: 'pos', c, p }); yield* processTriggers(g); return; }
   if (kind === 'setst') { if (D(c).sub === 'Field') { if (P.fz) move(g, P.fz, 'gy', { reason: 'rule' }); move(g, c, 'fz', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a Field Spell.`); return; } move(g, c, 'st', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a card.`); return; }
   if (kind === 'a') {
-    const ei = +b; const eff = SC(c).effs[ei];
+    const ei = +b; const eff = effsOf(c)[ei];
     yield* activate(g, p, c, eff, ei); yield* respondLoop(g, 1 - p); yield* resolveChain(g); yield* afterAction(g);
   }
 }
@@ -756,7 +764,7 @@ function* battlePhase(g) {
     const k = (yield* ask(g, g.tp, 'idle', 'Battle Phase', battleOpts(g)))[0];
     if (k === 'endbp') break;
     { const sw = g.sw; beginOp(g); if (k.startsWith('a:')) g.sw = sw; }
-    if (k.startsWith('a:')) { const [, u, ei] = k.split(':'); const c = [...g.p[g.tp].hand, ...allField(g), ...g.p[g.tp].gy, ...g.p[g.tp].ban].find(x => x.u === +u); yield* activate(g, g.tp, c, SC(c).effs[+ei], +ei); yield* respondLoop(g, 1 - g.tp); yield* resolveChain(g); yield* processTriggers(g); continue; }
+    if (k.startsWith('a:')) { const [, u, ei] = k.split(':'); const c = [...g.p[g.tp].hand, ...allField(g), ...g.p[g.tp].gy, ...g.p[g.tp].ban].find(x => x.u === +u); yield* activate(g, g.tp, c, effsOf(c)[+ei], +ei); yield* respondLoop(g, 1 - g.tp); yield* resolveChain(g); yield* processTriggers(g); continue; }
     const [, au, tu] = k.split(':'); const a = fieldMons(g).find(x => x.u === +au); const t = tu === 'd' ? null : fieldMons(g).find(x => x.u === +tu);
     yield* attack(g, a, t);
   }
@@ -1226,6 +1234,7 @@ E.lib = {
   winDuel, coin, dice, isBW, isFrog, isHERO, isEHERO, isGemini, evSummoned, fromFieldToGY, battleKill, oppFaceUp, stOnField, spellTrapAct, live, opp, tributeCands, synCombos,
 };
 E.lib.tgt = tgt;
+E.lib.effsOf = effsOf;   // a card's effects, copied ones included (set c.flags.copyEffs = name to copy a monster's effects)
 E.addScripts = (obj, format) => { const into = format && format !== 'edison' ? (FSCRIPTS[format] || (FSCRIPTS[format] = {})) : SCRIPTS; for (const k in obj) into[k] = obj[k]; };
 E.format = () => FMT;
 E.cards = () => CARDLIST;   // the card list E.init loaded (the computer re-inits with it plus its stand-ins)

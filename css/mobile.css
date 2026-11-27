@@ -873,3 +873,5 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .wip b{font-size:12px;padding:3px 8px;margin-top:1px}
 #stage.m .wipx{width:28px;height:28px}
 #stage.m .wipx svg{width:14px;height:14px}
+#stage.m .dlacts .gb{font-size:13px;min-height:40px}
+#stage.m .pilehint{display:block;margin:2px 0 0}
