@@ -11,7 +11,7 @@
 
    Boards: arena (Arena Lights), rewind (Rewind), rune (Runestone). Pick with ?mat=<id> or Settings (lrplay:set mat). */
 import * as THREE from '../vendor/three.module.min.js';
-import { ICONS } from './icons.js?v=165';
+import { ICONS } from './icons.js?v=166';
 
 const B = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 const CW = 0.6, CH = 0.875, ZW = CW + 0.08, ZH = CH + 0.08;
@@ -303,11 +303,16 @@ export class Board {
       g.strokeStyle = 'rgba(90,168,255,.10)'; g.beginPath(); g.arc(P.X(0), P.Y(0), P.U(6.2), Math.PI * 1.08, Math.PI * 1.92); g.stroke();
       g.strokeStyle = 'rgba(255,255,255,.07)'; P.line([[-20, 0], [20, 0]], 0.03);
     } else if (id === 'rewind') {
-      const rg = g.createRadialGradient(P.X(0), P.Y(0.3), 0, P.X(0), P.Y(0.3), P.U(9)); rg.addColorStop(0, 'rgba(90,52,34,.5)'); rg.addColorStop(1, 'rgba(90,52,34,0)'); g.fillStyle = rg; g.fillRect(0, 0, P.c.width, P.c.height);
-      // big rewind marks printed on the floor, and faint stripes like a tape label
-      g.fillStyle = 'rgba(255,91,31,.06)';
-      for (const [cx, cy, s] of [[-8.5, 3.5, 2.2], [8.5, 3.5, 2.2], [-9, -4, 1.6], [9, -4, 1.6]]) for (const dx of [0, s * 0.9]) { g.beginPath(); g.moveTo(P.X(cx + dx - s / 2), P.Y(cy)); g.lineTo(P.X(cx + dx + s / 2), P.Y(cy + s / 2)); g.lineTo(P.X(cx + dx + s / 2), P.Y(cy - s / 2)); g.closePath(); g.fill(); }
-      g.strokeStyle = 'rgba(239,227,207,.05)'; for (let y = -14; y < 18; y += 0.5) P.line([[-20, y], [20, y]], 0.05);
+      // Rewind's world is the den (Zack, 2026-11-26, from the surroundings mock-ups: "i like the first one... just remove the vhs";
+      // "i liked the new backdrop and the brighter squares around the board"): a plank floor, a rug in bright bands under the board, a lamp's warm light
+      const R = rnd(5);
+      g.fillStyle = '#25170e'; g.fillRect(0, 0, P.c.width, P.c.height);
+      for (let y = -14; y < 18; y += 0.55) { g.fillStyle = `rgb(${44 + R() * 16},${28 + R() * 10},${17 + R() * 6})`; g.fillRect(0, P.Y(y + 0.55), P.c.width, P.U(0.55)); g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(0, P.Y(y + 0.55), P.c.width, 1.5); for (let x = -20 + R() * 3; x < 20; x += 2.5 + R() * 3) g.fillRect(P.X(x), P.Y(y + 0.55), 1.5, P.U(0.55)); }
+      g.strokeStyle = 'rgba(255,220,180,.05)'; for (let k = 0; k < 260; k++) { const x = (R() - 0.5) * 40, y = (R() - 0.5) * 32; P.line([[x, y], [x + 1 + R() * 2, y + (R() - 0.5) * 0.05]], 0.012); }
+      const band = (w, h, c) => { P.rr(0, 0.15, w, h, 0.05); g.fillStyle = c; g.fill(); };
+      band(10.4, 7.2, '#7a3218'); band(10.0, 6.8, '#d9c3a0'); band(9.8, 6.6, '#4a2416'); band(9.3, 6.1, '#b4532a'); band(9.1, 5.9, '#3a1d13');
+      g.strokeStyle = 'rgba(217,195,160,.14)'; for (let x = -4.4; x <= 4.4; x += 0.55) for (const y of [-2.8, 3.1]) { g.beginPath(); g.moveTo(P.X(x), P.Y(y + 0.15)); g.lineTo(P.X(x + 0.22), P.Y(y)); g.lineTo(P.X(x), P.Y(y - 0.15)); g.lineTo(P.X(x - 0.22), P.Y(y)); g.closePath(); g.lineWidth = 2; g.stroke(); }
+      const rg = g.createRadialGradient(P.X(0), P.Y(0.5), 0, P.X(0), P.Y(0.5), P.U(9)); rg.addColorStop(0, 'rgba(255,170,90,.16)'); rg.addColorStop(1, 'rgba(255,170,90,0)'); g.fillStyle = rg; g.fillRect(0, 0, P.c.width, P.c.height);
     } else if (this.M.theme) { this.M.theme.floor(P, g, rnd(17));
     } else {
       const rg = g.createRadialGradient(P.X(0), P.Y(0.3), 0, P.X(0), P.Y(0.3), P.U(9)); rg.addColorStop(0, 'rgba(40,74,70,.5)'); rg.addColorStop(1, 'rgba(40,74,70,0)'); g.fillStyle = rg; g.fillRect(0, 0, P.c.width, P.c.height);
@@ -593,6 +598,17 @@ export class Board {
       this.reels = [-2.3, 2.3].map(x => { const r = new THREE.Mesh(new THREE.CircleGeometry(0.25, 48), new THREE.MeshBasicMaterial({ map: this.reelTex(), transparent: true })); r.rotation.x = -Math.PI / 2; r.position.copy(B(x, 0, 0.0016)); this.root.add(r); return r; });
       const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.0), new THREE.MeshBasicMaterial({ map: glowTex(256, 256, 60, 120), color: 0xff5b1f, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
       glow.rotation.x = -Math.PI / 2; glow.position.copy(B(0, 0, 0.0014)); glow.visible = false; this.root.add(glow); this.flares[1].push(glow); this.flares[-1].push(glow);
+      // the den's CRT behind the computer's side: a blue PLAY screen that flashes on big summons and hits, glowing on the floor
+      { const x = -2.5, y = SH / 2 + 1.05, cam = this.T.camera.position;
+        const tv = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.9, 0.9), new THREE.MeshLambertMaterial({ color: 0x2e2824 })); tv.position.copy(B(x, y, 0.45)); tv.rotation.y = -0.15; this.root.add(tv);
+        const c = document.createElement('canvas'); c.width = 320; c.height = 240; const g = c.getContext('2d');
+        g.fillStyle = '#1b38b8'; g.fillRect(0, 0, 320, 240); g.fillStyle = '#e8eeff'; g.font = '700 44px "Atkinson Hyperlegible", sans-serif'; g.fillText('PLAY', 30, 70); g.beginPath(); g.moveTo(150, 36); g.lineTo(186, 54); g.lineTo(150, 72); g.closePath(); g.fill();
+        g.font = '700 24px "Atkinson Hyperlegible", sans-serif'; g.fillText('SP  0:42:10', 30, 210); for (let yy = 0; yy < 240; yy += 4) { g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(0, yy, 320, 2); }
+        const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
+        const screen = (map, o) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 0.62), new THREE.MeshBasicMaterial(Object.assign({ map, transparent: true, depthWrite: false }, o))); m.position.copy(B(x + 0.05, y - 0.46, 0.47)); m.lookAt(cam.x, m.position.y + (cam.y - m.position.y) * 0.25, cam.z); this.root.add(m); return m; };
+        screen(tx, {}); const fl = screen(null, { color: 0xffffff, opacity: 0, blending: THREE.AdditiveBlending }); fl.visible = false;
+        const pool = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.6), new THREE.MeshBasicMaterial({ map: glowTex(256, 192, 60, 90), color: 0x3a6bff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false })); pool.rotation.x = -Math.PI / 2; pool.position.copy(B(x, y - 0.95, 0.003)); this.root.add(pool);
+        this.wfx.push(kind => { if (kind !== 'big' && kind !== 'hit') return; fl.visible = true; this.T.tween(500, k => { fl.material.opacity = 0.8 * (k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85); }).then(() => { fl.material.opacity = 0; fl.visible = false; }); }); }
     } else {
       // standing stones at the corners: their carved rune lights for the turn player and flares on big summons
       const stone = new THREE.MeshLambertMaterial({ color: 0x3a4044 }); this.stones = { 1: [], '-1': [] };
