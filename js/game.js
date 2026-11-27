@@ -109,8 +109,9 @@ const SETROWS = [
   { k: 'hintLimit', name: 'Hints per duel', vals: ['off', '1', '3', '5', 'unlimited'], lab: v => v, desc: 'A hint shows the strongest play and why it beats the next best, like the hint button on a chess site.' },
   { k: 'vol', name: 'Sound effects', vals: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], blocks: true, desc: 'How loud cards, summons and battles are.' },
   { k: 'muted', name: 'Sound', vals: [false, true], lab: v => v ? 'off' : 'on', desc: 'Turn every sound on or off.' },
-  { k: 'table', name: 'Table', vals: ['shop', 'rewind', 'rune', 'dragon', 'caster', 'fiend', 'light', 'dark'], lab: v => ({ shop: 'Card Shop', rewind: 'Rewind', rune: 'Runestone', dragon: 'Dragon', caster: 'Spellcaster', fiend: 'Fiend', light: 'Light', dark: 'Dark' })[v] || 'Card Shop', desc: 'The world your duels are played in. Every board but Card Shop reacts to each play.' },   // boards.js (Zack, 2026-11-26: picked Rewind and Runestone, then the themed boards but Toon)
+  { k: 'table', name: 'Table', vals: ['rewind', 'rune', 'dragon', 'caster', 'fiend', 'light', 'dark'], lab: v => ({ rewind: 'Rewind', rune: 'Runestone', dragon: 'Dragon', caster: 'Spellcaster', fiend: 'Fiend', light: 'Light', dark: 'Dark' })[v] || 'Rewind', desc: 'The world your duels are played in. Every board reacts to each play.' },   // boards.js (Zack, 2026-11-26: picked Rewind and Runestone, then the themed boards but Toon; Card Shop retired, Rewind the default)
 ];
+if (!SETROWS.find(r => r.k === 'table').vals.includes(SET.table)) SET.table = 'rewind';   // Card Shop retired (2026-11-26): its players move to Rewind
 let setRow = 0;
 // themes share one layout; a class on the stage swaps the look (css/rewind.css)
 // Rewind is in the back pocket (Zack, 2026-11-24): Broadcast always; set REWIND_PICKER true to bring back the Settings row and the T key
@@ -126,9 +127,9 @@ function renderSettings() {
 }
 // the board preview (Zack, 2026-11-26: "a preview option in the settings so players can see a preview of the board"): a still of each table,
 // the phone one on phones (assets/scenes/prev-<id>[-m].jpg, frames from tools/record.mjs duel clips)
-const prevImg = v => `assets/scenes/prev-${v || 'shop'}${MOBILE ? '-m' : ''}.jpg`;
+const prevImg = v => `assets/scenes/prev-${v || 'rewind'}${MOBILE ? '-m' : ''}.jpg`;
 function boardPreview() {
-  const r = SETROWS.find(x => x.k === 'table'), v = SET.table || 'shop'; if ($('#bigprev')) return;
+  const r = SETROWS.find(x => x.k === 'table'), v = matChoice(SET.table); if ($('#bigprev')) return;
   const d = document.createElement('div'); d.id = 'bigprev'; d.className = 'bigprev';
   d.innerHTML = `<div class="bpbox"><img src="${prevImg(v)}" alt=""><div class="bpcap"><span class="disp">${r.lab(v)}</span><span>${TAP()[0].toUpperCase() + TAP().slice(1)} anywhere to close</span></div></div>`;
   const close = () => { d.classList.add('out'); document.removeEventListener('keydown', key, true); setTimeout(() => d.remove(), 170); };

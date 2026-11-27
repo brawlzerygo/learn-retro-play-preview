@@ -44,11 +44,12 @@ export const MATS = {
 };
 export const MAT_IDS = Object.keys(MATS);
 export const layoutOf = id => MATS[id] ? LAYOUTS[MATS[id].layout] : null;
-// ?mat=<id> wins (testing), then the saved setting; '' or 'shop' means today's Card Shop scene
+// ?mat=<id> wins (testing; ?mat=shop still shows the old Card Shop scene), then the saved setting, else Rewind
+// (Zack, 2026-11-26: "lets retire card shop"; anyone who had Card Shop saved gets Rewind)
 export function matChoice(saved) {
   const q = new URLSearchParams(location.search).get('mat');
   if (q != null) return MATS[q] ? q : null;
-  return MATS[saved] ? saved : null;
+  return MATS[saved] ? saved : 'rewind';
 }
 
 // every zone of a layout, both sides, with its board position
@@ -267,11 +268,116 @@ const t0 = k => k * 0.2;
 for (const [id, t] of Object.entries(THEMES)) MATS[id] = { name: t.name, desc: t.desc, layout: 'hex', bg: t.bg, light: t.light, under: t.under, theme: t, glow: t.glow, hot: t.hot };
 export const THEME_IDS = Object.keys(THEMES);
 
+/* ---------------------------------------------------------------- Rewind's surroundings (Zack, 2026-11-26: "let me see some other versions of the design
+   around the board but leave the board the same"). The board, dial and reels stay; the world around them changes. Mock-ups: ?rw=den|neon|hifi|video
+   (none is today's: the warm floor with rewind marks and stacked tapes). Each world can answer the duel through b.wfx (kind, color, side). */
+const cvs = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; };
+const ctex = c => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+const flash = (b, m, peak, ms) => { m.visible = true; return b.T.tween(ms, k => { m.material.opacity = peak * (k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85); }).then(() => { m.material.opacity = 0; m.visible = false; }); };
+const upright = (b, w, h, map, x, y, z, o = {}) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial(Object.assign({ map, transparent: true, depthWrite: false }, o))); m.position.copy(B(x, y, z)); m.lookAt(b.T.camera.position.x, m.position.y + (b.T.camera.position.y - m.position.y) * 0.25, b.T.camera.position.z); b.root.add(m); return m; };
+const rewindMark = (g, cx, cy, s, fill) => { g.fillStyle = fill; for (const dx of [-s * 0.55, s * 0.35]) { g.beginPath(); g.moveTo(cx + dx - s * 0.5, cy); g.lineTo(cx + dx + s * 0.5, cy - s * 0.55); g.lineTo(cx + dx + s * 0.5, cy + s * 0.55); g.closePath(); g.fill(); } };
+
+const REWIND_WORLDS = {
+  // a 90s den: plank floor, a rug under the board, a CRT on the far right that flashes on big plays, a tape stack on the left
+  den: {
+    floor(P, g, R) {
+      g.fillStyle = '#25170e'; g.fillRect(0, 0, P.c.width, P.c.height);
+      for (let y = -14; y < 18; y += 0.55) { g.fillStyle = `rgb(${44 + R() * 16},${28 + R() * 10},${17 + R() * 6})`; g.fillRect(0, P.Y(y + 0.55), P.c.width, P.U(0.55)); g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(0, P.Y(y + 0.55), P.c.width, 1.5); for (let x = -20 + R() * 3; x < 20; x += 2.5 + R() * 3) g.fillRect(P.X(x), P.Y(y + 0.55), 1.5, P.U(0.55)); }
+      g.strokeStyle = 'rgba(255,220,180,.05)'; for (let k = 0; k < 260; k++) { const x = (R() - 0.5) * 40, y = (R() - 0.5) * 32; P.line([[x, y], [x + 1 + R() * 2, y + (R() - 0.5) * 0.05]], 0.012); }
+      // the rug: bands round a warm field
+      const band = (w, h, c) => { P.rr(0, 0.15, w, h, 0.05); g.fillStyle = c; g.fill(); };
+      band(10.4, 7.2, '#7a3218'); band(10.0, 6.8, '#d9c3a0'); band(9.8, 6.6, '#4a2416'); band(9.3, 6.1, '#b4532a'); band(9.1, 5.9, '#3a1d13');
+      g.strokeStyle = 'rgba(217,195,160,.14)'; for (let x = -4.4; x <= 4.4; x += 0.55) for (const y of [-2.8, 3.1]) { g.beginPath(); g.moveTo(P.X(x), P.Y(y + 0.15)); g.lineTo(P.X(x + 0.22), P.Y(y)); g.lineTo(P.X(x), P.Y(y - 0.15)); g.lineTo(P.X(x - 0.22), P.Y(y)); g.closePath(); g.lineWidth = 2; g.stroke(); }
+      radial(P, g, 0, 0.5, 9, 'rgba(255,170,90,.16)');
+    },
+    props(b, SW, SH) {
+      const R = rnd(9), cols = [0x2b211c, 0x332822, 0x261d18];
+      for (let n = 0; n < 5; n++) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.13, 0.55), [0, 1, 2, 3, 4, 5].map(f => f === 4 || f === 5 ? new THREE.MeshLambertMaterial({ map: b.tapeTex(n) }) : new THREE.MeshLambertMaterial({ color: cols[n % 3] }))); t.position.copy(B(-1.1, SH / 2 + 0.95, 0.065 + n * 0.135)); t.rotation.y = (R() - 0.5) * 0.3; b.root.add(t); }
+      // the CRT: a chunky set with a blue PLAY screen, glowing on the floor in front of it
+      const x = -2.5, y = SH / 2 + 1.05, tv = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.9, 0.9), new THREE.MeshLambertMaterial({ color: 0x2e2824 })); tv.position.copy(B(x, y, 0.45)); tv.rotation.y = -0.15; b.root.add(tv);
+      const [c, g] = cvs(320, 240); g.fillStyle = '#1b38b8'; g.fillRect(0, 0, 320, 240); g.fillStyle = '#e8eeff'; g.font = '700 44px "Atkinson Hyperlegible", sans-serif'; g.fillText('PLAY', 30, 70); g.beginPath(); g.moveTo(150, 36); g.lineTo(186, 54); g.lineTo(150, 72); g.closePath(); g.fill(); g.font = '700 24px "Atkinson Hyperlegible", sans-serif'; g.fillText('SP  0:42:10', 30, 210); for (let yy = 0; yy < 240; yy += 4) { g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(0, yy, 320, 2); }
+      const scr = upright(b, 0.82, 0.62, ctex(c), x + 0.05, y - 0.46, 0.47); const fl = upright(b, 0.82, 0.62, null, x + 0.05, y - 0.47, 0.47, { color: 0xffffff, opacity: 0, blending: THREE.AdditiveBlending }); fl.visible = false; void scr;
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.6), new THREE.MeshBasicMaterial({ map: glowTex(256, 192, 60, 90), color: 0x3a6bff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false })); pool.rotation.x = -Math.PI / 2; pool.position.copy(B(x, y - 0.95, 0.003)); b.root.add(pool);
+      b.wfx.push(kind => { if (kind === 'big' || kind === 'hit') flash(b, fl, 0.8, 500); });
+    } },
+  // synthwave: a neon grid floor, two neon tubes round the board, rewind signs that flicker on big plays
+  neon: {
+    floor(P, g, R) {
+      g.fillStyle = '#0a0612'; g.fillRect(0, 0, P.c.width, P.c.height);
+      const sky = g.createLinearGradient(0, P.Y(18), 0, P.Y(4)); sky.addColorStop(0, 'rgba(255,60,170,.35)'); sky.addColorStop(1, 'rgba(255,60,170,0)'); g.fillStyle = sky; g.fillRect(0, 0, P.c.width, P.c.height);
+      g.save(); g.shadowBlur = 8; g.shadowColor = '#3cdcff'; g.strokeStyle = 'rgba(60,220,255,.55)'; for (let x = -20; x <= 20; x += 1) P.line([[x, -14], [x, 18]], 0.03);
+      g.shadowColor = '#ff3caa'; g.strokeStyle = 'rgba(255,60,170,.55)'; for (let y = -14; y <= 18; y += 1) P.line([[-20, y], [20, y]], 0.03); g.restore();
+      const rg = g.createRadialGradient(P.X(0), P.Y(0.2), P.U(3.5), P.X(0), P.Y(0.2), P.U(9)); rg.addColorStop(0, 'rgba(10,6,18,.92)'); rg.addColorStop(1, 'rgba(10,6,18,0)'); g.fillStyle = rg; g.fillRect(0, 0, P.c.width, P.c.height);
+    },
+    props(b, SW, SH) {
+      const tubes = [];
+      for (const [off, col] of [[0.26, 0xff3caa], [0.44, 0x3cdcff]]) { const w = SW + 2 * off, h = SH + 2 * off, mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.95 });
+        for (const [sx, sz, x, y] of [[w, 0.035, 0, h / 2], [w, 0.035, 0, -h / 2], [0.035, h, w / 2, 0], [0.035, h, -w / 2, 0]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.035, sz), mat); m.position.copy(B(x, y, 0.02)); b.root.add(m); }
+        const glow = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.5, h + 0.5), new THREE.MeshBasicMaterial({ map: b._rim || (b._rim = (() => { const [c, g] = cvs(512, 340); g.shadowColor = '#fff'; g.shadowBlur = 24; g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(26, 26, 460, 288); g.strokeRect(26, 26, 460, 288); return new THREE.CanvasTexture(c); })()), color: col, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+        glow.rotation.x = -Math.PI / 2; glow.position.copy(B(0, 0, 0.001)); b.root.add(glow); tubes.push(mat, glow.material); }
+      const [c, g] = cvs(256, 128); g.shadowColor = '#ff3caa'; g.shadowBlur = 16; g.strokeStyle = '#ffb0de'; g.lineWidth = 7; g.lineJoin = 'round';
+      for (const dx of [-36, 30]) { g.beginPath(); g.moveTo(128 + dx - 34, 64); g.lineTo(128 + dx + 34, 26); g.lineTo(128 + dx + 34, 102); g.closePath(); g.stroke(); g.stroke(); }
+      const t = ctex(c), signs = [-1, 1].map(sx => upright(b, 1.5, 0.75, t, sx * (SW / 2 + 0.95), SH / 2 + 0.55, 0.7, { blending: THREE.AdditiveBlending }));
+      b.wfx.push(kind => { if (kind !== 'big' && kind !== 'hit') return; const ms = tubes.concat(signs.map(s => s.material)), o0 = ms.map(m => m.opacity);
+        b.T.tween(520, k => { const on = Math.floor(k * 9) % 2 ? 0.35 : 1; ms.forEach((m, i) => { m.opacity = o0[i] * (k > 0.85 ? 1 : on); }); }).then(() => ms.forEach((m, i) => { m.opacity = o0[i]; })); });
+    } },
+  // the hi-fi: brushed metal, a speaker each side that thumps on summons, VU meters that jump on plays and hits
+  hifi: {
+    floor(P, g, R) {
+      g.fillStyle = '#17181c'; g.fillRect(0, 0, P.c.width, P.c.height);
+      for (let k = 0; k < 2600; k++) { const y = (R() - 0.5) * 32 + 2, x = (R() - 0.5) * 40; g.fillStyle = `rgba(255,255,255,${0.015 + R() * 0.035})`; g.fillRect(P.X(x), P.Y(y), P.U(1 + R() * 5), 1); }
+      g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 3; P.rr(0, 0.1, 13.6, 7.2, 0.25); g.stroke(); g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 2; P.rr(0, 0.1, 13.8, 7.4, 0.28); g.stroke();
+      g.fillStyle = 'rgba(255,255,255,.3)'; for (const [x, y] of [[-6.6, 3.5], [6.6, 3.5], [-6.6, -3.3], [6.6, -3.3]]) { g.beginPath(); g.arc(P.X(x), P.Y(y), P.U(0.06), 0, 7); g.fill(); }
+      g.fillStyle = 'rgba(239,227,207,.45)'; g.font = `italic 800 ${P.U(0.16)}px "Barlow Condensed", sans-serif`; g.textAlign = 'center'; g.fillText('AUTO-REVERSE   ·   2-WAY STEREO   ·   LEARN RETRO', P.X(0), P.Y(3.32));
+      rewindMark(g, P.X(-3.4), P.Y(3.38), P.U(0.16), '#ff5b1f');
+    },
+    props(b, SW, SH) {
+      const [c, g] = cvs(512, 512), m = 256; const rg = g.createRadialGradient(m, m, 30, m, m, 250); rg.addColorStop(0, '#6a6a74'); rg.addColorStop(0.18, '#2a2a30'); rg.addColorStop(0.2, '#55555e'); rg.addColorStop(0.85, '#34343a'); rg.addColorStop(0.88, '#0c0c0e'); rg.addColorStop(0.93, '#9a9aa4'); rg.addColorStop(1, '#4a4a52'); g.fillStyle = rg; g.beginPath(); g.arc(m, m, 254, 0, 7); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,.1)'; for (let r = 70; r < 210; r += 14) { g.beginPath(); g.arc(m, m, r, 0, 7); g.lineWidth = 2; g.stroke(); }
+      const t = ctex(c), cones = [];
+      for (const sx of [-1, 1]) { const x = sx * (SW / 2 + 1.75);
+        const box = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.12, 2.9), new THREE.MeshLambertMaterial({ color: 0x24242a })); box.position.copy(B(x, 0.1, 0.06)); b.root.add(box);
+        const cone = new THREE.Mesh(new THREE.CircleGeometry(1.25, 64), new THREE.MeshBasicMaterial({ map: t })); cone.rotation.x = -Math.PI / 2; cone.position.copy(B(x, 0.1, 0.122)); b.root.add(cone); cones.push(cone);
+        const tw = new THREE.Mesh(new THREE.CircleGeometry(0.3, 32), new THREE.MeshBasicMaterial({ map: t })); tw.rotation.x = -Math.PI / 2; tw.position.copy(B(x, 1.9, 0.123)); b.root.add(tw); }
+      // two VU meters on the far rail
+      const bars = [];
+      for (const sx of [-1, 1]) { const cx = sx * 1.35, y = SH / 2 + 0.55;
+        const back = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.5), new THREE.MeshBasicMaterial({ color: 0x0a0a0c })); back.rotation.x = -Math.PI / 2; back.position.copy(B(cx, y, 0.002)); b.root.add(back);
+        for (let k = 0; k < 14; k++) { const col = k < 9 ? 0x47d47a : k < 12 ? 0xffd86a : 0xff4a3a; const bar = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.36), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.18 })); bar.rotation.x = -Math.PI / 2; bar.position.copy(B(cx - 0.95 + k * 0.146, y, 0.003)); b.root.add(bar); bars.push({ bar, k }); } }
+      const level = (to, ms) => b.T.tween(ms, e => { const lv = to * Math.sin(Math.PI * Math.min(1, e * 1.6)) * (1 - e * 0.3); for (const { bar, k } of bars) bar.material.opacity = k / 14 < lv ? 1 : 0.18; }).then(() => { for (const { bar } of bars) bar.material.opacity = 0.18; });
+      const thump = (amt, ms) => { for (const c of cones) b.T.tween(ms, e => { const s = 1 + amt * Math.sin(Math.PI * e); c.scale.set(s, s, 1); }).then(() => c.scale.set(1, 1, 1)); };
+      b.wfx.push(kind => { if (kind === 'summon') { thump(0.05, 300); level(0.6, 700); } else if (kind === 'big') { thump(0.1, 420); level(1, 1000); } else if (kind === 'hit') { thump(0.08, 360); level(0.95, 900); } else if (kind === 'attack') level(0.45, 500); });
+    } },
+  // a 90s video store: patterned carpet, a long shelf of tapes on the far side under a lit sign
+  video: {
+    floor(P, g, R) {
+      g.fillStyle = '#121735'; g.fillRect(0, 0, P.c.width, P.c.height);
+      const cols = ['rgba(47,211,197,.6)', 'rgba(232,63,158,.6)', 'rgba(247,201,59,.6)', 'rgba(140,120,255,.5)'];
+      for (let k = 0; k < 1300; k++) { const x = (R() - 0.5) * 40, y = (R() - 0.5) * 32 + 2, s = 0.12 + R() * 0.22, c = cols[k % 4], kind = k % 3; g.strokeStyle = c; g.fillStyle = c; g.lineWidth = P.U(0.035);
+        if (kind === 0) { g.beginPath(); g.moveTo(P.X(x), P.Y(y + s)); g.lineTo(P.X(x + s), P.Y(y - s * 0.6)); g.lineTo(P.X(x - s), P.Y(y - s * 0.6)); g.closePath(); g.fill(); }
+        else if (kind === 1) { g.beginPath(); for (let t = 0; t <= 1; t += 0.1) { const px = x + (t - 0.5) * s * 3, py = y + Math.sin(t * 9) * s * 0.4; t ? g.lineTo(P.X(px), P.Y(py)) : g.moveTo(P.X(px), P.Y(py)); } g.stroke(); }
+        else { g.beginPath(); g.arc(P.X(x), P.Y(y), P.U(s * 0.6), 0, 7); g.stroke(); } }
+      const rg = g.createRadialGradient(P.X(0), P.Y(0.2), P.U(3.2), P.X(0), P.Y(0.2), P.U(7)); rg.addColorStop(0, 'rgba(18,23,53,.85)'); rg.addColorStop(1, 'rgba(18,23,53,0)'); g.fillStyle = rg; g.fillRect(0, 0, P.c.width, P.c.height);
+    },
+    props(b, SW, SH) {
+      const [c, g] = cvs(2048, 300), R = rnd(31), pal = ['#e83f9e', '#2fd3c5', '#f7c93b', '#8c78ff', '#ff5b1f', '#efe3cf', '#47d47a'];
+      g.fillStyle = '#2a1d14'; g.fillRect(0, 0, 2048, 300);
+      for (let row = 0; row < 3; row++) { let x = 10; while (x < 2040) { const w = 26 + R() * 10; g.fillStyle = pal[Math.floor(R() * pal.length)]; g.fillRect(x, 12 + row * 96, w, 80); g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(x + 4, 30 + row * 96, w - 8, 16); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x + w - 3, 12 + row * 96, 3, 80); x += w + 3; } g.fillStyle = '#1a120c'; g.fillRect(0, 92 + row * 96, 2048, 8); }
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(SW + 1.6, 1.0, 0.45), [0, 1, 2, 3, 4, 5].map(f => f === 4 ? new THREE.MeshLambertMaterial({ map: ctex(c) }) : new THREE.MeshLambertMaterial({ color: 0x2a1d14 })));
+      shelf.scale.set(1, 0.8, 1); shelf.position.copy(B(0, SH / 2 + 1.9, 0.4)); b.root.add(shelf);
+      const [c2, g2] = cvs(1024, 120); g2.font = 'italic 900 84px "Barlow Condensed", sans-serif'; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.shadowColor = '#ff5b1f'; g2.shadowBlur = 22; g2.fillStyle = '#ffd7b0'; g2.fillText('LEARN RETRO VIDEO', 512, 62); g2.fillText('LEARN RETRO VIDEO', 512, 62);
+      const sign = upright(b, 3.6, 0.42, ctex(c2), 0, SH / 2 + 1.75, 1.05, { blending: THREE.AdditiveBlending, opacity: 0.85 });
+      const sx = (SW / 2 + 0.9); for (const s of [-1, 1]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.75, 0.5), [0, 1, 2, 3, 4, 5].map(f => f === 4 || f === 5 ? new THREE.MeshLambertMaterial({ map: ctex(c) }) : new THREE.MeshLambertMaterial({ color: 0x2a1d14 }))); st.position.copy(B(s * sx, SH / 2 + 0.3, 0.375)); st.rotation.y = -s * 0.5; b.root.add(st); }
+      b.wfx.push(kind => { if (kind === 'big' || kind === 'hit') b.T.tween(600, k => { sign.material.opacity = 0.85 + 0.15 * Math.sin(Math.PI * k) * (Math.floor(k * 10) % 2 ? 0.2 : 1); }).then(() => { sign.material.opacity = 0.85; }); });
+    } },
+};
+export const RW = (() => { const v = new URLSearchParams(location.search).get('rw'); return REWIND_WORLDS[v] ? v : 'tape'; })();
+
 /* ---------------------------------------------------------------- the board */
 export class Board {
   constructor(T, id, o = {}) {
     this.T = T; this.id = id; this.M = MATS[id]; this.L = LAYOUTS[this.M.layout]; this.phone = !!o.phone; this.rec = o.rec || (() => null);
-    this.zones = zonesOf(this.L); this.events = []; this.lpv = { 1: 8000, '-1': 8000 }; this.tp = 0; this.ph = -1;
+    this.zones = zonesOf(this.L); this.wfx = []; this.events = []; this.lpv = { 1: 8000, '-1': 8000 }; this.tp = 0; this.ph = -1;
     this.root = new THREE.Group(); T.scene.add(this.root);
     this.lights(); this.world(); this.reactLayer(); this.underlights(); this.turnRims(); this.props(); this.hookTable();
     // the mat waits for the display font so its labels are drawn in it
@@ -299,6 +405,7 @@ export class Board {
       g.strokeStyle = 'rgba(255,106,31,.10)'; g.beginPath(); g.arc(P.X(0), P.Y(0), P.U(6.2), Math.PI * 0.08, Math.PI * 0.92); g.lineWidth = P.U(0.05); g.stroke();
       g.strokeStyle = 'rgba(90,168,255,.10)'; g.beginPath(); g.arc(P.X(0), P.Y(0), P.U(6.2), Math.PI * 1.08, Math.PI * 1.92); g.stroke();
       g.strokeStyle = 'rgba(255,255,255,.07)'; P.line([[-20, 0], [20, 0]], 0.03);
+    } else if (id === 'rewind' && RW !== 'tape') { REWIND_WORLDS[RW].floor(P, g, rnd(5));
     } else if (id === 'rewind') {
       const rg = g.createRadialGradient(P.X(0), P.Y(0.3), 0, P.X(0), P.Y(0.3), P.U(9)); rg.addColorStop(0, 'rgba(90,52,34,.5)'); rg.addColorStop(1, 'rgba(90,52,34,0)'); g.fillStyle = rg; g.fillRect(0, 0, P.c.width, P.c.height);
       // big rewind marks printed on the floor, and faint stripes like a tape label
@@ -494,21 +601,23 @@ export class Board {
     const o = this.bp(pos), sd = o[1] < 0 ? 1 : -1, col = this.colorOf(id);
     this.fire(big ? 2 : 1, o, null, sd, col, big ? 1500 : 950);
     if (big) this.flare(sd, col);
+    this.wfxRun(big ? 'big' : 'summon', col, sd);
     if (this.id === 'rewind') this.spinReels(big ? 2 : 0.8, 900);
   }
   activate(pos, id) { const o = this.bp(pos); this.fire(5, o, null, o[1] < 0 ? 1 : -1, this.colorOf(id), 900); }
   attack(from, to, sd) {
     const o = this.bp(from), t = to ? this.bp(to) : [o[0] * 0.3, sd * 2.4];
-    this.fire(3, o, t, sd, sd === 1 ? 0xffb070 : 0x9fd0ff, 640);
+    this.fire(3, o, t, sd, sd === 1 ? 0xffb070 : 0x9fd0ff, 640); this.wfxRun('attack', 0, sd);
     if (this.id === 'rewind') this.spinReels(0.6, 600);
   }
   hit(pos) { const o = this.bp(pos); this.fire(7, o, null, o[1] < 0 ? 1 : -1, 0xfff0dc, 520); }
   destroy(pos) { const o = this.bp(pos); this.fire(4, o, null, o[1] < 0 ? 1 : -1, this.M.hot || (this.id === 'rune' ? 0xff7a4a : 0xff4a3a), 700); }
   damage(sd, n, lp) {
     this.lp(sd, lp);
-    this.fire(6, [0, 0], null, sd, DANGER, n >= 1000 ? 900 : 600);
+    this.fire(6, [0, 0], null, sd, DANGER, n >= 1000 ? 900 : 600); this.wfxRun('hit', DANGER, sd);
     if (n >= 1000) this.flare(sd, DANGER);
   }
+  wfxRun(kind, col, sd) { for (const f of this.wfx) f(kind, col, sd); }   // the world's own answers (Rewind's surroundings)
   lp(sd, lp) { this.lpv[sd] = lp; this.rimColor(); }
   turn(sd) {
     this.tp = sd; this.rimColor(); this.fade(this.rims[1], sd === 1 ? 0.55 : 0.08, 500); this.fade(this.rims[-1], sd === -1 ? 0.55 : 0.08, 500);
@@ -587,7 +696,8 @@ export class Board {
       this.dial.rotation.x = -Math.PI / 2; this.dial.position.copy(B(0, 0, 0.0016)); this.dialBase = 0; this.root.add(this.dial);
       this.reels = [-2.3, 2.3].map(x => { const r = new THREE.Mesh(new THREE.CircleGeometry(0.25, 48), new THREE.MeshBasicMaterial({ map: this.reelTex(), transparent: true })); r.rotation.x = -Math.PI / 2; r.position.copy(B(x, 0, 0.0016)); this.root.add(r); return r; });
       const R = rnd(9), cols = [0x2b211c, 0x332822, 0x261d18];
-      for (const sx of [-1, 1]) for (let n = 0; n < 4; n++) {
+      if (RW !== 'tape') REWIND_WORLDS[RW].props(this, SW, SH);
+      else for (const sx of [-1, 1]) for (let n = 0; n < 4; n++) {
         const t = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.13, 0.55), [0, 1, 2, 3, 4, 5].map(f => f === 4 || f === 5 ? new THREE.MeshLambertMaterial({ map: this.tapeTex(n) }) : new THREE.MeshLambertMaterial({ color: cols[n % 3] })));
         t.position.copy(B(sx * (SW / 2 + 0.7), SH / 2 - 0.2, 0.065 + n * 0.135)); t.rotation.y = (R() - 0.5) * 0.25; this.root.add(t);
       }
