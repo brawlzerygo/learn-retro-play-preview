@@ -1,6 +1,9 @@
 // Release notes, newest first (Zack, 2026-11-26: a "latest release notes" page next to the version in the home screen's corner).
 // v is the build number from ?v= (167 shows as 1.67). Written for players: what changed in the game, plain words, no code.
 export const NOTES = [
+  { v: 168, date: 'Nov 26, 2026', items: [
+    'Your hand fans out again, in a clean arc: the cards overlap evenly and tilt to follow the curve. The computer\'s hand fans the same way.',
+  ] },
   { v: 167, date: 'Nov 26, 2026', items: [
     'Every Edison and Goat legal card is now in the Deck Builder: 3,673 cards for Edison and 1,691 for Goat.',
     'Every card was checked a second time against its own text, and over 30 cards that didn\'t work as written were fixed.',

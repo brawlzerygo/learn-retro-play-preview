@@ -1,11 +1,11 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=167';
-import * as S from './sfx.js?v=167';
-import * as FX from './fx.js?v=167';
-import { Board, layoutOf, matChoice } from './boards.js?v=167';
-import { NOTES, verLabel } from './notes.js?v=167';
+import { Table } from './table.js?v=168';
+import * as S from './sfx.js?v=168';
+import * as FX from './fx.js?v=168';
+import { Board, layoutOf, matChoice } from './boards.js?v=168';
+import { NOTES, verLabel } from './notes.js?v=168';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -158,7 +158,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=167');
+const W = new Worker('js/worker.js?v=168');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -1026,17 +1026,29 @@ function reconcile(v) {
 }
 
 /* ---------- HUD pieces ---------- */
+// a clean fanned hand (Zack, 2026-11-26: "i dont like them directly next to each other, need a clean fanned look"; live in v1.68; ?level shows the old level hand):
+// every card sits on one arc around a point far below the hand, turned to match, so the tops form a smooth curve and the cards overlap
+// evenly. fanAt gives card i of n its offset from the hand's middle along the arc (x), its drop (y) and its turn (a, degrees).
+const FAN = !new URLSearchParams(location.search).has('level');
+function fanAt(i, n, step, R) { const a = (i - (n - 1) / 2) * step / R; return { x: R * Math.sin(a), y: R * (1 - Math.cos(a)), a: a * 180 / Math.PI }; }
 function renderHands(newU) {
   const h = D.disp.p[0].hand, n = h.length;
   // phones: 86-point cards fanned across the bottom, overlapping more as the hand grows
   const hw = LAND ? 74 : HW, hx = LAND ? LG.cx : SW / 2, room = LAND ? SW - LCOL - RCOL + 40 : SW - 36;
   const step = MOBILE ? Math.min(LAND ? 60 : 74, (room - hw) / Math.max(1, n - 1)) : Math.min(150, 900 / Math.max(1, n)), x0 = MOBILE ? hx - hw / 2 - (step * (n - 1)) / 2 : 550 - (step * (n - 1)) / 2 - 70;
   const el = $('#hand'); const old = new Map([...el.children].map(c => [+c.dataset.u, c]));
+  // the fan's step: on phones, as wide as fits once the outer cards' tilted corners are counted, so the fan never leaves the screen
+  let fanStep = MOBILE ? Math.min(LAND ? 52 : 56, (room - hw) / Math.max(1, n - 1)) : Math.min(108, 780 / Math.max(1, n));
+  if (FAN && MOBILE && n > 1) { const ch = hw * 614 / 421, half = room / 2;
+    for (let k = 0; k < 40; k++) { const f = fanAt(n - 1, n, fanStep, 1000), r = f.a * Math.PI / 180; if (f.x + hw / 2 * Math.cos(r) + ch / 2 * Math.sin(r) <= half) break; fanStep *= 0.95; } }
   h.forEach((c, i) => {
     let d = old.get(c.u); if (!d) { d = document.createElement('div'); d.className = 'hc in'; d.dataset.u = c.u; el.appendChild(d); }
     old.delete(c.u);
     d.style.backgroundImage = `url(${artUrl(c.id)})`; d.style.left = (x0 + i * step) + 'px';
-    d.style.transform = 'rotate(0deg)'; d.style.zIndex = i + 1;   // level, no fan (Zack, 2026-11-26: the hand was "a bit too staggered")
+    if (FAN) { const f = fanAt(i, n, fanStep, MOBILE ? 1000 : 1500);
+      d.style.left = ((MOBILE ? hx : 555) + f.x - (MOBILE ? hw : 150) / 2) + 'px'; d.style.translate = `0 ${f.y}px`; d.style.transform = `rotate(${f.a}deg)`; }
+    else { d.style.transform = 'rotate(0deg)'; d.style.translate = ''; }   // the level hand (?level), v1.62 to v1.67
+    d.style.zIndex = i + 1;
   });
   for (const d of old.values()) { d.classList.add('gone'); d.removeAttribute('data-u'); setTimeout(() => d.remove(), 240); }
   $('#hcMe').textContent = n;
@@ -1044,7 +1056,10 @@ function renderHands(newU) {
   const os = MOBILE ? Math.min(30, 230 / Math.max(1, on)) : Math.min(92, 520 / Math.max(1, on)), ox = MOBILE ? (LAND ? LG.cx : SW / 2) - (os * (on - 1)) / 2 - 20 : 300 - (os * (on - 1)) / 2 - 48;
   while (oe.children.length > on) oe.lastElementChild.remove();
   while (oe.children.length < on) { const c = document.createElement('div'); c.className = 'card in'; oe.appendChild(c); }
-  [...oe.children].forEach((c, i) => { c.style.left = (ox + i * os) + 'px'; c.style.transform = 'rotate(0deg) translateZ(0)'; });
+  [...oe.children].forEach((c, i) => {
+    if (FAN) { const f = fanAt(i, on, MOBILE ? Math.min(26, 220 / Math.max(1, on)) : Math.min(78, 460 / Math.max(1, on)), MOBILE ? 420 : 1100), cw = c.offsetWidth || (MOBILE ? 40 : 96);
+      c.style.left = ((MOBILE ? (LAND ? LG.cx : SW / 2) : 300) + f.x - cw / 2) + 'px'; c.style.translate = `0 ${-f.y}px`; c.style.transform = `rotate(${-f.a}deg) translateZ(0)`; }
+    else { c.style.left = (ox + i * os) + 'px'; c.style.translate = ''; c.style.transform = 'rotate(0deg) translateZ(0)'; } });
   $('#hcOp').textContent = on;
 }
 $('#hand').addEventListener('mouseover', e => { const c = e.target.closest('.hc'); if (c) { const h = D && D.disp.p[0].hand.find(x => x.u === +c.dataset.u); if (h) inspect(h.id); } });
