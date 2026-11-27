@@ -897,3 +897,31 @@ html.m.hs #stage.m{position:absolute}
 #stage.m .relnotes{width:auto;max-height:none}
 #stage.m .rnlist{max-height:60vh;font-size:15px}
 #stage.m .rnhead b{font-size:22px}
+/* the board picker on phones: one column, the board large, a swipe row of boards, the button pinned at the bottom (2026-11-26) */
+#stage.m .vrow .bthumb{width:72px;height:40px;margin:0 10px 0 auto}
+#stage.m .vrow .tval{margin-left:0;gap:10px}
+#stage.m .vrow .tval .vt{width:auto}
+#stage.m .bchg{height:38px;padding:0 14px;font-size:18px}
+#stage.m .bpick{display:flex;flex-direction:column;padding:calc(var(--sat) + 10px) 0 calc(var(--sab) + 16px)}
+#stage.m .bpback,#stage.m .bptitle,#stage.m .bphero,#stage.m .bpgal{position:relative;left:auto;top:auto}
+#stage.m .bpback{align-self:flex-start;margin-left:12px}
+#stage.m .bptitle{padding:10px 20px 0;font-size:40px}
+#stage.m .bptitle small{font-size:14px}
+#stage.m .bphero{flex:1 1 auto;min-height:0;width:auto;margin:12px 20px 0;display:flex}
+#stage.m .bpimg{flex:1;width:auto;height:auto;min-height:200px;background-position:center 58%}
+#stage.m .bpimg::after{height:170px}
+#stage.m .bpcap{left:16px;right:16px;bottom:14px;display:block}
+#stage.m .bpnm{font-size:38px}
+#stage.m .bpds{font-size:14px;margin-top:4px}
+#stage.m .bptag{left:12px;top:12px;font-size:14px;padding:4px 10px}
+#stage.m .bpgal{width:auto;margin-top:14px}
+#stage.m .bplbl{padding:0 20px;font-size:15px;margin-bottom:8px}
+#stage.m .bpgrid{display:flex;gap:10px;overflow-x:auto;overscroll-behavior-x:contain;padding:4px 20px;scrollbar-width:none}
+#stage.m .bpgrid::-webkit-scrollbar{display:none}
+#stage.m .bpt{flex:none;width:92px;height:118px;background-position:center 58%}
+#stage.m .bpt:hover{transform:none}
+#stage.m .bpt b{font-size:15px;padding:3px 7px}
+#stage.m .bpt .ck{width:22px;height:22px;right:5px;top:5px}
+#stage.m .bpt .ck svg{width:13px;height:13px}
+#stage.m .bpt.on{outline-width:3px}
+#stage.m .bpuse{margin:16px 20px 0;height:60px;justify-content:center;font-size:26px;flex:none}

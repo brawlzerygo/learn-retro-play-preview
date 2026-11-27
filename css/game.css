@@ -1496,3 +1496,37 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 .rnhead span{color:var(--mute);font-size:16px}
 .rnhead i{font-style:normal;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;background:rgba(255,255,255,.1);padding:2px 8px;border-radius:999px}
 .rnlist ul{margin:0;padding-left:22px}.rnlist li+li{margin-top:6px}
+/* the board picker (2026-11-26): a full-screen panel over Settings; mock-up in mockups/board-picker/ */
+.vrow .tval .vt{width:auto;min-width:0}
+.bchg{display:inline-flex;align-items:center;height:46px;padding:0 20px;background:var(--acc);color:#140a04;transform:skewX(-10deg);font:900 24px 'Barlow Condensed';font-style:italic;letter-spacing:.04em;text-transform:uppercase}
+.vrow:hover .bchg,.vrow.on .bchg{box-shadow:0 0 0 2px #fff}
+.bpick{position:absolute;inset:0;z-index:400;overflow:hidden;background:radial-gradient(1400px 900px at 70% 20%,#2a1a12 0%,#0d0907 60%,#070504 100%);animation:bpin .2s ease-out}
+.bpick.out{opacity:0;transition:opacity .16s}
+.bpback{position:absolute;left:40px;top:36px}
+.bptitle{position:absolute;left:80px;top:118px;font:900 76px 'Barlow Condensed';font-style:italic;text-transform:uppercase;letter-spacing:-.01em;color:#fff}
+.bptitle small{display:block;font:700 22px 'Atkinson Hyperlegible';text-transform:none;letter-spacing:0;color:var(--mute);margin-top:2px}
+.bphero{position:absolute;left:80px;top:250px;width:1180px}
+.bpimg{position:relative;width:1180px;height:664px;background:#000 center/cover;outline:3px solid rgba(255,255,255,.18);box-shadow:0 30px 80px rgba(0,0,0,.7)}
+.bpimg::after{content:"";position:absolute;inset:auto 0 0 0;height:260px;background:linear-gradient(transparent,rgba(5,4,3,.92))}
+.bptag{position:absolute;left:24px;top:22px;z-index:2;padding:6px 14px;background:rgba(0,0,0,.7);font:800 18px 'Barlow Condensed';letter-spacing:.08em;text-transform:uppercase;color:#8dff9e;border:1px solid rgba(141,255,158,.45)}
+.bpcap{position:absolute;left:36px;right:36px;bottom:30px;z-index:2;display:flex;align-items:flex-end;justify-content:space-between;gap:30px}
+.bpnm{font:900 64px 'Barlow Condensed';font-style:italic;text-transform:uppercase;line-height:.95;color:#fff}
+.bpds{font-size:21px;color:#e6dcd0;margin-top:8px;max-width:640px;line-height:1.35}
+.bpuse{flex:none;display:flex;align-items:center;height:76px;padding:0 40px;border:0;background:var(--acc);color:#140a04;transform:skewX(-10deg);font:900 32px 'Barlow Condensed';font-style:italic;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;box-shadow:0 14px 40px rgba(255,106,31,.35);transition:filter .12s,transform .12s}
+.bpuse span{display:block;transform:skewX(10deg)}
+.bpuse:hover{filter:brightness(1.12);transform:skewX(-10deg) scale(1.03)}
+.bpuse.inuse{background:#1d1612;color:#8dff9e;box-shadow:inset 0 0 0 2px rgba(141,255,158,.5);cursor:default}
+.bpuse.inuse:hover{filter:none;transform:skewX(-10deg)}
+.bpgal{position:absolute;left:1310px;top:250px;width:540px}
+.bplbl{display:flex;justify-content:space-between;margin-bottom:14px;font:800 20px 'Barlow Condensed';letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.bpgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.bpt{position:relative;height:150px;background:#000 center/cover;outline:2px solid rgba(255,255,255,.14);cursor:pointer;transition:outline-color .12s,transform .12s}
+.bpt:hover{outline-color:rgba(255,255,255,.5);transform:scale(1.02)}
+.bpt b{position:absolute;left:0;right:0;bottom:0;padding:5px 12px;background:linear-gradient(transparent,rgba(0,0,0,.85));font:800 22px 'Barlow Condensed';font-style:italic;letter-spacing:.04em;text-transform:uppercase;color:#fff}
+.bpt.on{outline:4px solid var(--acc);box-shadow:0 0 30px rgba(255,106,31,.35)}
+.bpt .ck{position:absolute;right:8px;top:8px;width:30px;height:30px;border-radius:50%;background:#8dff9e;display:grid;place-items:center}
+.bpt .ck svg{width:18px;height:18px;stroke:#0b2a12;stroke-width:3.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.bpkeys{position:absolute;left:0;right:0;bottom:0;height:62px;background:#120d0a;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:34px;padding:0 80px;font:700 19px 'Barlow Condensed';letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.bpkeys kbd{display:inline-block;min-width:34px;padding:3px 8px;margin-right:8px;background:#2a211b;border:1px solid rgba(255,255,255,.18);font:800 16px 'Barlow Condensed';color:#fff;text-align:center}
+.bpkeys .r{margin-left:auto}
+#stage.touch .bpkeys{display:none}

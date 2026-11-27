@@ -1,11 +1,11 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=168';
-import * as S from './sfx.js?v=168';
-import * as FX from './fx.js?v=168';
-import { Board, layoutOf, matChoice } from './boards.js?v=168';
-import { NOTES, verLabel } from './notes.js?v=168';
+import { Table } from './table.js?v=169';
+import * as S from './sfx.js?v=169';
+import * as FX from './fx.js?v=169';
+import { Board, layoutOf, matChoice } from './boards.js?v=169';
+import { NOTES, verLabel } from './notes.js?v=169';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -123,19 +123,51 @@ applyTheme();
 function renderSettings() {
   $('#setList').innerHTML = SETROWS.map((r, i) => { const v = SET[r.k] != null ? SET[r.k] : r.vals[0];
     const val = r.blocks ? `<span class="blocks">${r.vals.slice(1).map(x => `<i class="${x <= v ? 'f' : ''}"></i>`).join('')}</span><span class="vn">${v}</span>` : `<span class="vt">${r.lab(v)}</span>`;
-    return `<div class="vrow ${i === setRow ? 'on' : ''}" data-i="${i}"><span>${r.name}</span><span class="dots"></span>${r.k === 'table' ? `<span class="bthumb" data-prev="1" title="Preview" style="background-image:url(${prevImg(v)})"><b>Preview</b></span>` : ''}<span class="val"><span class="arr" data-d="-1"><svg><use href="#i-tl"/></svg></span>${val}<span class="arr" data-d="1"><svg><use href="#i-tr"/></svg></span>${r.soon ? `<span class="soonv">${r.soon}</span>` : ''}</span></div>`; }).join('');
-  $('#setDesc').textContent = SETROWS[setRow].desc + (SETROWS[setRow].k === 'table' ? ` ${TAP()[0].toUpperCase() + TAP().slice(1)} the picture to see it full size.` : '');
+    return `<div class="vrow ${i === setRow ? 'on' : ''}" data-i="${i}"><span>${r.name}</span><span class="dots"></span>${r.k === 'table' ? `<span class="bthumb" data-prev="1" style="background-image:url(${prevImg(v)})"></span><span class="val tval"><span class="vt">${r.lab(v)}</span><span class="bchg" data-prev="1">Change</span></span></div>` : `<span class="val"><span class="arr" data-d="-1"><svg><use href="#i-tl"/></svg></span>${val}<span class="arr" data-d="1"><svg><use href="#i-tr"/></svg></span>${r.soon ? `<span class="soonv">${r.soon}</span>` : ''}</span></div>`}`; }).join('');
+  $('#setDesc').textContent = SETROWS[setRow].desc + (SETROWS[setRow].k === 'table' ? ` ${TAP()[0].toUpperCase() + TAP().slice(1)} the row to see every table${MOBILE ? '' : ' (or press Enter)'}.` : '');
 }
 // the board preview (Zack, 2026-11-26: "a preview option in the settings so players can see a preview of the board"): a still of each table,
 // the phone one on phones (assets/scenes/prev-<id>[-m].jpg, frames from tools/record.mjs duel clips)
 const prevImg = v => `assets/scenes/prev-${v || 'rewind'}${MOBILE ? '-m' : ''}.jpg`;
-function boardPreview() {
-  const r = SETROWS.find(x => x.k === 'table'), v = matChoice(SET.table); if ($('#bigprev')) return;
-  const d = document.createElement('div'); d.id = 'bigprev'; d.className = 'bigprev';
-  d.innerHTML = `<div class="bpbox"><img src="${prevImg(v)}" alt=""><div class="bpcap"><span class="disp">${r.lab(v)}</span><span>${TAP()[0].toUpperCase() + TAP().slice(1)} anywhere to close</span></div></div>`;
-  const close = () => { d.classList.add('out'); document.removeEventListener('keydown', key, true); setTimeout(() => d.remove(), 170); };
-  const key = e => { if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); close(); } };
-  d.onclick = close; document.addEventListener('keydown', key, true); stage.appendChild(d); S.play('select');
+// the board picker (Zack, 2026-11-26: "when someone is looking at the preview image, they can select that board... not sure if
+// arrows/cycling thru them is the best experience"; mock-up mockups/board-picker/): every table at once, the one you look at large
+// with its own Use button. Web: a grid on the right, arrows move, Enter uses, Esc closes. Phones: a swipe row and a pinned button.
+const BOARD_INFO = {
+  rewind: 'A cozy den: plank floor, a striped rug round the board, and lights that run with every play.',
+  rune: 'Carved stone with light running through its channels. Standing stones flare on big summons.',
+  dragon: 'Scorched stone and dragon marks. Fire runs the lanes when a big monster lands.',
+  caster: 'An arcane study table with staff and swirl marks that glow with every spell.',
+  fiend: 'A dark altar of skulls and thorns. It burns red as Life Points drop.',
+  light: 'Bright marble and sunbursts. Sparkles answer every summon.',
+  dark: 'Moonlit black stone and ink swirls that ripple on every attack.',
+};
+function boardPicker() {
+  if ($('#bpick')) return;
+  const r = SETROWS.find(x => x.k === 'table'), ids = r.vals; let f = matChoice(SET.table);
+  const d = document.createElement('div'); d.id = 'bpick'; d.className = 'bpick';
+  const tick = '<span class="ck"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+  const draw = () => {
+    const using = matChoice(SET.table), inUse = f === using;
+    const btn = inUse ? `<button class="bpuse inuse" data-use><span>In use</span></button>` : `<button class="bpuse" data-use><span>Use ${esc(r.lab(f))}</span></button>`;
+    d.innerHTML = `<button class="gb sm bpback" data-x><svg><use href="#i-tl"/></svg>Back<span class="shine"></span></button>
+      <h2 class="bptitle">Choose your table<small>${MOBILE ? 'Tap a board to see it. Use it when it looks right.' : 'Click a board to see it big, then use it. Your duels are played on it.'}</small></h2>
+      <div class="bphero"><div class="bpimg" style="background-image:url(${prevImg(f)})">${inUse ? '<div class="bptag">In use</div>' : ''}</div>
+        <div class="bpcap"><div><div class="bpnm">${esc(r.lab(f))}</div><div class="bpds">${esc(BOARD_INFO[f] || '')}</div></div>${MOBILE ? '' : btn}</div></div>
+      <div class="bpgal"><div class="bplbl"><span>All tables · ${ids.length}</span><span>${MOBILE ? 'Swipe for more' : 'Now: ' + esc(r.lab(using))}</span></div>
+        <div class="bpgrid">${ids.map(id => `<div class="bpt${id === f ? ' on' : ''}" data-b="${id}" style="background-image:url(${prevImg(id)})">${id === using ? tick : ''}<b>${esc(r.lab(id))}</b></div>`).join('')}</div></div>
+      ${MOBILE ? btn : `<div class="bpkeys"><span><kbd>&#8592;&#8594;</kbd>Look through</span><span><kbd>Enter</kbd>Use this table</span><span><kbd>Esc</kbd>Back</span><span class="r">Changes take effect next duel</span></div>`}`;
+    const on = d.querySelector('.bpt.on'); if (on && MOBILE) on.scrollIntoView({ block: 'nearest', inline: 'center' });
+  };
+  const look = id => { if (!id || id === f) return; f = id; S.play('hover'); const sc = MOBILE && d.querySelector('.bpgrid') ? d.querySelector('.bpgrid').scrollLeft : 0; draw(); if (MOBILE) d.querySelector('.bpgrid').scrollLeft = sc; };
+  const use = () => { if (f === matChoice(SET.table)) { close(); return; } SET.table = f; saveSet(); if (table) rebuildTable(); S.play('select'); draw(); setTimeout(close, 420); };
+  const close = () => { if (!d.isConnected) return; d.classList.add('out'); document.removeEventListener('keydown', key, true); setTimeout(() => d.remove(), 170); renderSettings(); };
+  const key = e => { const k = e.key, i = ids.indexOf(f), cols = MOBILE ? 1 : 2;
+    if (k === 'Escape') close(); else if (k === 'Enter' || k === ' ') use();
+    else if (k === 'ArrowRight' || k === 'ArrowLeft') look(ids[(i + (k === 'ArrowRight' ? 1 : -1) + ids.length) % ids.length]);
+    else if (k === 'ArrowDown' || k === 'ArrowUp') look(ids[Math.max(0, Math.min(ids.length - 1, i + (k === 'ArrowDown' ? cols : -cols)))]);
+    else return; e.preventDefault(); e.stopPropagation(); };
+  d.addEventListener('click', e => { if (e.target.closest('[data-x]')) return close(); if (e.target.closest('[data-use]')) return use(); const t = e.target.closest('[data-b]'); if (t) look(t.dataset.b); });
+  draw(); document.addEventListener('keydown', key, true); stage.appendChild(d); S.play('select');
 }
 function changeSetting(i, d) {
   const r = SETROWS[i]; const cur = SET[r.k] != null ? SET[r.k] : r.vals[0]; let j = r.vals.indexOf(cur); if (j < 0) j = 0;
@@ -144,7 +176,7 @@ function changeSetting(i, d) {
   if (r.k === 'vol') S.setVolume(SET.vol / 100); if (r.k === 'muted') S.setMuted(SET.muted); if (r.k === 'speed' && table) table.speed = SPEED[SET.speed]; if (r.k === 'theme') applyTheme(); if (r.k === 'table' && table) rebuildTable();
   S.play('click'); renderSettings();
 }
-$('#setList').onclick = e => { const row = e.target.closest('[data-i]'); if (!row) return; setRow = +row.dataset.i; if (e.target.closest('[data-prev]')) { renderSettings(); boardPreview(); return; } const a = e.target.closest('[data-d]'); if (a) changeSetting(setRow, +a.dataset.d); else { S.play('hover'); renderSettings(); } };
+$('#setList').onclick = e => { const row = e.target.closest('[data-i]'); if (!row) return; setRow = +row.dataset.i; if (SETROWS[setRow].k === 'table') { renderSettings(); boardPicker(); return; } const a = e.target.closest('[data-d]'); if (a) changeSetting(setRow, +a.dataset.d); else { S.play('hover'); renderSettings(); } };
 renderSettings();
 
 /* ---------- data ---------- */
@@ -158,7 +190,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=168');
+const W = new Worker('js/worker.js?v=169');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -206,7 +238,7 @@ addEventListener('keydown', e => {
   else if (cur === 'random') { if (e.key === 'Escape') { if (!closeDeckList()) goBack(); return; } if ($('#dlist') || (document.activeElement && document.activeElement.tagName === 'INPUT')) return; const b = $('#rndBody [data-go2]')[+e.key - 1]; if (b) b.click(); }
   else if (cur === 'mode') { if (e.key === 'Escape') show('title'); const t = $('#modeRow .fmt:not(.lock)')[+e.key - 1]; if (t) t.click(); }
   else if (cur === 'deck') { if (e.key === 'Escape') { if (!closeDeckList()) show('format'); return; } if ($('#dlist')) return; if (e.key === 'Enter') $('#duelGo').click(); if (e.key === 'l' || e.key === 'L') $('#seeList') && $('#seeList').click(); }
-  else if (cur === 'settings') { if (e.key === 'Escape') show('title'); if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { setRow = (setRow + (e.key === 'ArrowDown' ? 1 : -1) + SETROWS.length) % SETROWS.length; S.play('hover'); renderSettings(); } if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') changeSetting(setRow, e.key === 'ArrowRight' ? 1 : -1); }
+  else if (cur === 'settings') { if (e.key === 'Escape') show('title'); if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { setRow = (setRow + (e.key === 'ArrowDown' ? 1 : -1) + SETROWS.length) % SETROWS.length; S.play('hover'); renderSettings(); } if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Enter') { if (SETROWS[setRow].k === 'table') boardPicker(); else if (e.key !== 'Enter') changeSetting(setRow, e.key === 'ArrowRight' ? 1 : -1); } }
   else if (cur === 'stats') { if (e.key === 'Escape') show('title'); }
   else if (cur === 'draft') { if (e.key === 'Escape') { if (!closeDeckList()) goBack(); return; } if ($('#dlist') || (document.activeElement && document.activeElement.tagName === 'INPUT')) return; const b = $$('#draftBody [data-go2]')[+e.key - 1]; if (b) b.click(); }
   else if (cur === 'build') { if (e.key === 'Escape' && closeCardZoom()) return; if (e.key === 'Escape') { if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur(); else goBack(); } }
@@ -2260,15 +2292,16 @@ if (!/localhost|127\.0\.0\.1/.test(location.hostname)) { setTimeout(checkUpdate,
 
 // version and release notes in the home screen's corner (Zack, 2026-11-26: "change our version logic to a decimal - so this one being 1.67";
 // "a 'latest release notes' page thats clickable in the bottom right next to the version"). ?v= stays a whole number (the cache key
-// and the update check); players see it as v1.67. Notes live in js/notes.js, newest first.
+// and the update check). Players see the newest entry in js/notes.js (Zack, 2026-11-26: small changes can "land in the whats new popup"
+// of the current version, so the cache number can move on while the version stays, e.g. ?v=169 still shows v1.68).
 function releaseNotes() {
   S.play('click'); const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 69; const p = document.createElement('div'); p.className = 'pn dlg relnotes'; p.style.zIndex = 70;
-  p.innerHTML = `<h3 class="disp">What's new</h3><div class="rnlist">${NOTES.map(n => `<section><div class="rnhead"><b>${verLabel(n.v)}</b><span>${esc(n.date)}</span>${n.v === MYV ? '<i>You have this</i>' : ''}</div><ul>${n.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')}</div><div class="btns"><button class="gb pri" data-y>Close<span class="shine"></span></button></div>`;
+  p.innerHTML = `<h3 class="disp">What's new</h3><div class="rnlist">${NOTES.map(n => `<section><div class="rnhead"><b>${verLabel(n.v)}</b><span>${esc(n.date)}</span>${n === NOTES[0] ? '<i>You have this</i>' : ''}</div><ul>${n.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')}</div><div class="btns"><button class="gb pri" data-y>Close<span class="shine"></span></button></div>`;
   stage.append(v, p); const key = e => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(); } };
   const done = () => { v.remove(); p.remove(); document.removeEventListener('keydown', key, true); };
   document.addEventListener('keydown', key, true); v.onclick = done; p.onclick = e => { if (e.target.closest('[data-y]')) done(); };
 }
-$('#verNum').textContent = verLabel(MYV || NOTES[0].v); $('#verNotes').onclick = releaseNotes;
+$('#verNum').textContent = verLabel(NOTES[0].v); $('#verNotes').onclick = releaseNotes;
 
 // work-in-progress note on the title screen; hidden for good once closed
 { const w = $('#wipNote'); if (w && localStorage.getItem('lrplay:wip') !== '1') { w.hidden = false; $('#wipX').onclick = () => { w.hidden = true; localStorage.setItem('lrplay:wip', '1'); }; } }
