@@ -1,12 +1,12 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=180';
-import * as S from './sfx.js?v=180';
-import * as FX from './fx.js?v=180';
-import { Board, layoutOf, matChoice } from './boards.js?v=180';
-import { NOTES, verLabel } from './notes.js?v=180';
-import { paintMenuBg } from './menubg.js?v=180';
+import { Table } from './table.js?v=181';
+import * as S from './sfx.js?v=181';
+import * as FX from './fx.js?v=181';
+import { Board, layoutOf, matChoice } from './boards.js?v=181';
+import { NOTES, verLabel } from './notes.js?v=181';
+import { paintMenuBg } from './menubg.js?v=181';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -192,7 +192,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=180');
+const W = new Worker('js/worker.js?v=181');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -221,7 +221,7 @@ async function leaveRun() { const k = liveRun(); if (!k) return true; if (!(awai
 async function goBack() { const k = liveRun(), left = await leaveRun(); if (!left) return; if (typeof left === 'string') { S.play('nav'); if (k === 'draft') { dMenu = true; if (DPOOLS[left].jank) backToJank(left); else if (DPOOLS[left].classic) renderThemePick(left); else { dPick = false; renderDraft(true); } } else { sMenu = true; renderPackPick(left); } return; } if (subBack()) { S.play('nav'); return; } if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; if (BACK[cur]) show(BACK[cur]); }
 $('#gBack').onclick = () => { S.unlock(); goBack(); };
 $('#mTabs').onclick = async e => { const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === cur) return; S.unlock(); if (!(await leaveRun())) return; if (cur === 'build' && B.dirty && !(await ask('Leave without saving?', 'Leave'))) return; show(b.dataset.tab); };
-function show(s) { if (s !== 'random' && typeof rollStop === 'function') rollStop(); const prevScr = cur; if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') { if (prevScr !== 'deck') { PK = { you: false, cpu: false }; pickingOpp = false; SEL.mtab = 'you'; } renderDecks(); } if (s === 'format') renderFormats(); if (s === 'mode') renderModes(); if (s === 'random') { RND = { f: null }; renderRandom(true); } if (s === 'build') { if (!B.enterSealed && B.sealed) { B.sealed = null; B.deck = null; } BACK.build = B.sealed ? 'sealed' : 'title'; $('#gBack').classList.add('on'); B.enterSealed = false; B.howto = undefined; readyP.then(openBuilder); } if (s === 'sealed') { sMenu = !(prevScr === 'build' && B.sealed); if (sMenu && SD()) saveSD(null); renderSealed(true); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'draft') { dSel = null; dMenu = true; if (DR()) saveDR(null); renderDraft(true); } if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); const gbb = $('.gbackbar'); if (gbb) gbb.hidden = ['build', 'stats', 'settings', 'duel'].includes(s); }
+function show(s) { if (UPD_ON && s !== cur && UPD_SAFE.has(s)) setTimeout(checkUpdate, 400); if (s !== 'random' && typeof rollStop === 'function') rollStop(); const prevScr = cur; if (s !== cur) S.play('nav'); if (s !== cur) closeDeckList(); if (s !== 'build') closeCardZoom(); cur = s; stage.dataset.scr = s; $$('#mTabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === s)); closeSheet(); $('#gBack').classList.toggle('on', !!BACK[s]); $$('.screen').forEach(e => { const on = e.id === 's-' + s; if (!on && e.classList.contains('on') && !REDUCED) { e.classList.add('leaving'); setTimeout(() => e.classList.remove('leaving'), 260); } e.classList.toggle('on', on); }); if (s === 'deck') { if (prevScr !== 'deck') { PK = { you: false, cpu: false }; pickingOpp = false; SEL.mtab = 'you'; } renderDecks(); } if (s === 'format') renderFormats(); if (s === 'mode') renderModes(); if (s === 'random') { RND = { f: null }; renderRandom(true); } if (s === 'build') { if (!B.enterSealed && B.sealed) { B.sealed = null; B.deck = null; } BACK.build = B.sealed ? 'sealed' : 'title'; $('#gBack').classList.add('on'); B.enterSealed = false; B.howto = undefined; readyP.then(openBuilder); } if (s === 'sealed') { sMenu = !(prevScr === 'build' && B.sealed); if (sMenu && SD()) saveSD(null); renderSealed(true); } /* OK hides the how-to only until the next visit */ if (s === 'stats') renderStats(); if (s === 'draft') { dSel = null; dMenu = true; if (DR()) saveDR(null); renderDraft(true); } if (s === 'settings') renderSettings(); if (s === 'title') updateTicker(); const gbb = $('.gbackbar'); if (gbb) gbb.hidden = ['build', 'stats', 'settings', 'duel'].includes(s); }
 // browsers keep a page silent until the first click, tap or key press (hovering doesn't count): turn sound on at the very first one, anywhere
 for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, () => S.unlock(), { capture: true, passive: true });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { S.unlock(); show(b.dataset.go); } const h = e.target.closest('[data-href]'); if (h) open(h.dataset.href, '_blank'); });
@@ -2290,15 +2290,20 @@ async function checkUpdate() {
   try {
     const t = await (await fetch('index.html?u=' + Date.now(), { cache: 'no-store' })).text();
     const nv = +((t.match(/game\.js\?v=(\d+)/) || [])[1] || 0);
-    if (nv > MYV && cur !== 'duel' && sessionStorage.getItem('lrplay:upd') !== String(nv)) { sessionStorage.setItem('lrplay:upd', String(nv)); const u = new URL(location.href); u.searchParams.set('r', nv); location.replace(u.href); }
+    if (nv > MYV && UPD_SAFE.has(cur) && sessionStorage.getItem('lrplay:upd') !== String(nv)) { sessionStorage.setItem('lrplay:upd', String(nv)); const u = new URL(location.href); u.searchParams.set('r', nv); location.replace(u.href); }
   } catch (e) { /* offline */ }
 }
-if (!/localhost|127\.0\.0\.1/.test(location.hostname)) { setTimeout(checkUpdate, 1500); document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); }); }
+// Update check (2026-11-27, Zack: players who kept one tab open stayed on an old copy): on open, on coming back to the tab, every 3 minutes,
+// and on every move to a menu screen. It reloads only on screens with nothing to lose (never mid-duel, on results, or in the Deck Builder),
+// so a player who duels back to back picks up the new version the moment they leave the results.
+var UPD_SAFE = new Set(['title', 'mode', 'format', 'deck', 'stats', 'settings']);
+var UPD_ON = !/localhost|127\.0\.0\.1/.test(location.hostname);
+if (UPD_ON) { setTimeout(checkUpdate, 1500); setInterval(checkUpdate, 180000); document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); }); }
 
 // version and release notes in the home screen's corner (Zack, 2026-11-26: "change our version logic to a decimal - so this one being 1.67";
 // "a 'latest release notes' page thats clickable in the bottom right next to the version"). ?v= stays a whole number (the cache key
 // and the update check). Players see the newest entry in js/notes.js (Zack, 2026-11-26: small changes can "land in the whats new popup"
-// of the current version, so the cache number can move on while the version stays, e.g. ?v=180 still shows v1.68).
+// of the current version, so the cache number can move on while the version stays, e.g. ?v=181 still shows v1.68).
 function releaseNotes() {
   S.play('click'); const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 69; const p = document.createElement('div'); p.className = 'pn dlg relnotes'; p.style.zIndex = 70;
   p.innerHTML = `<h3 class="disp">What's new</h3><div class="rnlist">${NOTES.map(n => `<section><div class="rnhead"><b>${verLabel(n.v)}</b><span>${esc(n.date)}</span>${n === NOTES[0] ? '<i>You have this</i>' : ''}</div><ul>${n.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')}</div><div class="btns"><button class="gb pri" data-y>Close<span class="shine"></span></button></div>`;

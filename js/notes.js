@@ -7,6 +7,7 @@ export const NOTES = [
     'Choose Attack or Defense Position when you Special Summon.',
     'Card and rules fixes.',
     'Phones: your Extra Deck and Graveyard are easier to open.',
+    'The game updates itself to the newest version between duels.',
   ] },
   { v: 168, date: 'Nov 26, 2026', items: [
     'Your hand fans out again, in a clean arc: the cards overlap evenly and tilt to follow the curve. The computer\'s hand fans the same way.',
