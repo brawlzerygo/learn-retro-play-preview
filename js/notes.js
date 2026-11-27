@@ -1,14 +1,12 @@
 // Release notes, newest first (Zack, 2026-11-26: a "latest release notes" page next to the version in the home screen's corner).
-// v is the version players see (167 shows as 1.67); the newest entry is the version on the home screen. The ?v= cache number can be
+// Keep each line a short general summary (Zack, 2026-11-27: no card-by-card detail). v is the version players see (167 shows as 1.67); the newest entry is the version on the home screen. The ?v= cache number can be
 // higher (a small change added to the current version's notes still needs new cache numbers). Written for players: what changed in the game, plain words, no code.
 export const NOTES = [
   { v: 169, date: 'Nov 27, 2026', items: [
-    'The computer plays much sharper on Advanced and Tournament: it no longer skips direct attacks, passes on attacks it would win, or misses lethal when it is holding a card it could respond with.',
-    'It now judges each play by where the whole turn ends up, so it sees the damage a summon will deal and the damage it is open to next turn, and it stops going back and forth on Set cards in Goat.',
-    'You choose Attack or Defense Position when you Special Summon, unless the card says which: Monster Reborn, Polymerization, Cyber Dragon, contact Fusions and the rest.',
-    'Gaia Knight, the Force of Earth is a Synchro monster again: it goes in the Extra Deck in drafts and can be Synchro Summoned.',
-    'Phones: when you can Synchro Summon or use a Graveyard effect, tap the words "Extra Deck" or "Graveyard" in the prompt to open it. On short phone screens the piles are small and easy to miss.',
-    'Playing a new Field Spell over your old one now destroys the old one, as the rules say: Set a Field Spell over Geartown and its effect Special Summons an Ancient Gear monster (activating one over it still misses the timing).',
+    'A smarter computer on Advanced and Tournament.',
+    'Choose Attack or Defense Position when you Special Summon.',
+    'Card and rules fixes.',
+    'Phones: your Extra Deck and Graveyard are easier to open.',
   ] },
   { v: 168, date: 'Nov 26, 2026', items: [
     'Your hand fans out again, in a clean arc: the cards overlap evenly and tilt to follow the curve. The computer\'s hand fans the same way.',
