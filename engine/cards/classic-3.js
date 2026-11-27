@@ -30,7 +30,7 @@ const bounceAttacker = { type: 'trig', loc: 'any', mand: true, label: 'Return th
   on: (g, ev, c) => ev.type === 'dsEnd' && ev.t === c && ev.a && ev.a.ctrl !== (onField(c) ? c.ctrl : c.owner),
   res: function* (g, c, p, L2) { const a = L2.ev.a; if (a && onField(a) && a.zone === 'm') { const n = name(a); move(g, a, 'hand', { reason: 'effect', by: p }); log(g, `${n} returned to the hand.`); } } };
 const umiOn = g => [g.p[0].fz, g.p[1].fz].some(f => f && faceUp(f) && (named(f, 'Umi') || named(f, 'A Legendary Ocean')));
-const MAGNETS = ['Alpha The Magnet Warrior', 'Beta The Magnet Warrior', 'Gamma The Magnet Warrior'];
+const MAGNETS = ['Alpha The Magnet Warrior', 'Beta The Magnet Warrior', 'Gamma the Magnet Warrior'];
 
 E.addScripts({
   'Dark Magician Girl': { self: { atk: (g, c) => 300 * [...g.p[0].gy, ...g.p[1].gy].filter(x => named(x, 'Dark Magician') || named(x, 'Magician of Black Chaos')).length } },
@@ -166,7 +166,7 @@ E.addScripts({
     { type: 'trig', mand: true, faceDownOk: true, label: 'Become an Equip Card',
       on: (g, ev, c) => ev.type === 'attack' && ev.t === c && c.pos === 'set' && ev.a.ctrl !== c.ctrl,
       res: function* (g, c, p, L2) { const a = L2.ev.a; if (c.zone !== 'm' || c.pos !== 'set' || !onField(a) || freeST(g, p) < 0) return;
-        move(g, c, 'st', { ctrl: p, pos: 'up', reason: 'equip', by: p }); c.equipTo = a.u; c.flags.negated = true;
+        move(g, c, 'st', { ctrl: p, pos: 'up', reason: 'equip', by: p }); c.equipTo = a.u; /* not flagged negated: that stopped its Standby LP gain (2026-11-26 review) */
         log(g, `Kiseitai became an Equip Card equipped to ${name(a)}.`); L.negateAttack(g); } },
     { type: 'trig', loc: 'st', mand: true, label: 'Gain half its ATK',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp !== c.ctrl && !!c.equipTo && fieldMons(g).some(x => x.u === c.equipTo),

@@ -11,6 +11,7 @@
 
    Boards: arena (Arena Lights), rewind (Rewind), rune (Runestone). Pick with ?mat=<id> or Settings (lrplay:set mat). */
 import * as THREE from '../vendor/three.module.min.js';
+import { ICONS } from './icons.js?v=163';
 
 const B = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
 const CW = 0.6, CH = 0.875, ZW = CW + 0.08, ZH = CH + 0.08;
@@ -183,6 +184,88 @@ const FRAG = {
     gl_FragColor = vec4(acc, 1.0);
   }`,
 };
+FRAG.theme = FRAG.rune.replace('gl_FragColor = vec4(acc, 1.0);', 'gl_FragColor = vec4(acc, clamp(max(acc.r, max(acc.g, acc.b)), 0.0, 1.0));');
+
+
+/* ---------------------------------------------------------------- themed boards (Zack, 2026-11-26: "theme boards that match game themes similar to
+   our packs/boosters (dragon theme, spellcaster, toons, fiend, light, dark, etc)... building off the new board engine of rewind and runestone").
+   Each theme is Runestone's engine (straight grid, channels the reactions run through, standing props, phase lights on the rift) dressed in its
+   own palette, mat texture, lane art, zone marks, props and floor. The art is ours, drawn in code. */
+const curve = (P, g, pts, w) => { g.beginPath(); g.moveTo(P.X(pts[0][0]), P.Y(pts[0][1])); for (let i = 1; i + 1 < pts.length; i += 2) g.quadraticCurveTo(P.X(pts[i][0]), P.Y(pts[i][1]), P.X(pts[i + 1][0]), P.Y(pts[i + 1][1])); g.lineWidth = P.U(w); g.stroke(); };
+const blobs = (P, g, R, n, cols, SW, SH, r0 = 0.2, r1 = 0.9) => { for (let k = 0; k < n; k++) { const x = (R() - 0.5) * SW, y = (R() - 0.5) * SH, r = r0 + R() * (r1 - r0), c = cols[k % cols.length]; const rg = g.createRadialGradient(P.X(x), P.Y(y), 0, P.X(x), P.Y(y), P.U(r)); rg.addColorStop(0, c); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = rg; g.fillRect(P.X(x - r), P.Y(y + r), P.U(2 * r), P.U(2 * r)); } };
+const dots = (P, g, R, n, col, SW, SH, s0 = 1, s1 = 3) => { g.fillStyle = col; for (let k = 0; k < n; k++) { const s = s0 + R() * (s1 - s0); g.globalAlpha = 0.2 + R() * 0.8; g.fillRect(P.X((R() - 0.5) * SW) - s / 2, P.Y((R() - 0.5) * SH) - s / 2, s, s); } g.globalAlpha = 1; };
+const radial = (P, g, x, y, r, c) => { const rg = g.createRadialGradient(P.X(x), P.Y(y), 0, P.X(x), P.Y(y), P.U(r)); rg.addColorStop(0, c); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = rg; g.fillRect(0, 0, P.c.width, P.c.height); };
+// a zone's mark: a game-icons.net icon (js/icons.js), the theme's monster icon on Monster and Field zones and its Spell/Trap icon on
+// Spell/Trap zones, turned to face the zone's owner, filled in the current stroke color (the mat's ink, or a mask channel)
+const PATH2D = {};
+function zoneIcon(P, g, z, icons) {
+  const name = z.zone === 'st' ? icons.st : icons.m, ic = ICONS[name]; if (!ic) return;
+  const path = PATH2D[name] || (PATH2D[name] = new Path2D(ic.d)), size = z.zone === 'st' ? 0.34 : 0.42, k = P.U(size) / 512;
+  g.save(); g.fillStyle = g.strokeStyle; g.translate(P.X(z.x), P.Y(z.y)); if (z.side === -1) g.rotate(Math.PI); g.scale(k, k); g.translate(-256, -256); g.fill(path); g.restore();
+}
+const RUNE_ICONS = { m: 'rune-stone', st: 'crystal-growth' };
+function themeGlyph(P, g, z, lw, icons) { zoneIcon(P, g, z, icons); }
+// the corner props share a light (a soft glow that lights for the turn player and flares on big summons) and a beam
+function propLight(b, x, y, h, col, sd) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({ map: b._round || (b._round = glowTex(128, 128, 30, 64)), color: col, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
+  m.position.copy(B(x, y, h)); m.lookAt(b.T.camera.position); b.root.add(m); b.stones[sd].push(m);
+  const beam = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 3.0), new THREE.MeshBasicMaterial({ map: b.beamTex(), color: col, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  beam.position.copy(B(x, y, h + 1.3)); beam.lookAt(b.T.camera.position.x, beam.position.y, b.T.camera.position.z); beam.visible = false; b.root.add(beam); b.flares[sd].push(beam);
+}
+const corners = (SW, SH, f) => { for (const sx of [-1, 1]) for (const sy of [-1, 1]) f(sx * (SW / 2 + 0.45), sy * (SH / 2 + 0.25), sy < 0 ? 0.65 : 1.25, sy < 0 ? 1 : -1, sx); };
+const lam = c => new THREE.MeshLambertMaterial({ color: c });
+
+const THEMES = {
+  dragon: { name: 'Dragon', desc: 'Scaled stone, claw marks and ember spires.', icons: { m: 'dragon-head', st: 'claw-slashes' },
+    base: '#1d1311', slab: 0x120c0a, bg: '#0d0807', glow: 0xff7a2a, glowCss: '#ff7a2a', hot: 0xff8a3a,
+    ink: 'rgba(0,0,0,.5)', glowInk: 'rgba(255,122,42,.34)', zoneFill: 'rgba(0,0,0,.32)', zoneLine: 'rgba(232,170,90,.5)', pileLine: 'rgba(232,170,90,.26)', glyphInk: 'rgba(255,140,60,.2)', label: 'rgba(240,190,120,.6)',
+    light: { sky: 0xffe9d8, ground: 0x2a140c, hemi: 1.55, key: 0xfff0e0, keyI: 1.3 }, under: 0.42,
+    tex(P, g, R, SW, SH) { g.strokeStyle = 'rgba(255,160,90,.07)'; g.lineWidth = P.U(0.008); for (let r = 0, y = -SH / 2; y < SH / 2; y += 0.13, r++) for (let x = -SW / 2 + (r % 2) * 0.1; x < SW / 2; x += 0.2) { g.beginPath(); g.arc(P.X(x), P.Y(y), P.U(0.1), 0, Math.PI); g.stroke(); } dots(P, g, R, 500, '#ff9a4a', SW, SH, 1, 3); blobs(P, g, R, 40, ['rgba(0,0,0,.25)', 'rgba(120,40,10,.12)'], SW, SH); },
+    deco(P, g, w) { for (const s of [1, -1]) for (let k = 0; k < 3; k++) { const y0 = -s * (0.7 + k * 0.16); curve(P, g, [[-3.75, y0], [-3.3, y0 - s * 0.55], [-2.72, y0 - s * 1.25]], w); } for (let k = 0; k < 3; k++) { const y0 = 0.5 + k * 0.14; curve(P, g, [[3.42, -y0], [3.6, -y0 - 0.6], [3.82, -y0 - 1.2]], w * 0.8); } },
+    lane(P, g, w) { P.line([[-3.7, 0], [3.7, 0]], w); for (let x = -3.6; x <= 3.6; x += 0.24) { if (Math.abs(x) < 1.4) continue; P.line([[x - 0.04, -0.09], [x + 0.04, 0], [x - 0.04, 0.09]], w * 0.8); } },
+    floor(P, g, R) { radial(P, g, 0, 0.3, 9, 'rgba(150,60,20,.42)'); dots(P, g, R, 900, '#ff8a3a', 30, 24, 1, 4); g.strokeStyle = 'rgba(255,140,60,.05)'; for (let k = 0; k < 30; k++) { const x = (R() - 0.5) * 34, y = (R() - 0.5) * 26; curve(P, g, [[x, y], [x + R() * 2, y + R() * 1.5], [x + 1 + R() * 2, y + R() * 3]], 0.04); } },
+    props(b, SW, SH) { corners(SW, SH, (x, y, h, sd, sx) => { const c = new THREE.Mesh(new THREE.ConeGeometry(0.2, h, 5), lam(0x1e1512)); c.position.copy(B(x, y, h / 2)); c.rotation.z = -sx * 0.08; b.root.add(c); const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.11, h * 0.6, 5), lam(0x2a1c17)); c2.position.copy(B(x + sx * 0.22, y + 0.12, h * 0.3)); c2.rotation.z = -sx * 0.25; b.root.add(c2); const tip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.14, 5), new THREE.MeshBasicMaterial({ color: 0xff7a2a })); tip.position.copy(B(x, y, h + 0.02)); b.root.add(tip); propLight(b, x, y, h * 0.9, 0xff7a2a, sd); }); } },
+  caster: { name: 'Spellcaster', desc: 'A night sky of arcane lines and floating crystals.', icons: { m: 'wizard-staff', st: 'magic-swirl' },
+    base: '#15122c', slab: 0x0d0b1e, bg: '#08071a', glow: 0x9b7bff, glowCss: '#9b7bff', hot: 0xc06bff,
+    ink: 'rgba(0,0,0,.45)', glowInk: 'rgba(160,130,255,.34)', zoneFill: 'rgba(10,8,30,.42)', zoneLine: 'rgba(190,175,255,.5)', pileLine: 'rgba(190,175,255,.26)', glyphInk: 'rgba(170,150,255,.22)', label: 'rgba(200,190,255,.62)',
+    light: { sky: 0xf0ecff, ground: 0x1a1430, hemi: 1.55, key: 0xf6f2ff, keyI: 1.3 }, under: 0.42,
+    tex(P, g, R, SW, SH) { blobs(P, g, R, 26, ['rgba(120,80,255,.14)', 'rgba(60,200,255,.08)'], SW, SH, 0.5, 1.6); dots(P, g, R, 1400, '#ffffff', SW, SH, 1, 3); },
+    deco(P, g, w) { for (const s of [1, -1]) { const cy = -s * 1.2; for (const rot of [0, Math.PI]) { g.beginPath(); for (let k = 0; k <= 3; k++) { const a = rot + Math.PI / 2 + k * 2 * Math.PI / 3; const px = Math.cos(a) * 1.55, py = cy + Math.sin(a) * 1.0; k ? g.lineTo(P.X(px), P.Y(py)) : g.moveTo(P.X(px), P.Y(py)); } g.lineWidth = P.U(w * 0.8); g.stroke(); } }
+      const st = [[-3.7, 1.9], [-3.35, 1.3], [-3.6, 0.7], [-3.1, 0.45]]; P.line(st, w * 0.6); P.line(st.map(([x, y]) => [x, -y]), w * 0.6); },
+    lane(P, g, w) { g.setLineDash([P.U(0.12), P.U(0.08)]); P.line([[-3.7, 0], [3.7, 0]], w); g.setLineDash([]); for (const x of [-3.2, -2.4, -1.6, 1.6, 2.4, 3.2]) { g.beginPath(); g.moveTo(P.X(x), P.Y(0.08)); g.lineTo(P.X(x + 0.06), P.Y(0)); g.lineTo(P.X(x), P.Y(-0.08)); g.lineTo(P.X(x - 0.06), P.Y(0)); g.closePath(); g.lineWidth = P.U(w); g.stroke(); } },
+    floor(P, g, R) { radial(P, g, 0, 0.3, 10, 'rgba(70,50,160,.5)'); dots(P, g, R, 2200, '#ffffff', 40, 32, 1, 3); blobs(P, g, R, 18, ['rgba(110,70,255,.12)', 'rgba(40,180,255,.07)'], 40, 30, 1.5, 4); },
+    props(b, SW, SH) { corners(SW, SH, (x, y, h, sd) => { const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.12, 8), lam(0x26214a)); ped.position.copy(B(x, y, 0.06)); b.root.add(ped); const cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.2), new THREE.MeshLambertMaterial({ color: 0x8f78ff, emissive: 0x3b2a99 })); cr.scale.set(0.8, 1.9, 0.8); cr.position.copy(B(x, y, h * 0.55 + 0.25)); cr.rotation.y = 0.5; b.root.add(cr); propLight(b, x, y, h * 0.55 + 0.25, 0x9b7bff, sd); }); } },
+  fiend: { name: 'Fiend', desc: 'Cracked basalt with lava running through it, and thorns.', icons: { m: 'daemon-skull', st: 'thorn-helix' },
+    base: '#1c0d0e', slab: 0x100607, bg: '#0c0405', glow: 0xff3a2a, glowCss: '#ff3a2a', hot: 0xff5a2a,
+    ink: 'rgba(0,0,0,.55)', glowInk: 'rgba(255,80,40,.42)', zoneFill: 'rgba(0,0,0,.36)', zoneLine: 'rgba(255,110,90,.44)', pileLine: 'rgba(255,110,90,.22)', glyphInk: 'rgba(255,80,60,.2)', label: 'rgba(255,150,130,.58)',
+    light: { sky: 0xffe4e0, ground: 0x2a0c0c, hemi: 1.55, key: 0xfff0ec, keyI: 1.3 }, under: 0.42,
+    tex(P, g, R, SW, SH) { blobs(P, g, R, 60, ['rgba(0,0,0,.3)', 'rgba(110,20,20,.16)'], SW, SH, 0.1, 0.6); dots(P, g, R, 300, '#ff6a3a', SW, SH, 1, 2); },
+    deco(P, g, w) { const R = rnd(41); for (let k = 0; k < 16; k++) { let x = (R() - 0.5) * 7.4, y = (R() - 0.5) * 4.6; const pts = [[x, y]]; let a = R() * 6.28; for (let j = 0; j < 8; j++) { a += (R() - 0.5) * 1.1; x += Math.cos(a) * 0.16; y += Math.sin(a) * 0.16; pts.push([x, y]); } P.line(pts, w * (0.6 + R() * 0.6)); } },
+    lane(P, g, w) { const R = rnd(43), pts = []; for (let x = -3.75; x <= 3.75; x += 0.1) pts.push([x, (R() - 0.5) * 0.09]); P.line(pts, w * 1.2); },
+    floor(P, g, R) { radial(P, g, 0, 0.3, 9, 'rgba(140,20,15,.45)'); dots(P, g, R, 900, '#ff5a2a', 34, 26, 1, 4); },
+    props(b, SW, SH) { corners(SW, SH, (x, y, h, sd, sx) => { for (let k = 0; k < 3; k++) { const hh = h * (1 - k * 0.25); const c = new THREE.Mesh(new THREE.ConeGeometry(0.07, hh, 6), lam(0x231010)); c.position.copy(B(x + (k - 1) * 0.18, y + (k % 2) * 0.12, hh / 2)); c.rotation.z = (k - 1) * 0.35 - sx * 0.05; b.root.add(c); } propLight(b, x, y, h * 0.5, 0xff3a2a, sd); }); } },
+  light: { name: 'Light', desc: 'White marble and gold, with rays from the center.', icons: { m: 'barbed-sun', st: 'sparkles' }, bright: true,
+    base: '#ddd4c2', slab: 0xb9ad94, bg: '#c9bc9e', glow: 0xffb020, glowCss: '#e0a830', hot: 0xff9a10,
+    ink: 'rgba(150,110,40,.32)', zoneFill: 'rgba(255,255,255,.32)', zoneLine: 'rgba(160,120,40,.72)', pileLine: 'rgba(160,120,40,.42)', glyphInk: 'rgba(170,130,50,.28)', label: 'rgba(120,90,30,.8)',
+    light: { sky: 0xffffff, ground: 0x8a7a60, hemi: 1.4, key: 0xfff6e6, keyI: 1.05 }, under: 0.3,
+    tex(P, g, R, SW, SH) { blobs(P, g, R, 30, ['rgba(255,255,255,.35)', 'rgba(190,170,130,.18)'], SW, SH, 0.4, 1.4); g.strokeStyle = 'rgba(120,110,100,.16)'; for (let k = 0; k < 14; k++) { const x = (R() - 0.5) * SW, y = (R() - 0.5) * SH; curve(P, g, [[x, y], [x + (R() - 0.5) * 2, y + (R() - 0.5) * 1.5], [x + (R() - 0.5) * 3, y + (R() - 0.5) * 2]], 0.008 + R() * 0.01); } },
+    deco(P, g, w) { for (let k = 0; k < 20; k++) { const a = k * Math.PI / 10 + 0.08; P.line([[Math.cos(a) * 0.45, Math.sin(a) * 0.3], [Math.cos(a) * 4.4, Math.sin(a) * 2.9]], w * 0.55); } },
+    lane(P, g, w) { P.line([[-3.75, 0.06], [3.75, 0.06]], w * 0.7); P.line([[-3.75, -0.06], [3.75, -0.06]], w * 0.7); for (const x of [-3.2, -2.4, -1.6, 1.6, 2.4, 3.2]) { g.beginPath(); g.moveTo(P.X(x), P.Y(0.11)); g.lineTo(P.X(x + 0.07), P.Y(0)); g.lineTo(P.X(x), P.Y(-0.11)); g.lineTo(P.X(x - 0.07), P.Y(0)); g.closePath(); g.lineWidth = P.U(w); g.stroke(); } },
+    floor(P, g, R) { radial(P, g, 0, 0.3, 10, 'rgba(255,236,190,.55)'); blobs(P, g, R, 24, ['rgba(255,255,255,.4)', 'rgba(230,200,140,.2)'], 40, 30, 1.5, 4); g.strokeStyle = 'rgba(180,140,60,.12)'; for (let k = 0; k < 28; k++) { const a = k * Math.PI / 14; P.line([[Math.cos(a) * 5.5, Math.sin(a) * 4], [Math.cos(a) * 22, Math.sin(a) * 18]], 0.06); } },
+    props(b, SW, SH) { corners(SW, SH, (x, y, h, sd) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, h, 18), lam(0xf4eee2)); c.position.copy(B(x, y, h / 2)); b.root.add(c); for (const z of [0.03, h - 0.03]) { const cap = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.06, 0.36), lam(0xd2a845)); cap.position.copy(B(x, y, z)); b.root.add(cap); } propLight(b, x, y, h + 0.1, 0xffc040, sd); }); } },
+  dark: { name: 'Dark', desc: 'A void of ink and shadow, with obelisks at the edge.', icons: { m: 'evil-moon', st: 'ink-swirl' },
+    base: '#0f0b17', slab: 0x07050c, bg: '#050309', glow: 0x9a5cff, glowCss: '#9a5cff', hot: 0xd04dff,
+    ink: 'rgba(0,0,0,.5)', glowInk: 'rgba(150,90,255,.32)', zoneFill: 'rgba(0,0,0,.38)', zoneLine: 'rgba(180,140,255,.42)', pileLine: 'rgba(180,140,255,.22)', glyphInk: 'rgba(160,110,255,.2)', label: 'rgba(190,160,255,.58)',
+    light: { sky: 0xf0e8ff, ground: 0x120a20, hemi: 1.55, key: 0xf6f0ff, keyI: 1.3 }, under: 0.42,
+    tex(P, g, R, SW, SH) { blobs(P, g, R, 50, ['rgba(70,30,120,.18)', 'rgba(0,0,0,.35)', 'rgba(120,40,160,.08)'], SW, SH, 0.3, 1.3); },
+    deco(P, g, w) { for (const s of [1, -1]) for (let k = 0; k < 3; k++) { const pts = []; for (let t = 0; t <= 1.001; t += 0.05) { const a = t * 4.2 + k * 2.1, r = 0.15 + t * 0.75; pts.push([-3.3 + Math.cos(a) * r * 0.6, -s * 1.3 + Math.sin(a) * r]); } P.line(pts, w * (0.9 - t0(k))); } },
+    lane(P, g, w) { const pts = []; for (let x = -3.75; x <= 3.75; x += 0.05) pts.push([x, Math.sin(x * 4) * 0.07]); P.line(pts, w); P.line(pts.map(([x, y]) => [x, -y]), w * 0.6); },
+    floor(P, g, R) { radial(P, g, 0, 0.3, 9, 'rgba(80,30,150,.4)'); g.strokeStyle = 'rgba(150,90,255,.05)'; for (let k = 0; k < 4; k++) { const pts = []; for (let t = 0; t < 1; t += 0.01) { const a = t * 12 + k * 1.57, r = 4 + t * 14; pts.push([Math.cos(a) * r, Math.sin(a) * r * 0.8]); } P.line(pts, 0.12); } },
+    props(b, SW, SH) { corners(SW, SH, (x, y, h, sd, sx) => { const o = new THREE.Mesh(new THREE.BoxGeometry(0.18, h * 1.1, 0.18), lam(0x0e0b14)); o.position.copy(B(x, y, h * 0.55)); o.rotation.y = sx * 0.3; b.root.add(o); const slit = new THREE.Mesh(new THREE.PlaneGeometry(0.03, h * 0.7), new THREE.MeshBasicMaterial({ color: 0xa070ff })); slit.position.copy(B(x, y, h * 0.6)); slit.rotation.y = o.rotation.y; slit.translateZ(0.092); b.root.add(slit); propLight(b, x, y, h * 0.6, 0x9a5cff, sd); }); } },
+};
+const t0 = k => k * 0.2;
+for (const [id, t] of Object.entries(THEMES)) MATS[id] = { name: t.name, desc: t.desc, layout: 'hex', bg: t.bg, light: t.light, under: t.under, theme: t, glow: t.glow, hot: t.hot };
+export const THEME_IDS = Object.keys(THEMES);
 
 /* ---------------------------------------------------------------- the board */
 export class Board {
@@ -222,6 +305,7 @@ export class Board {
       g.fillStyle = 'rgba(255,91,31,.06)';
       for (const [cx, cy, s] of [[-8.5, 3.5, 2.2], [8.5, 3.5, 2.2], [-9, -4, 1.6], [9, -4, 1.6]]) for (const dx of [0, s * 0.9]) { g.beginPath(); g.moveTo(P.X(cx + dx - s / 2), P.Y(cy)); g.lineTo(P.X(cx + dx + s / 2), P.Y(cy + s / 2)); g.lineTo(P.X(cx + dx + s / 2), P.Y(cy - s / 2)); g.closePath(); g.fill(); }
       g.strokeStyle = 'rgba(239,227,207,.05)'; for (let y = -14; y < 18; y += 0.5) P.line([[-20, y], [20, y]], 0.05);
+    } else if (this.M.theme) { this.M.theme.floor(P, g, rnd(17));
     } else {
       const rg = g.createRadialGradient(P.X(0), P.Y(0.3), 0, P.X(0), P.Y(0.3), P.U(9)); rg.addColorStop(0, 'rgba(40,74,70,.5)'); rg.addColorStop(1, 'rgba(40,74,70,0)'); g.fillStyle = rg; g.fillRect(0, 0, P.c.width, P.c.height);
       // broken flagstones fading into the dark
@@ -234,13 +318,13 @@ export class Board {
     this.mat = new THREE.Mesh(new THREE.PlaneGeometry(MAT_R.x1 - MAT_R.x0, MAT_R.y1 - MAT_R.y0), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, opacity: 1 }));
     this.mat.rotation.x = -Math.PI / 2; this.mat.position.copy(B((MAT_R.x0 + MAT_R.x1) / 2, (MAT_R.y0 + MAT_R.y1) / 2, -0.002)); this.mat.renderOrder = -2; this.root.add(this.mat);
     // a raised edge under the mat, so the board is a slab sitting in its world (the diorama feel)
-    const slab = this.slab = { arena: [7.8, 4.9, 0x0b0d13], rewind: [7.5, 4.95, 0x1d1613], rune: [7.8, 4.9, 0x15181b] }[id];
+    const slab = this.slab = this.M.theme ? [7.8, 4.9, this.M.theme.slab] : { arena: [7.8, 4.9, 0x0b0d13], rewind: [7.5, 4.95, 0x1d1613], rune: [7.8, 4.9, 0x15181b] }[id];
     const s = new THREE.Mesh(new THREE.BoxGeometry(slab[0] + 0.14, 0.12, slab[1] + 0.14), new THREE.MeshLambertMaterial({ color: slab[2] }));
     s.position.copy(B(0, 0, -0.064)); this.root.add(s);
   }
   paintMat() {
     const P = new Paper(MAT_R, this.phone ? 300 : 380), g = P.g, id = this.id, [SW, SH] = this.slab;
-    if (id === 'arena') this.paintArena(P, g, SW, SH); else if (id === 'rewind') this.paintRewind(P, g, SW, SH); else this.paintRune(P, g, SW, SH);
+    if (this.M.theme) this.paintTheme(P, g, SW, SH); else if (id === 'arena') this.paintArena(P, g, SW, SH); else if (id === 'rewind') this.paintRewind(P, g, SW, SH); else this.paintRune(P, g, SW, SH);
     const old = this.mat.material.map; this.mat.material.map = P.tex(this.T.renderer); this.mat.material.needsUpdate = true; if (old) old.dispose();
   }
   pileLabels(P, g, color) {
@@ -313,13 +397,7 @@ export class Board {
     for (const s of [1, -1]) { const zs = this.zones.filter(z => z.side === s), ys = zs.map(z => z.y), xs = zs.map(z => z.x); const y0 = Math.min(...ys) - ZH / 2 - 0.1, y1 = Math.max(...ys) + ZH / 2 + 0.1, x0 = Math.min(...xs) - ZW / 2 - 0.1, x1 = Math.max(...xs) + ZW / 2 + 0.1; P.rr((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0, 0.2); g.lineWidth = P.U(lw * 0.8); g.stroke(); }
     void R;
   }
-  runeGlyph(P, g, z, lw) {
-    const x = z.x, y = z.y, s = z.side, h = 0.3, w = 0.22;
-    g.lineWidth = P.U(lw); g.beginPath();
-    if (z.zone === 'm' || z.zone === 'fz') { g.moveTo(P.X(x), P.Y(y + h)); g.lineTo(P.X(x + w), P.Y(y)); g.lineTo(P.X(x), P.Y(y - h)); g.lineTo(P.X(x - w), P.Y(y)); g.closePath(); g.moveTo(P.X(x), P.Y(y + h * 0.55)); g.lineTo(P.X(x), P.Y(y - h * 0.55)); }
-    else { g.moveTo(P.X(x - w), P.Y(y - s * h * 0.6)); g.lineTo(P.X(x + w), P.Y(y - s * h * 0.6)); g.lineTo(P.X(x), P.Y(y + s * h * 0.8)); g.closePath(); g.moveTo(P.X(x - w * 0.5), P.Y(y)); g.lineTo(P.X(x + w * 0.5), P.Y(y)); }
-    g.stroke();
-  }
+  runeGlyph(P, g, z, lw) { zoneIcon(P, g, z, RUNE_ICONS); }   // game-icons.net icons since 2026-11-26 (Zack: "actual icons")
   paintRune(P, g, SW, SH) {
     // stone: mottled basalt, darker toward the rim
     P.rr(0, 0, SW, SH, 0.35); g.fillStyle = '#1b1f22'; g.fill();
@@ -336,7 +414,7 @@ export class Board {
       P.rr(z.x, z.y, ZW, ZH, 0.06); g.fillStyle = 'rgba(0,0,0,.32)'; g.fill();
       g.lineWidth = P.U(0.016); g.strokeStyle = 'rgba(0,0,0,.6)'; P.rr(z.x - 0.008, z.y + 0.008, ZW, ZH, 0.06); g.stroke();
       g.strokeStyle = z.pile ? 'rgba(170,230,215,.18)' : 'rgba(170,230,215,.3)'; P.rr(z.x + 0.006, z.y - 0.006, ZW, ZH, 0.06); g.stroke();
-      if (!z.pile) { g.strokeStyle = 'rgba(54,224,192,.12)'; this.runeGlyph(P, g, z, 0.018); }
+      if (!z.pile) { g.strokeStyle = 'rgba(54,224,192,.16)'; this.runeGlyph(P, g, z, 0.018); }
     }
     this.pileLabels(P, g, 'rgba(170,230,215,.5)');
   }
@@ -353,14 +431,46 @@ export class Board {
     const t = new THREE.CanvasTexture(P.c); t.colorSpace = THREE.NoColorSpace; return t;
   }
 
+  // a themed mat: base, texture, the channel network and the theme's lane and decoration in its ink, then lit; zones and their marks
+  paintTheme(P, g, SW, SH) {
+    const T = this.M.theme, R = rnd(5);
+    P.rr(0, 0, SW, SH, 0.3); g.fillStyle = T.base; g.fill();
+    g.save(); g.clip(); T.tex(P, g, R, SW, SH);
+    const vg = g.createRadialGradient(P.X(0), P.Y(0), P.U(1.8), P.X(0), P.Y(0), P.U(4.8)); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, T.bright ? 'rgba(80,60,30,.18)' : 'rgba(0,0,0,.42)'); g.fillStyle = vg; g.fillRect(0, 0, P.c.width, P.c.height);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    g.strokeStyle = T.ink; this.runeNet(P, g, 'groove', T.bright ? 0.5 : 1); T.deco(P, g, 0.03); T.lane(P, g, 0.03, 'mat');
+    if (T.glowInk) { g.shadowColor = T.glowCss; g.shadowBlur = P.U(0.05); g.strokeStyle = T.glowInk; g.globalCompositeOperation = 'lighter'; this.runeNet(P, g, 'groove', 0.32); T.deco(P, g, 0.012); T.lane(P, g, 0.012, 'glow'); }
+    g.restore();
+    g.lineWidth = P.U(0.06); g.strokeStyle = T.bright ? 'rgba(90,70,40,.5)' : 'rgba(255,255,255,.08)'; P.rr(0, 0, SW - 0.06, SH - 0.06, 0.28); g.stroke();
+    for (const z of this.zones) {
+      if (T.shadow) { P.rr(z.x + 0.03, z.y - 0.03, ZW, ZH, 0.05); g.fillStyle = 'rgba(22,17,14,.35)'; g.fill(); }
+      P.rr(z.x, z.y, ZW, ZH, 0.05); g.fillStyle = T.zoneFill; g.fill(); g.lineWidth = P.U(T.zoneW || 0.014); g.strokeStyle = z.pile ? T.pileLine : T.zoneLine; g.stroke();
+      if (!z.pile) { g.strokeStyle = T.glyphInk; themeGlyph(P, g, z, 0.018, T.icons); }
+    }
+    this.pileLabels(P, g, T.label);
+  }
+  // a theme's reaction mask, like Runestone's: R its lines (channels, lane, decoration), G cracks, B the zone marks
+  themeMask() {
+    const T = this.M.theme, P = new Paper(MAT_R, 150), g = P.g; g.fillStyle = '#000'; g.fillRect(0, 0, P.c.width, P.c.height); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+    g.strokeStyle = '#ff0000'; g.shadowColor = '#ff0000'; g.shadowBlur = 5; this.runeNet(P, g, 'mask'); T.deco(P, g, 0.05); T.lane(P, g, 0.05, 'mask'); g.shadowBlur = 0;
+    const R = rnd(23);
+    for (const z of this.zones) {
+      g.strokeStyle = '#00ff00'; g.lineWidth = 2;
+      for (let n = 0; n < 4; n++) { let x = z.x + (R() - 0.5) * 0.1, y = z.y + (R() - 0.5) * 0.1; const a = R() * 6.28; g.beginPath(); g.moveTo(P.X(x), P.Y(y)); for (let s = 0; s < 6; s++) { x += Math.cos(a + (R() - 0.5) * 1.2) * 0.07; y += Math.sin(a + (R() - 0.5) * 1.2) * 0.09; g.lineTo(P.X(x), P.Y(y)); } g.stroke(); }
+      if (!z.pile) { g.strokeStyle = '#0000ff'; themeGlyph(P, g, z, 0.035, T.icons); }
+    }
+    const t = new THREE.CanvasTexture(P.c); t.colorSpace = THREE.NoColorSpace; return t;
+  }
+
   /* ----- reactions: the floor shader and its events */
   reactLayer() {
     const A = [], Bv = [], C = [];
     for (let i = 0; i < 8; i++) { A.push(new THREE.Vector4()); Bv.push(new THREE.Vector4()); C.push(new THREE.Vector3()); }
-    const mask = this.id === 'rune' ? this.runeMask() : null;
+    const T = this.M.theme, mask = this.id === 'rune' ? this.runeMask() : T && T.shader !== 'toon' ? this.themeMask() : null;
     this.fxu = { uTime: { value: 0 }, uA: { value: A }, uB: { value: Bv }, uC: { value: C }, uMask: { value: mask }, uMR: { value: new THREE.Vector4(MAT_R.x0, MAT_R.y0, MAT_R.x1 - MAT_R.x0, MAT_R.y1 - MAT_R.y0) } };
     const [SW, SH] = this.slab;
-    const m = this.fxm = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), new THREE.ShaderMaterial({ uniforms: this.fxu, vertexShader: VERT, fragmentShader: FRAG[this.id], transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    const m = this.fxm = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), new THREE.ShaderMaterial(Object.assign({ uniforms: this.fxu, vertexShader: VERT, fragmentShader: FRAG[T ? T.shader || 'theme' : this.id], transparent: true, depthWrite: false, blending: THREE.AdditiveBlending },
+      T ? { blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor } : {})));
     m.rotation.x = -Math.PI / 2; m.position.copy(B(0, 0, 0.0015)); m.visible = false; m.renderOrder = -1; this.root.add(m);
   }
   // fire one reaction: kind (see FRAG), at board point o, toward t, on side sd, in a color, over ms
@@ -393,7 +503,7 @@ export class Board {
     if (this.id === 'rewind') this.spinReels(0.6, 600);
   }
   hit(pos) { const o = this.bp(pos); this.fire(7, o, null, o[1] < 0 ? 1 : -1, 0xfff0dc, 520); }
-  destroy(pos) { const o = this.bp(pos); this.fire(4, o, null, o[1] < 0 ? 1 : -1, this.id === 'rune' ? 0xff7a4a : 0xff4a3a, 700); }
+  destroy(pos) { const o = this.bp(pos); this.fire(4, o, null, o[1] < 0 ? 1 : -1, this.M.hot || (this.id === 'rune' ? 0xff7a4a : 0xff4a3a), 700); }
   damage(sd, n, lp) {
     this.lp(sd, lp);
     this.fire(6, [0, 0], null, sd, DANGER, n >= 1000 ? 900 : 600);
@@ -404,7 +514,7 @@ export class Board {
     this.tp = sd; this.rimColor(); this.fade(this.rims[1], sd === 1 ? 0.55 : 0.08, 500); this.fade(this.rims[-1], sd === -1 ? 0.55 : 0.08, 500);
     this.fire(6, [0, 0], null, sd, sd === 1 ? YOU : THEM, 900);
     if (this.id === 'rewind') { this.rewindDial(); this.spinReels(-3, 1100); }
-    if (this.id === 'rune') this.lightStones(sd === 1 ? YOU : THEM, sd);
+    if (this.stones) this.lightStones(sd === 1 ? YOU : THEM, sd);
   }
   phase(ph, sd) {
     const k = Math.max(0, PHASES.indexOf(ph === 'start' ? 'draw' : ph)); if (k === this.ph && sd === this.tp) return; this.ph = k;
@@ -449,7 +559,10 @@ export class Board {
   /* ----- props on the rim: each board's scenery, and the parts that react */
   props() {
     const [SW, SH] = this.slab; this.flares = { 1: [], '-1': [] };
-    if (this.id === 'arena') {
+    if (this.M.theme) {
+      const T = this.M.theme; this.stones = { 1: [], '-1': [] }; T.props(this, SW, SH);
+      this.glyphs = PHASES.map((_, k) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshBasicMaterial({ map: glowTex(64, 64, 14, 30), color: YOU, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.position.copy(B((k - 2.5) * 0.5, 0, 0.0018)); this.root.add(m); return m; });
+    } else if (this.id === 'arena') {
       // four light pylons at the court's corners, and a long LED board behind the far side
       const body = new THREE.MeshLambertMaterial({ color: 0x14171f });
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
@@ -500,7 +613,7 @@ export class Board {
     if (this.ledFlash) { this.ledFlash.material.color.setHex(col); this.ledFlash.visible = true; this.T.tween(700, k => { this.ledFlash.material.opacity = 0.55 * (1 - k); }).then(() => { this.ledFlash.visible = false; }); }
     if (this.stones) for (const r of this.stones[sd]) { r.material.color.setHex(col); this.T.tween(900, k => { r.material.opacity = 0.18 + 0.8 * Math.sin(Math.PI * k); }); }
   }
-  lightStones(col, sd) { if (!this.stones) return; for (const s of [1, -1]) for (const r of this.stones[s]) { r.material.color.setHex(s === sd ? col : 0x36e0c0); this.fade(r, s === sd ? 0.75 : 0.15, 600); } }
+  lightStones(col, sd) { if (!this.stones) return; for (const s of [1, -1]) for (const r of this.stones[s]) { r.material.color.setHex(s === sd ? col : this.M.glow || 0x36e0c0); this.fade(r, s === sd ? 0.75 : 0.15, 600); } }
   rewindDial() { if (!this.dial) return; const r0 = this.dial.rotation.z; this.dialBase = r0 + 2 * Math.PI; this.T.tween(1000, k => { this.dial.rotation.z = r0 + 2 * Math.PI * k; }); this.ph = -1; }
   spinReels(turns, ms) { if (!this.reels) return; for (const r of this.reels) { const a = r.rotation.z; this.T.tween(ms, k => { r.rotation.z = a + turns * 2 * Math.PI * k; }); } }
 

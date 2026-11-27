@@ -366,6 +366,8 @@ const S = {
       attackOk: (g, c, t) => { const w = c.flags.f07wild && c.flags.f07wild.turn === g.turnNo ? c.flags.f07wild.us : []; return !w.includes(t.u); } },
     effs: [] },
   // PARTIAL: "unaffected by Trap effects" only covers destruction by Traps (the engine's unaffectedTraps flag).
+  // ENGINE: destroy() checks the flag only when the Trap passes { src: c }; most Trap scripts (Mirror Force, Torrential Tribute,
+  // Trap Hole, Bottomless Trap Hole in engine.js) don't yet, so in play those still destroy Wildheart.
   'Elemental HERO Wildheart': { self: { unaffectedTraps: true }, effs: [] },
   // An optional trigger in your Standby Phase.
   'Elemental HERO Woodsman': { effs: [{ type: 'trig', opt: true, label: 'Add Polymerization',

@@ -103,7 +103,8 @@ const gbEquipBack = { type: 'trig', loc: 'gy', mand: true, label: 'Return this c
   res: function* (g, c, p) { if (c.zone === 'gy') { move(g, c, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} returned ${nm(c)} to the hand.`); } } };
 /* A-Counters: place n, one at a time, on face-up monsters picked from cs(g) */
 function* placeA(g, p, n, cs) {
-  for (let i = 0; i < n; i++) { const ms = cs(g); if (!ms.length) break; const [m] = yield* pick(g, p, `Place an A-Counter on which monster? (${i + 1} of ${n})`, ms, 1, 1, 'bad'); if (!m) break; addCtr(g, m, 'A', 1); log(g, `${name(m)} got an A-Counter.`); }
+  for (let i = 0; i < n; i++) { const ms = cs(g); if (!ms.length) break; const [m] = yield* pick(g, p, `Place an A-Counter on which monster? (${i + 1} of ${n})`, ms, 1, 1, 'bad'); if (!m) break; addCtr(g, m, 'A', 1); log(g, `${name(m)} got an A-Counter.`);
+    for (const k in (g._incS || {})) g._incS[k][m.u] = ctr(m, 'A'); } // A Cell Incubator sees the new counter even if no event comes before its removal
 }
 // subsets of the cards whose Levels add up to exactly n (Ancient Gear Factory)
 function lvSets(cards, n, limit = 8) {
@@ -170,8 +171,11 @@ E.addScripts({
       const xs = yield* pick(g, p, 'Shuffle which 2 Gladiator Beast cards into the Deck?', cs, 2, 2, 'cost');
       for (const x of xs) move(g, x, 'deck', { reason: 'effect' }); log(g, `${PN(g, p)} shuffled ${xs.map(nm).join(' and ')} into the Deck.`); draw(g, p, 3); } }] },
   // PARTIAL: the engine opens no window after a summon made by a resolving effect (the tag outs), so Lash can be used then
-  // only as the first play of the next Main Phase.
-  'Gladiator Lash': { effs: [{ type: 'act', cond: (g, c, p) => !!g.sw && g.sw.p === p && g.sw.cs.some(x => onField(x) && gbMon(x)),
+  // only as the first play of the next Main Phase (nothing else may happen in between, phase changes aside).
+  // The hook remembers the last Gladiator Beast Special Summon; Lash stays usable until any other event but a phase change.
+  'Gladiator Lash': { effs: [{ type: 'trig', loc: 'any', on: (g, ev) => { if (ev.type === 'summon' && SSTYPES.includes(ev.how) && ev.cs.some(gbMon)) g._lashW = { p: ev.p, turn: g.turnNo, n: g.events.length, cs: ev.cs.slice() }; return false; }, res: function* () {} },
+    { type: 'act', cond: (g, c, p) => (!!g.sw && g.sw.p === p && g.sw.cs.some(x => onField(x) && gbMon(x)))
+      || (!!g._lashW && g._lashW.p === p && g._lashW.turn === g.turnNo && g._lashW.cs.some(x => onField(x) && gbMon(x)) && g.events.slice(g._lashW.n).every(e => e.type === 'phase')),
     res: function* (g, c, p) { const o = opp(p); if (!g.p[o].hand.length) return; const [x] = yield* pick(g, o, 'Discard 1 card', g.p[o].hand, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, o)} discarded ${nm(x)}.`); } } }] },
   'Gladiator Proving Ground': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.some(x => gbMon(x) && lv(x) <= 4),
     res: function* (g, c, p) { yield* search(g, p, x => gbMon(x) && lv(x) <= 4, 'Add a Level 4 or lower Gladiator Beast'); } }] },
@@ -328,6 +332,8 @@ E.addScripts({
       x.turnIn = g.turnNo; shuffleDeck(g, p); log(g, `${PN(g, p)} Set a Spell from the Deck.`);
       addRule(g, (g2, a) => a.type === 'activate' && a.c === x, { end: g.turnNo }); } }] },
   // PARTIAL: ① is an optional Spell Speed 3 response (ENGINE: no automatic negation of effects that target a card).
+  // PARTIAL: the Trap negation is a Continuous Effect in the rulings; here it is a Quick Effect its controller is offered
+  // (ENGINE: a static effect can't negate a Trap's resolution or destroy it).
   'Ancient Gear Engineer': { cont: atkLock, effs: [
     { type: 'quick', speed: 3, ds: true, label: 'Negate the Trap that targets it',
       cond: (g, c, p, x) => x.top && !x.top.negated && isTrap(x.top.c) && x.top.t && x.top.t.includes(c),

@@ -251,7 +251,6 @@ E.addScripts({
 
   /* ----- Destiny ----- */
   // Port of classic-1.js. The Edison rulings say the rest are destroyed when one leaves the field.
-  // (The Spirit Message cards are not in the Edison card list, so in Edison this card can't win.)
   'Destiny Board': { effs: [
     { type: 'act', res: function* (g, c, p) { boardWin(g, p); } },
     { type: 'trig', loc: 'st', mand: true, opt: true, label: 'Place a Spirit Message',
@@ -259,8 +258,8 @@ E.addScripts({
       cond: (g, c, p) => freeST(g, p) >= 0 && msgsOn(g, p).length < 4,
       res: function* (g, c, p) {
         if (!onField(c) || !faceUp(c) || freeST(g, p) < 0) return;
-        const have = new Set(msgsOn(g, p).map(x => D(x).n)); const next = MSGS.find(n => !have.has(n)); if (!next) return;
-        const x = g.p[p].hand.find(y => named(y, next)) || g.p[p].deck.find(y => named(y, next));
+        const have = new Set(msgsOn(g, p).map(x => msgKey(D(x).n))); const next = MSGS.find(n => !have.has(n)); if (!next) return;
+        const x = g.p[p].hand.find(y => msgKey(D(y).n) === next) || g.p[p].deck.find(y => msgKey(D(y).n) === next);
         if (!x) { log(g, `${PN(g, p)} has no ${next} to place.`); return; }
         const fromDeck = x.zone === 'deck'; move(g, x, 'st', { ctrl: p, pos: 'up', reason: 'effect' }); if (fromDeck) shuffleDeck(g, p);
         log(g, `${PN(g, p)} placed ${next} with Destiny Board.`); boardWin(g, p); } },
@@ -484,8 +483,10 @@ function dsOk(g, c, p, x) {
 }
 function cdOk(m) { return faceUp(m) && (name(m) === 'Power Tool Dragon' || (lv(m) >= 4 && race(m) === 'Machine' && /Morphtronic/.test(name(m)))); }
 /* Destiny Board (classic-1.js) */
-const MSGS = ['Spirit Message "I"', 'Spirit Message "N"', 'Spirit Message "A"', 'Spirit Message "L"'];
-function isBoardPart(c) { return named(c, 'Destiny Board') || MSGS.includes(D(c).n); }
-function msgsOn(g, p) { return stOf(g, p).filter(x => faceUp(x) && MSGS.includes(D(x).n)); }
-function boardWin(g, p) { const have = new Set(msgsOn(g, p).map(x => D(x).n)); if (stOf(g, p).some(x => faceUp(x) && named(x, 'Destiny Board')) && MSGS.every(n => have.has(n))) L.winDuel(g, p, `${PN(g, p)} spelled FINAL with Destiny Board and won`); }
+// Goat names them Spirit Message "I", Edison Spirit Message I: compared without the quotes so both formats work
+const msgKey = n => String(n).replace(/"/g, '');
+const MSGS = ['Spirit Message I', 'Spirit Message N', 'Spirit Message A', 'Spirit Message L'];
+function isBoardPart(c) { return named(c, 'Destiny Board') || MSGS.includes(msgKey(D(c).n)); }
+function msgsOn(g, p) { return stOf(g, p).filter(x => faceUp(x) && MSGS.includes(msgKey(D(x).n))); }
+function boardWin(g, p) { const have = new Set(msgsOn(g, p).map(x => msgKey(D(x).n))); if (stOf(g, p).some(x => faceUp(x) && named(x, 'Destiny Board')) && MSGS.every(n => have.has(n))) L.winDuel(g, p, `${PN(g, p)} spelled FINAL with Destiny Board and won`); }
 })();
