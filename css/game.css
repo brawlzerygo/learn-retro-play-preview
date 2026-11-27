@@ -1541,3 +1541,14 @@ html.reduce .cfp::after,html.reduce .bx-front::after{animation:none;display:none
 #stage.menuart #s-format .menubg,#stage.menuart #s-deck .menubg,#stage.menuart #s-load .menubg{background:url(../assets/menu/regional-hall.jpg) center/cover;filter:none;transform:none}
 #stage.menuart #s-build .menubg{background:url(../assets/menu/binder.jpg) center/cover;filter:none;transform:none}
 #stage.menuart #s-stats .menubg,#stage.menuart #s-results .menubg{background:url(../assets/menu/trophy-shelf.jpg) center/cover;filter:none;transform:none}
+
+/* "New version ready" banner (updBanner in game.js): top centre on the menus */
+.updbar{position:absolute;left:50%;top:22px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:18px;padding:12px 14px 12px 24px;
+  background:rgba(14,16,22,.96);border-left:6px solid var(--acc,#ff6a1a);box-shadow:0 12px 40px rgba(0,0,0,.5);animation:updIn .25s ease-out both}
+.updbar b{font-size:26px;font-style:italic;text-transform:uppercase;letter-spacing:.02em}
+.updbar span{font-size:17px;opacity:.75}
+.updbar .gb{height:48px}
+.updx{background:none;border:0;color:var(--ink);font-size:30px;line-height:1;opacity:.6;cursor:pointer;padding:0 6px}
+.updx:hover{opacity:1}
+@keyframes updIn{from{opacity:0;transform:translate(-50%,-12px)}to{opacity:1;transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.updbar{animation:none}}

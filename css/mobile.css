@@ -934,3 +934,10 @@ html.m.hs #stage.m{position:absolute}
 #stage.m.menuart #s-format .menubg,#stage.m.menuart #s-deck .menubg,#stage.m.menuart #s-load .menubg{background-image:url(../assets/menu/regional-hall-m.jpg);filter:none;transform:none;background-position:center}
 #stage.m.menuart #s-build .menubg{background-image:url(../assets/menu/binder-m.jpg);filter:none;transform:none;background-position:center}
 #stage.m.menuart #s-stats .menubg,#stage.m.menuart #s-results .menubg{background-image:url(../assets/menu/trophy-shelf-m.jpg);filter:none;transform:none;background-position:center}
+
+/* update banner on phones: full width above the tab bar */
+#stage.m .updbar{top:auto;left:10px;right:10px;bottom:84px;align-content:center;transform:none;flex-wrap:wrap;gap:6px 12px;padding:10px 10px 10px 16px;animation:none}
+#stage.m .updbar b{font-size:20px;flex:1 1 100%}
+#stage.m .updbar span{font-size:14px;flex:1}
+#stage.m .updbar .gb{height:44px}
+#stage.m .updx{position:absolute;top:4px;right:6px}
