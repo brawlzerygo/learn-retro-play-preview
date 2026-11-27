@@ -10,7 +10,7 @@ const ease = { out: k => 1 - Math.pow(1 - k, 3), inOut: k => k < .5 ? 4 * k * k 
 
 export class Table {
   constructor(canvas, cam, opts = {}) {
-    this.cam = cam; this.speed = 1; this.tokenArt = opts.tokenArt || {};
+    this.cam = cam; this.speed = 1; this.tokenArt = opts.tokenArt || {}; this.layout = opts.layout || null;   // a board's own zone layout (boards.js)
     // the view: the canvas's size on the stage and where it sits (desktop 1920x1080 at 0,0; the phone layout draws the upright
     // render at the phone's width and moves it up on short phones). project() and pointer picks work in stage pixels.
     this.V = Object.assign({ w: 1920, h: 1080, ox: 0, oy: 0, dpr: Math.min(2, window.devicePixelRatio || 1) }, opts.view || {});
@@ -86,7 +86,7 @@ export class Table {
   /* ---------- where things are ---------- */
   slot(side, zone, i) {
     const s = side, C = this.COLX, M = this.ROW_M, S = this.ROW_S;
-    const at = { m: [C(i + 1), M], st: [C(i + 1), S], fz: [C(0), M], extra: [C(0), S], gy: [C(6), M], deck: [C(6), S], ban: [C(6) + this.CW + this.G + 0.2, M] }[zone];
+    const at = this.layout ? this.layout(zone, i) : { m: [C(i + 1), M], st: [C(i + 1), S], fz: [C(0), M], extra: [C(0), S], gy: [C(6), M], deck: [C(6), S], ban: [C(6) + this.CW + this.G + 0.2, M] }[zone];
     return B(at[0] * s, at[1] * s, 0.006);
   }
   pileTop(side, kind) { const p = this.piles.get(side + ':' + kind); const v = this.slot(side, kind); v.y = (p ? p.h : 0) + 0.008; return v; }
@@ -182,7 +182,7 @@ export class Table {
     const tiltTo = Math.atan2(dir.x, dir.z) * 0.12;
     await this.tween(240, k => { c.g.position.lerpVectors(p0, back, k); c.g.rotation.x = -0.35 * k; c.g.rotation.z = tiltTo * k; }, ease.out);          // wind up
     await this.tween(170, k => { c.g.position.lerpVectors(back, hit, k); c.g.rotation.x = -0.35 + 0.55 * k; }, ease.in);                                   // strike
-    this.burst(to, 0xffe0b8, 1.1); this.shakeCam(0.06);
+    this.burst(to, 0xffe0b8, 1.1); if (this.board) this.board.hit(to); this.shakeCam(0.06);
     await this.tween(320, k => { c.g.position.lerpVectors(hit, p0, k); c.g.rotation.x = 0.2 * (1 - k); c.g.rotation.z = tiltTo * (1 - k); }, ease.quint); // recoil home
     c.g.position.copy(p0); c.g.rotation.x = 0; c.g.rotation.z = 0;
   }
@@ -259,7 +259,7 @@ export class Table {
   burst(pos, color = 0xff9a50, size = 1) {
     const geo = new THREE.RingGeometry(0.05, 0.12, 48);
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-    m.rotation.x = -Math.PI / 2; m.position.copy(pos); m.position.y = 0.03; this.scene.add(m);
+    m.rotation.x = -Math.PI / 2; m.position.copy(pos); m.position.y = 0.03; if (!this.board) this.scene.add(m);   // a board reacts on its own floor instead of a ring (boards.js)
     const flash = new THREE.PointLight(color, 6 * size, 3.5); flash.position.copy(pos).add(new THREE.Vector3(0, 0.6, 0)); this.scene.add(flash);
     this.tween(520, k => { const s = 1 + k * 9 * size; m.scale.set(s, s, s); m.material.opacity = 1 - k; flash.intensity = 6 * size * (1 - k); }).then(() => { this.scene.remove(m, flash); });
   }

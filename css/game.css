@@ -136,6 +136,7 @@ html,body{height:100%;background:#0a0706;overflow:hidden;font-family:'Atkinson H
 
 /* ===== the duel ===== */
 #scene{position:absolute;inset:0;background:url(../assets/scenes/shop.jpg) center/cover}
+#stage #scene.mat,#stage.m #scene.mat,#stage.ml #scene.mat{background:#05060a}   /* a board (boards.js) draws its own world in 3D */
 #gl{position:absolute;inset:0;width:1920px;height:1080px}
 #ov{position:absolute;inset:0;pointer-events:none}
 .st{position:absolute;translate:-50% -25%;white-space:nowrap;font:700 18px Verdana;background:rgba(10,7,5,.9);padding:4px 11px;border-radius:4px;border:1px solid rgba(217,164,95,.5);box-shadow:0 4px 10px rgba(0,0,0,.6);transition:color .3s}

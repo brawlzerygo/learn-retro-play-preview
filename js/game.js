@@ -1,9 +1,10 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=160';
-import * as S from './sfx.js?v=160';
-import * as FX from './fx.js?v=160';
+import { Table } from './table.js?v=161';
+import * as S from './sfx.js?v=161';
+import * as FX from './fx.js?v=161';
+import { Board, layoutOf, matChoice } from './boards.js?v=161';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -108,7 +109,7 @@ const SETROWS = [
   { k: 'hintLimit', name: 'Hints per duel', vals: ['off', '1', '3', '5', 'unlimited'], lab: v => v, desc: 'A hint shows the strongest play and why it beats the next best, like the hint button on a chess site.' },
   { k: 'vol', name: 'Sound effects', vals: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], blocks: true, desc: 'How loud cards, summons and battles are.' },
   { k: 'muted', name: 'Sound', vals: [false, true], lab: v => v ? 'off' : 'on', desc: 'Turn every sound on or off.' },
-  { k: 'table', name: 'Table', vals: ['shop'], lab: () => 'Card Shop', desc: 'The world your duels are played in.' },
+  { k: 'table', name: 'Table', vals: ['shop', 'rewind', 'rune'], lab: v => ({ shop: 'Card Shop', rewind: 'Rewind', rune: 'Runestone' })[v] || 'Card Shop', desc: 'The world your duels are played in. Rewind and Runestone react to every play.' },   // boards.js (Zack, 2026-11-26: picked Rewind and Runestone)
 ];
 let setRow = 0;
 // themes share one layout; a class on the stage swaps the look (css/rewind.css)
@@ -127,7 +128,7 @@ function changeSetting(i, d) {
   const r = SETROWS[i]; const cur = SET[r.k] != null ? SET[r.k] : r.vals[0]; let j = r.vals.indexOf(cur); if (j < 0) j = 0;
   const nj = Math.max(0, Math.min(r.vals.length - 1, j + d)); if (nj === j) { S.play('error'); return; }
   SET[r.k] = r.vals[nj]; saveSet();
-  if (r.k === 'vol') S.setVolume(SET.vol / 100); if (r.k === 'muted') S.setMuted(SET.muted); if (r.k === 'speed' && table) table.speed = SPEED[SET.speed]; if (r.k === 'theme') applyTheme();
+  if (r.k === 'vol') S.setVolume(SET.vol / 100); if (r.k === 'muted') S.setMuted(SET.muted); if (r.k === 'speed' && table) table.speed = SPEED[SET.speed]; if (r.k === 'theme') applyTheme(); if (r.k === 'table' && table) rebuildTable();
   S.play('click'); renderSettings();
 }
 $('#setList').onclick = e => { const row = e.target.closest('[data-i]'); if (!row) return; setRow = +row.dataset.i; const a = e.target.closest('[data-d]'); if (a) changeSetting(setRow, +a.dataset.d); else { S.play('hover'); renderSettings(); } };
@@ -144,7 +145,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=160');
+const W = new Worker('js/worker.js?v=161');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -728,7 +729,11 @@ async function ensureTable() {
 async function makeTable() {
   const key = MOBILE && !LAND ? 'shop-m' : 'shop';
   camData = CAMS[key] || (CAMS[key] = await (await fetch(`assets/scenes/${key}-camera.json`)).json());
-  table = new Table($('#gl'), camData, { tokenArt: TOKEN_ART, phone: MOBILE, view: MOBILE ? mview() : undefined });
+  // the duel board (boards.js): none is today's Card Shop scene
+  const MAT = matChoice(SET.table);
+  table = new Table($('#gl'), camData, { tokenArt: TOKEN_ART, phone: MOBILE, view: MOBILE ? mview() : undefined, layout: MAT ? layoutOf(MAT) : null });
+  $('#scene').classList.toggle('mat', !!MAT);
+  if (MAT) new Board(table, MAT, { phone: MOBILE, rec: id => rec(D ? D.fmt : SEL.fmt, id) });
   table.speed = SPEED[SET.speed];
   table.bindPointer($('#gl'), toStage);
   table.onHover = h => { $('#gl').classList.toggle('point', !!(h && (h.u != null || h.pile || h.zone))); if (!D) return; if (h && h.u != null) inspectU(h.u); else if (h && h.pile) hoverPile(h.pile); };
@@ -770,7 +775,7 @@ async function startDuel() {
   D = { fmt: f, you: youDeck.name, cpu: cpuDeck.name, youDeck, cpuDeck, first, q: [], busy: false, prompt: null, view: null, disp: null, lp: [8000, 8000], turn: 0, phase: '', tp: first,
     chain: [], log: [], stats: { summons: 0, synchro: 0, destroyed: 0, biggest: 0, dealt: 0, chains: 0, mvp: new Map(), lastAtk: null }, over: null, sel: null, zoneMode: null, picks: null };
   table.clearField(new Set()); for (const side of [1, -1]) for (const k of ['deck', 'extra', 'gy', 'ban']) table.setPile(side, k, 0, null);
-  table.setPile(1, 'deck', youDeck.main.length, null); table.setPile(-1, 'deck', cpuDeck.main.length, null);
+  table.setPile(1, 'deck', youDeck.main.length, null); table.setPile(-1, 'deck', cpuDeck.main.length, null); if (table.board) table.board.reset();
   table.setPile(1, 'extra', youDeck.extra.length, null); table.setPile(-1, 'extra', cpuDeck.extra.length, null);
   $('#hand').innerHTML = ''; $('#ohand').innerHTML = ''; $('#ov').innerHTML = ''; $('#layer').innerHTML = ''; $('#chainp').classList.add('hidden'); $('#inspect').classList.add('hidden');
   D.disp = { p: [{ hand: [], deck: youDeck.main.length }, { hand: [], deck: cpuDeck.main.length }] };
@@ -816,13 +821,13 @@ const waitMs = ms => sleep(ms * GAP[SET.speed]);
 
 async function anim(ev) {
   // a new turn or phase gets its banner first
-  if (ev.turn != null && ev.turn !== D.turn && ev.turn > 0) { D.turn = ev.turn; D.tp = ev.turn % 2 === 1 ? D.first : 1 - D.first; $('#turnNo').textContent = ev.turn; await turnBanner(); }
-  if (ev.phase && ev.phase !== D.phase) { D.phase = ev.phase; setPhase(ev.phase); if (ev.phase === 'battle') await banner('Battle Phase', D.tp === 0 ? '' : 'The computer is attacking', D.tp !== 0); }
+  if (ev.turn != null && ev.turn !== D.turn && ev.turn > 0) { D.turn = ev.turn; D.tp = ev.turn % 2 === 1 ? D.first : 1 - D.first; $('#turnNo').textContent = ev.turn; if (table.board) table.board.turn(side(D.tp)); await turnBanner(); }
+  if (ev.phase && ev.phase !== D.phase) { D.phase = ev.phase; setPhase(ev.phase); if (table.board) table.board.phase(ev.phase, side(D.tp)); if (ev.phase === 'battle') await banner('Battle Phase', D.tp === 0 ? '' : 'The computer is attacking', D.tp !== 0); }
   const t = ev.type;
   if (t === 'move') return animMove(ev);
   if (t === 'summon') {
     for (const u of ev.us) { const p = table.where(u); if (!p) continue; const big = ['synchro', 'fusion', 'ritual'].includes(ev.how);
-      table.burst(p, big ? 0xffd080 : 0xff9a50, big ? 1.5 : 1); if (big) table.pillar(p); S.play(big ? 'synchro' : 'summon'); }
+      if (table.board) table.board.summon(p, (table.cards.get(u) || {}).id, big); else { table.burst(p, big ? 0xffd080 : 0xff9a50, big ? 1.5 : 1); if (big) table.pillar(p); } S.play(big ? 'synchro' : 'summon'); }
     D.stats.summons += ev.p === 0 ? 1 : 0; if (ev.p === 0 && ev.how === 'synchro') D.stats.synchro++;
     if (FX.on()) { for (const u of ev.us) await FX.summon(u, (table.cards.get(u) || {}).id, ev.how, ev.p); return; }
     return waitMs(ev.how === 'synchro' || ev.how === 'fusion' ? 520 : 260);
@@ -836,11 +841,12 @@ async function anim(ev) {
     D.stats.lastAtk = ev.a; S.play('attack');
     const to = ev.t != null && table.where(ev.t) ? table.where(ev.t) : table.screenToWorld(960, ev.p === 0 ? 90 : 1000, 0.3);
     if (ev.t != null) table.ringOn(ev.t, ev.p === 0 ? 0xff7a30 : 0x7fb8ff);
+    if (table.board) table.board.attack(table.where(ev.a), ev.t != null ? table.where(ev.t) : null, side(ev.p));
     if (FX.on()) { await FX.attackStart(ev.a, ev.t, ev.p); setTimeout(() => FX.attackHit(ev.a, ev.t, ev.p, ev.t == null), (240 + 170) * (table.speed || 1)); }
     await table.lunge(ev.a, to); table.ringsOff(); FX.attackEnd(); return;
   }
   if (t === 'damage') {
-    const before = D.lp[ev.p]; setLP(ev.p, ev.lp); S.play('hit'); const pl = ev.p === 0 ? $('#lpMe') : $('#lpOp');
+    const before = D.lp[ev.p]; setLP(ev.p, ev.lp); if (table.board) table.board.damage(side(ev.p), ev.n, ev.lp); S.play('hit'); const pl = ev.p === 0 ? $('#lpMe') : $('#lpOp');
     pl.classList.remove('shake'); void pl.offsetWidth; pl.classList.add('shake');
     popNum(ev.p, '-' + ev.n); FX.damage(ev.p, ev.n, pl);
     if (ev.p === 1) { D.stats.dealt += ev.n; D.stats.biggest = Math.max(D.stats.biggest, ev.n); if (ev.battle && D.stats.lastAtk != null) D.stats.mvp.set(D.stats.lastAtk, (D.stats.mvp.get(D.stats.lastAtk) || 0) + ev.n); }
@@ -850,8 +856,9 @@ async function anim(ev) {
   if (t === 'chain') {
     if (ev.p === 0) D.stats.chains++;
     D.chain.push(ev); renderChain(); S.play(ev.link > 1 ? 'chain' : 'activate'); FX.activate(ev.u, ev.id, ev.p, ev.link);
-    const c = table.cards.get(ev.u); if (c && !c.up) await table.flip(ev.u, ev.id, true);
-    else if (c) table.burst(c.g.position, 0xffc070, 0.7);
+    const c = table.cards.get(ev.u); if (c && table.board) table.board.activate(c.g.position, ev.id);
+    if (c && !c.up) await table.flip(ev.u, ev.id, true);
+    else if (c && !table.board) table.burst(c.g.position, 0xffc070, 0.7);
     for (const tu of ev.targets || []) table.ringOn(tu, ev.p === 0 ? 0xff7a30 : 0x7fb8ff);
     if (ev.link >= 2) await banner(`Chain Link ${ev.link}`, ev.name, ev.p !== 0); else await waitMs(650);
     return;
@@ -930,7 +937,7 @@ async function animMove(ev) {
   }
   else if (ev.from === 'hand') { from = handPoint(p, ev.u); dropHand(p, ev.u); }
   else if (pileKind(ev.from)) { from = table.pileTop(fromSide, pileKind(ev.from)); bumpPile(fromSide, pileKind(ev.from), -1, ev.u); }
-  if (ev.destroyed && table.has(ev.u)) { S.play('destroy'); if (await FX.shatter(ev.u)) from = null; else await table.shatter(ev.u); if (ev.owner === 1) D.stats.destroyed++; }   // FX: the pieces fall; the card appears in the pile
+  if (ev.destroyed && table.has(ev.u)) { S.play('destroy'); if (table.board) table.board.destroy(table.where(ev.u)); if (await FX.shatter(ev.u)) from = null; else await table.shatter(ev.u); if (ev.owner === 1) D.stats.destroyed++; }   // FX: the pieces fall; the card appears in the pile
   // where it goes
   if (['m', 'st', 'fz'].includes(ev.to)) {
     const up = ev.pos !== 'set';
