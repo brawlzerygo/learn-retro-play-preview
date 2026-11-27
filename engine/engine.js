@@ -463,7 +463,7 @@ function* activate(g, p, c, eff, ei) {
   const d = D(c);
   const L = { c, eff, ei, p, speed: speedOf(c, eff), t: [], data: {}, negated: false, cardAct: eff.type === 'act', tags: eff.tags || {}, link: g.chain.length + 1 };
   if (eff.type === 'act') {
-    if (c.zone === 'hand') { if (d.sub === 'Field') { if (g.p[p].fz) move(g, g.p[p].fz, 'gy', { reason: 'rule' }); move(g, c, 'fz', { ctrl: p, pos: 'up', reason: 'activate' }); } else move(g, c, 'st', { ctrl: p, pos: 'up', reason: 'activate' }); }
+    if (c.zone === 'hand') { if (d.sub === 'Field') { if (g.p[p].fz) { destroy(g, [g.p[p].fz], { rule: true, by: p }); const sw = g.sw; beginOp(g); g.sw = sw; } move(g, c, 'fz', { ctrl: p, pos: 'up', reason: 'activate' }); } else move(g, c, 'st', { ctrl: p, pos: 'up', reason: 'activate' }); }
     else { c.pos = 'up'; g.seq++; }
   }
   c.used[ei] = g.turnNo;
@@ -752,7 +752,8 @@ function* doIdle(g, k) {
     g.sw = { cs: [c], p, how: 'gemini', group: ev.group }; return yield* afterAction(g);
   }
   if (kind === 'pos') { c.pos = c.pos === 'atk' ? 'def' : 'atk'; c.posChanged = true; log(g, `${PN(g, p)} changed ${name(c)} to ${c.pos === 'atk' ? 'Attack' : 'Defense'} Position.`); emit(g, { type: 'pos', c, p }); yield* processTriggers(g); return; }
-  if (kind === 'setst') { if (D(c).sub === 'Field') { if (P.fz) move(g, P.fz, 'gy', { reason: 'rule' }); move(g, c, 'fz', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a Field Spell.`); return; } move(g, c, 'st', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a card.`); return; }
+  if (kind === 'setst') { if (D(c).sub === 'Field') { if (P.fz) destroy(g, [P.fz], { rule: true, by: p }); // replacing your Field Spell destroys it (Geartown rulings: its effect can activate when you Set over it, misses the timing when you activate over it)
+ move(g, c, 'fz', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a Field Spell.`); yield* processTriggers(g); return; } move(g, c, 'st', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a card.`); return; }
   if (kind === 'a') {
     const ei = +b; const eff = effsOf(c)[ei];
     yield* activate(g, p, c, eff, ei); yield* respondLoop(g, 1 - p); yield* resolveChain(g); yield* afterAction(g);

@@ -7,6 +7,7 @@ export const NOTES = [
     'It now judges each play by where the whole turn ends up, so it sees the damage a summon will deal and the damage it is open to next turn, and it stops going back and forth on Set cards in Goat.',
     'You choose Attack or Defense Position when you Special Summon, unless the card says which: Monster Reborn, Polymerization, Cyber Dragon, contact Fusions and the rest.',
     'Gaia Knight, the Force of Earth is a Synchro monster again: it goes in the Extra Deck in drafts and can be Synchro Summoned.',
+    'Playing a new Field Spell over your old one now destroys the old one, as the rules say: Set a Field Spell over Geartown and its effect Special Summons an Ancient Gear monster (activating one over it still misses the timing).',
   ] },
   { v: 168, date: 'Nov 26, 2026', items: [
     'Your hand fans out again, in a clean arc: the cards overlap evenly and tilt to follow the curve. The computer\'s hand fans the same way.',
