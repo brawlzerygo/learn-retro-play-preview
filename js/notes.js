@@ -2,6 +2,10 @@
 // v is the version players see (167 shows as 1.67); the newest entry is the version on the home screen. The ?v= cache number can be
 // higher (a small change added to the current version's notes still needs new cache numbers). Written for players: what changed in the game, plain words, no code.
 export const NOTES = [
+  { v: 169, date: 'Nov 27, 2026', items: [
+    'The computer plays much sharper on Advanced and Tournament: it no longer skips direct attacks, passes on attacks it would win, or misses lethal when it is holding a card it could respond with.',
+    'It now judges each play by where the whole turn ends up, so it sees the damage a summon will deal and the damage it is open to next turn, and it stops going back and forth on Set cards in Goat.',
+  ] },
   { v: 168, date: 'Nov 26, 2026', items: [
     'Your hand fans out again, in a clean arc: the cards overlap evenly and tilt to follow the curve. The computer\'s hand fans the same way.',
     'A new table picker in Settings: see every table at once, look at one big, and pick it with one tap.',
