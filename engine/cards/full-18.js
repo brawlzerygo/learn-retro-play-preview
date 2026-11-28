@@ -107,10 +107,12 @@ E.addScripts({
   // the hand or the Deck), while its owner controlled it.
   'Vampire Lord': { effs: [
     { type: 'trig', mand: true, label: 'Declare a card type', on: (g, ev, c) => dealtBattleDmg(ev, c), res: function* (g, c, p) { yield* vampireMill(g, c, p); } },
-    { type: 'trig', loc: 'gy', on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.to === 'gy' && ev.destroyed && !ev.battle && ev.by != null && ev.by !== c.owner && ev.prevCtrl === c.owner) c.flags.vlTurn = g.turnNo; return false; }, res: function* () {} },
+    { type: 'trig', loc: 'gy', on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.to === 'gy' && ev.destroyed && !ev.battle && ev.by != null && ev.by !== c.owner && (ev.prevCtrl == null || ev.prevCtrl === c.owner)) c.flags.vlTurn = g.turnNo; return false; }, res: function* () {} },   // from the hand, Deck or a negated summon too
     { type: 'trig', loc: 'gy', mand: true, opt: true, tags: { ss: 1 }, label: 'Special Summon itself',
-      on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner && c.flags.vlTurn != null && c.flags.vlTurn < g.turnNo,
-      res: function* (g, c, p) { if (c.zone !== 'gy') return; c.flags.vlTurn = null; ss(g, p, c, 'atk'); } }] },
+      // only that next Standby Phase: the mark is used up there even when it can't activate (Solomon's Lawbook: "not even on the following
+      // Standby Phase", archive; 2026-11-28 audit, goat-12)
+      on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner && c.flags.vlTurn != null && c.flags.vlTurn < g.turnNo) { c.flags.vlTurn = null; return true; } return false; },
+      res: function* (g, c, p) { if (c.zone !== 'gy') return; ss(g, p, c, 'atk'); } }] },
   // Port of classic-5.js.
   'Vengeful Bog Spirit': { effs: [{ type: 'act', res: function* () {} }],
     cont: { forbid: (g, src, a) => a.type === 'attack' && a.c && (a.c.turnIn === g.turnNo && a.c.summonType || g.events.some(e => e.type === 'summon' && e.turn === g.turnNo && e.cs.includes(a.c))) } },
@@ -253,8 +255,8 @@ E.addScripts({
 
   /* ----- numbers ----- */
   '3-Hump Lacooda': { effs: [{ type: 'ign', label: 'Tribute 2 Lacooda: draw 3',
-    cond: (g, c, p) => monsOf(g, p).filter(x => faceUp(x) && named(x, '3-Hump Lacooda')).length >= 3 && g.p[p].deck.length >= 3,
-    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 3-Hump Lacooda', monsOf(g, p).filter(x => faceUp(x) && named(x, '3-Hump Lacooda')), 2, 2, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && named(x, '3-Hump Lacooda')).length >= 3 && g.p[p].deck.length >= 3,
+    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 3-Hump Lacooda', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && named(x, '3-Hump Lacooda')), 2, 2, 'cost');
       for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed 2 3-Hump Lacooda.`); },
     res: function* (g, c, p) { draw(g, p, 3); } }] },
   // Face-down monsters show no Level, so only face-up Level 4 monsters are destroyed.
@@ -398,15 +400,18 @@ E.addScripts({
   // Activation: an opponent's draw outside the Draw Phase among the last game events. Then each such draw (once per
   // effect, however many cards) draws 2 with no chain.
   'Appropriate': { effs: [
-    { type: 'act', cond: (g, c, p) => g.events.slice(-8).some(e => e.type === 'move' && e.reason === 'draw' && e.c.owner === opp(p) && e.phase !== 'draw' && e.turn === g.turnNo), res: function* () {} },
+    // only right after the draw (rulings 1 and Graceful Charity 1: the last thing that happened; a discard after it, or a later phase, misses it)
+    { type: 'act', cond: (g, c, p) => { for (let i = g.events.length - 1; i >= 0; i--) { const e = g.events[i];
+        if (['spellResolved', 'negated', 'stardustEnd', 'lp'].includes(e.type) || (e.type === 'move' && e.reason === 'rule')) continue;
+        return e.type === 'move' && e.reason === 'draw' && e.c.owner === opp(p) && e.phase !== 'draw' && e.turn === g.turnNo; } return false; }, res: function* () {} },
     { type: 'trig', loc: 'st', on: (g, ev, c) => {
       if (ev.type === 'move' && ev.reason === 'draw' && ev.to === 'hand' && ev.c.owner === opp(c.ctrl) && ev.phase !== 'draw' && faceUp(c) && c.flags.apGrp !== ev.group && !g.chain.some(l => l.c === c)) {
         c.flags.apGrp = ev.group; log(g, 'Appropriate: draw 2 cards.'); draw(g, c.ctrl, 2); }
       return false; }, res: function* () {} }] },
   'Arcane Archer of the Forest': { self: { noAttackTarget: (g, c) => monsOf(g, c.ctrl).some(x => faceUp(x) && race(x) === 'Plant') },
     effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Tribute a Plant: destroy a Spell/Trap',
-      cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Plant') && stOnField(g).length > 0,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Plant monster', monsOf(g, p).filter(x => race(x) === 'Plant'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => race(x) === 'Plant') && stOnField(g).length > 0,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Plant monster', E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Plant'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Spell/Trap Card?', stOnField(g), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
   // Port of goat-7.js: you declare from the names in your own deck list (the known top card first under Convulsion of Nature).

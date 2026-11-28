@@ -199,8 +199,8 @@ E.addScripts({
         res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; const q = L2.ev.tp; const n = 1000 - 500 * stOf(g, q).length; if (n > 0) damage(g, q, n, { src: c, srcP: p }); } }] },
   'Simultaneous Loss': { effs: [{ type: 'act', res: function* (g, c, p) { mill(g, p, 1); mill(g, opp(p), 1); } }] },
   'Six Scrolls of the Samurai': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).filter(x => faceUp(x) && /Six Samurai/.test(name(x))).length >= 2 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Great Shogun Shien')),
-    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute which 2 face-up Six Samurai monsters?', monsOf(g, p).filter(x => faceUp(x) && /Six Samurai/.test(name(x))), 2, 2, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && /Six Samurai/.test(name(x))).length >= 2 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Great Shogun Shien')),
+    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute which 2 face-up Six Samurai monsters?', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && /Six Samurai/.test(name(x))), 2, 2, 'cost');
       for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); },
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const x = g.p[p].deck.find(y => named(y, 'Great Shogun Shien')); if (x && canSS(g, p, x)) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   'Skelengel': { effs: [flip('Draw 1 card', { res: function* (g, c, p) { draw(g, p, 1); } })] },
@@ -425,8 +425,8 @@ E.addScripts({
   // face-down first). PARTIAL: a control change doesn't count as leaving your side.
   'Storming Wynn': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Tribute a WIND: Special Summon a WIND from your hand',
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && E.lib.isAttr(x, 'WIND')) && g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'WIND') && D(x).k !== 'ritual' && canSS(g, p, x)),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WIND monster?', monsOf(g, p).filter(x => x !== c && E.lib.isAttr(x, 'WIND')), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && E.lib.isAttr(x, 'WIND')) && g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'WIND') && D(x).k !== 'ritual' && canSS(g, p, x)),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WIND monster?', E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && E.lib.isAttr(x, 'WIND')), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND') && D(x).k !== 'ritual' && canSS(g, p, x)); if (!cs.length) return;
         const [x] = yield* pick(g, p, 'Special Summon which WIND monster from your hand?', cs, 1, 1, 'good');
         if (x && ss(g, p, x, 'atk')) { x.flags.f44wynn = c.u; if (onField(c) && faceUp(c)) (c.flags.f44wynnSet || (c.flags.f44wynnSet = [])).push(x.u); } } },

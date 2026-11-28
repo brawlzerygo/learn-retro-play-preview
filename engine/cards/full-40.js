@@ -300,8 +300,8 @@ E.addScripts({
         if (xs.length) log(g, `${xs.length} monster${xs.length > 1 ? 's were' : ' was'} shuffled into the Deck.`);
         if (onField(c) && faceUp(c)) { c.flags.baseAtk = 1000 * n; g.seq++; log(g, `Kasha's ATK became ${1000 * n}.`); } } }] },
   'Kid Guard': { effs: [{ type: 'act',
-    cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && monsOf(g, p).some(x => named(x, 'Hero Kid')),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Hero Kid?', monsOf(g, p).filter(x => named(x, 'Hero Kid')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Hero Kid.`); } },
+    cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && E.lib.tribPool(g, p, { known: true }).some(x => named(x, 'Hero Kid')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Hero Kid?', E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Hero Kid')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Hero Kid.`); } },
     res: function* (g, c, p) { if (g.aw) negateAttack(g); yield* search(g, p, x => isMon(x) && /^Elemental HERO/.test(D(x).n), 'Add which Elemental HERO monster?'); } }] },
   // The 2000 applies during damage calculation only (E.lib.dcalc, 2026-11-28 audit).
   'Kinetic Soldier (Cipher Soldier)': { self: {
@@ -429,7 +429,7 @@ E.addScripts({
     cond: (g, c, p) => monsOf(g, p).length > 0 && !allCards(g, 'gy').concat(allField(g), g.p[p].hand, g.p[p].deck, g.p[p].ban).some(x => x !== c && x.owner === p && isSpell(x) && Object.keys(x.used || {}).some(k => x.used[k] === g.turnNo && (L.effsOf(x)[+k] || {}).type === 'act')),
     cost: function* (g, c, p, L2) {
       addRule(g, (g2, a) => a.type === 'activate' && a.p === p && a.c && a.c !== c && isSpell(a.c) && a.eff && a.eff.type === 'act', { end: g.turnNo });
-      const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p), 1, 1, 'cost'); if (!x) return;
+      const [x] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p), 1, 1, 'cost'); if (!x) return;
       L2.data.n = D(x).k === 'trap' ? 0 : x.flags.tokAtk != null ? x.flags.tokAtk : baseAtk(x);
       const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); },
     res: function* (g, c, p, L2) { const n = Math.floor((L2.data.n || 0) / 2); if (n > 0) damage(g, opp(p), n, { src: c, srcP: p }); } }] },

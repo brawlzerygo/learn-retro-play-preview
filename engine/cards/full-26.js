@@ -303,7 +303,7 @@ E.addScripts({
   // The card's behavior (as in goat-2.js): the declared Level sends everything to the GY, any other Level Special Summons it.
   // The batch text reads the other way round ("if its Level isn't the declared number, send ... to the GY"), which is
   // not how Reasoning has ever played, so the printed behavior is kept.
-  'Reasoning': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(canNS),
+  'Reasoning': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.length > 0,   // no summonable monster needed: then the Deck is only shuffled (pass2 goat-03)
     res: function* (g, c, p) { const o = opp(p); const i = yield* choose(g, o, 'Reasoning: declare a Level', Array.from({ length: 12 }, (_, k) => 'Level ' + (k + 1))); const lvD = i + 1; log(g, `${PN(g, o)} declared Level ${lvD}.`);
       const [m, rest] = excavate(g, p); log(g, `${PN(g, p)} revealed ${rest.length + (m ? 1 : 0)} card${rest.length + (m ? 1 : 0) === 1 ? '' : 's'}${m ? `, down to ${D(m).n}` : ''}.`);
       if (!m) { shuffleDeck(g, p); log(g, 'No monster was found: the Deck was shuffled.'); return; }   // ruling: the effect disappears (2026-11-28 audit, E4b)

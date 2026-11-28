@@ -225,15 +225,15 @@ E.addScripts({
       const h = g.p[p].hand.slice(); for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, p);
       log(g, `${PN(g, p)} shuffled ${D(t).n} and ${h.length} card${h.length === 1 ? '' : 's'} from the hand into the Deck.`);
       if (h.length) draw(g, p, h.length); } }] },
-  'Multiply': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && name(m) === 'Kuriboh'),
-    cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which Kuriboh?', monsOf(g, p).filter(m => faceUp(m) && name(m) === 'Kuriboh'), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Kuriboh.`); } },
+  'Multiply': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(m => faceUp(m) && name(m) === 'Kuriboh'),
+    cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which Kuriboh?', E.lib.tribPool(g, p, { known: true }).filter(m => faceUp(m) && name(m) === 'Kuriboh'), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Kuriboh.`); } },
     res: function* (g, c, p) { const n = nFreeM(g, p); if (n) tokens(g, p, { n: 'Kuriboh Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 300, def: 200 }, n, 'def', { noTribute: 'summon' }); } }] },
   // "Cards and effects cannot be activated in response": nothing can be activated while this link is on the chain.
   'Anti-Magic Arrows': { effs: [{ type: 'act',
     cond: (g, c, p, x) => g.phase === 'battle' && !x.top && !g.aw && !g.inDS && !fieldMons(g).some(m => m.declared),
     after: (g, c, p, L2) => { addRule(g, (g2, a) => a.type === 'activate' && g2.chain.includes(L2), { end: g.turnNo }); },
     res: function* (g, c, p) { addRule(g, (g2, a) => a.type === 'activate' && a.c && isST(a.c), { end: g.turnNo }); log(g, 'Spell and Trap Cards can’t be activated for the rest of this turn.'); } }] },
-  'De-Fusion': { effs: [{ type: 'act', cond: g => fieldMons(g).some(m => faceUp(m) && D(m).k === 'fusion' && !L.toDeckBlocked(g, m)),   // G.B. Hunter ruling 1
+  'De-Fusion': { effs: [{ type: 'act', cond: (g, c, p) => fieldMons(g).some(m => faceUp(m) && D(m).k === 'fusion' && !L.toDeckBlocked(g, m) && L.canTarget(g, m, { c, p, eff: { type: 'act' }, cardAct: true })),   // a target it can target (King Dragun: pass2 goat-05)   // G.B. Hunter ruling 1
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Fusion Monster to the Extra Deck?', fieldMons(g).filter(m => faceUp(m) && D(m).k === 'fusion' && !L.toDeckBlocked(g, m)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const us = t.flags.fusionMats || [];
       move(g, t, 'extra', { reason: 'effect', by: p }); log(g, `${D(t).n} returned to the Extra Deck.`);

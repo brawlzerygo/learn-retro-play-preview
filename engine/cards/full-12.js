@@ -28,13 +28,30 @@ function halve(g, wall, m) {
   m.mods.push({ set: a - cut, which: 'atk', mw: wall.u, turn: g.turnNo }); log(g, `${name(m)}'s ATK was halved by Mirror Wall.`);
 }
 // Ojama King / Ojama Knight: up to n of the opponent's unused Monster Zones (rulings 1 to 4: empty ones only, picked when it becomes face-up,
-// none after a control change), chosen automatically, lowest first. The engine locks them (cont.lockZones, 2026-11-28 audit, E4b).
+// none after a control change), chosen by its controller (chooseKingZones). The engine locks them (cont.lockZones, 2026-11-28 audit, E4b).
 function kingZones(g, c, n = 3) {
   const o = opp(c.ctrl); if (c.flags.ojamaZones) return c.flags.ojamaZones.p === o ? c.flags.ojamaZones : null;
   const zs = [0, 1, 2, 3, 4].filter(i => !g.p[o].m[i]).slice(0, n);
   c.flags.ojamaZones = { p: o, zs }; return c.flags.ojamaZones;
 }
 E.lib.kingZones = kingZones;
+// The controller chooses the zones (2026-11-28 audit, E4c: they were the lowest ones): as it becomes face-up the lowest free zones are locked
+// at once, then a step with no chain link (rulings 2: chosen when it becomes face-up) lets its controller choose up to n of the opponent's
+// unused zones instead (the AI takes the first options, the same zones).
+function* chooseKingZones(g, c, n) {
+  const Z = c.flags.ojamaZones; if (!Z || !onField(c) || !faceUp(c)) return;
+  const free = [0, 1, 2, 3, 4].filter(i => !g.p[Z.p].m[i]), zs = [];
+  while (zs.length < n && zs.length < free.length) {
+    const left = free.filter(i => !zs.includes(i)), opts = [...left.map(i => `Zone ${i + 1}`), zs.length ? 'No more' : 'None'];
+    const i = yield* choose(g, c.ctrl, `${name(c)}: choose ${zs.length ? 'another' : 'a'} Monster Zone of ${PN(g, Z.p)}'s that can't be used`, opts);
+    if (i >= left.length) break; zs.push(left[i]);
+  }
+  Z.zs = zs.sort((a, b) => a - b); log(g, zs.length ? `${PN(g, Z.p)}'s Monster Zones ${zs.map(i => i + 1).join(', ')} can't be used.` : `${name(c)} locked no zones.`);
+}
+const kingZoneTrig = n => ({ type: 'trig', mand: true, noChain: true, label: `Choose up to ${n} of the opponent's unused Monster Zones`,
+  on: (g, ev, c) => { if (evSummoned(ev, c) || (ev.type === 'flip' && ev.c === c)) { c.flags.ojamaZones = null; const Z = kingZones(g, c, n); return !!(Z && Z.zs.length); } return false; },
+  res: function* (g, c) { yield* chooseKingZones(g, c, n); } });
+E.lib.kingZoneTrig = kingZoneTrig;
 // Effect Monsters (Non-Spellcasting Area)
 function isEffMon(c) {
   const d = D(c), tx = d.tx || '';
@@ -248,7 +265,7 @@ E.addScripts({
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 2000 LP or destroy it', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 2000) && (yield* yn(g, p, 'Pay 2000 LP to keep Mirror Wall?'))) pay(g, p, 2000); else destroy(g, [c], { rule: true }); } }] },
 
-  'Monster Gate': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => L.tribPool(g, p).length > 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(canNS),
+  'Monster Gate': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => L.tribPool(g, p).length > 0 && g.p[p].deck.length > 0,   // no summonable monster needed: then the Deck is only shuffled (pass2 goat-03)
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', L.tribPool(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${x.pos === 'set' ? 'a face-down monster' : name(x)}.`); },
     // no monster found: the Deck is shuffled and nothing is sent (ruling; 2026-11-28 audit, E4b, goat-02)
     res: function* (g, c, p) { const [m, rest] = excavate(g, p); log(g, `${PN(g, p)} excavated ${rest.length + (m ? 1 : 0)} card${rest.length + (m ? 1 : 0) === 1 ? '' : 's'}.`);
@@ -370,8 +387,8 @@ E.addScripts({
 
   // The 800 is taken as each token is destroyed (no chain link, ruling).
   'Nightmare Archfiends': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).length > 0 && nFreeM(g, opp(p)) >= 3,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${x.pos === 'set' ? 'a face-down monster' : name(x)}.`); },
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.tribPool(g, p).length > 0 && nFreeM(g, opp(p)) >= 3,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', E.lib.tribPool(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${x.pos === 'set' ? 'a face-down monster' : name(x)}.`); },
       res: function* (g, c, p) { if (nFreeM(g, opp(p)) < 3) return; const ts = tokens(g, opp(p), { n: 'Nightmare Archfiend Token', a: 'DARK', r: 'Fiend', lv: 6, atk: 2000, def: 2000 }, 3, 'atk'); for (const t of ts) t.flags.nmArch = c.u; } },
     { type: 'trig', loc: 'any', on: (g, ev, c) => { if (ev.type === 'move' && ev.destroyed && ev.wasField && ev.snap && ev.snap.flags && ev.snap.flags.nmArch === c.u) damage(g, ev.prevCtrl, 800, { src: c, srcP: c.owner }); return false; }, res: noop }] },
 
@@ -399,8 +416,8 @@ E.addScripts({
   'Non-Spellcasting Area': { cont: { grant: (g, src, m, flag) => flag === 'unaffectedSpells' && m.zone === 'm' && faceUp(m) && !isEffMon(m) }, effs: [{ type: 'act', res: noop }] },
 
   'Ocean Dragon Lord - Neo-Daedalus': {
-    proc: { label: 'Special Summon (Tribute Levia-Dragon - Daedalus)', cond: (g, c, p) => monsOf(g, p).some(x => named(x, 'Levia-Dragon - Daedalus')),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Levia-Dragon - Daedalus?', monsOf(g, p).filter(x => named(x, 'Levia-Dragon - Daedalus')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Levia-Dragon - Daedalus.`); } } },
+    proc: { label: 'Special Summon (Tribute Levia-Dragon - Daedalus)', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => named(x, 'Levia-Dragon - Daedalus')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Levia-Dragon - Daedalus?', E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Levia-Dragon - Daedalus')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Levia-Dragon - Daedalus.`); } } },
     effs: [lockInstall,
       { type: 'ign', label: 'Send Umi: send every other card to the GY',
         cond: (g, c, p) => !!umiOf(g, p),
@@ -414,9 +431,7 @@ E.addScripts({
 
   'Ojama King': {
     cont: { lockZones: (g, src) => kingZones(g, src, 3) },
-    effs: [{ type: 'trig', on: (g, ev, c) => {
-      if (evSummoned(ev, c) || (ev.type === 'flip' && ev.c === c)) { c.flags.ojamaZones = null; const Z = kingZones(g, c, 3); if (Z && Z.zs.length) log(g, `${PN(g, Z.p)}'s Monster Zones ${Z.zs.map(i => i + 1).join(', ')} can't be used.`); }
-      return false; }, res: noop }] },
+    effs: [kingZoneTrig(3)] },
 
   'Ojama Red': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Ojamas from your hand',
     on: (g, ev, c) => evSummoned(ev, c, ['normal']),

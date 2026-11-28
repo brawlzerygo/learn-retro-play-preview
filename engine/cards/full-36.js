@@ -44,7 +44,7 @@ const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's 
 const isNormal = x => isMon(x) && (D(x).k === 'normal' || (isGemini(x) && !(onField(x) && x.flags.gemini)));
 // a monster with ? ATK: the card data stores it as 0, so it is read from the text.
 // PARTIAL: a 0 ATK monster whose text sets its ATK in other words isn't seen.
-const qAtk = x => isMon(x) && D(x).atk === '0' && /original ATK|ATK (and DEF )?(of this card )?(is|are|become|becomes) (equal|each|the|\d)|ATK and DEF (are|is) each|ATK equal to|ATK become equal/i.test(D(x).tx || '');
+const qAtk = x => isMon(x) && (['?', '-1'].includes(String(D(x).atk)) || D(x).atk === '0' && /original ATK|ATK (and DEF )?(of this card )?(is|are|become|becomes) (equal|each|the|\d)|ATK and DEF (are|is) each|ATK equal to|ATK become equal/i.test(D(x).tx || ''));   // the data now keeps "?" ("-1" in Goat; 2026-11-28 audit, E4c)
 const ctrlsAttr = (g, p, a) => monsOf(g, p).some(m => faceUp(m) && attr(m) === a);
 const isAlien = x => /Alien/.test(D(x).n);
 const quoted = x => [...(D(x).tx || '').matchAll(/"([^"]+)"/g)].map(m => m[1]);
@@ -157,8 +157,8 @@ E.addScripts({
       addRule(g, (g2, a) => ['ns', 'set', 'ss'].includes(a.type) && g2.phase !== 'end', { end: g.turnNo });
       log(g, 'Neither player can Summon monsters during the Main Phases and Battle Phase this turn.'); } }] },
   'Cannon Soldier MK-2': { effs: [{ type: 'ign', label: 'Tribute 2 monsters: 1500 damage',
-    cond: (g, c, p) => monsOf(g, p).length >= 2,
-    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 monsters', monsOf(g, p), 2, 2, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(', ')}.`); },
+    cond: (g, c, p) => E.lib.tribPool(g, p).length >= 2,
+    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 monsters', E.lib.tribPool(g, p), 2, 2, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(', ')}.`); },
     res: function* (g, c, p) { damage(g, opp(p), 1500, { src: c, srcP: p }); } }] },
   'Canyon': { cont: { dmg: (g, src, p, n, o) => {
       if (!o.battle || !g.battle || !g.battle.t || !g.battle.a) return n; const t = g.battle.t;
@@ -393,8 +393,8 @@ E.addScripts({
     cost: function* (g, c, p, L2) { L2.data.s = lilySyn(g, p); pay(g, p, 500); },
     res: function* (g, c, p, L2) { const s = L2.data.s; if (s && onField(s) && faceUp(s)) { addMod(g, s, { atk: 1000, end: true }); log(g, `${name(s)} gained 1000 ATK.`); } } }] },
   'Cranium Fish': {
-    proc: { label: "Special Summon (Tribute Ocean's Keeper)", cond: (g, c, p) => monsOf(g, p).some(x => named(x, "Ocean's Keeper")),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, "Tribute Ocean's Keeper", monsOf(g, p).filter(x => named(x, "Ocean's Keeper")), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Ocean's Keeper.`); } } },
+    proc: { label: "Special Summon (Tribute Ocean's Keeper)", cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => named(x, "Ocean's Keeper")),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, "Tribute Ocean's Keeper", E.lib.tribPool(g, p, { known: true }).filter(x => named(x, "Ocean's Keeper")), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Ocean's Keeper.`); } } },
     effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Discard a WATER: destroy a face-down card',
       cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'WATER')) && allField(g).some(x => x.pos === 'set'),
       cost: function* (g, c, p) { yield* discard1(g, p, 'Discard 1 WATER monster', g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER'))); },
@@ -432,8 +432,8 @@ E.addScripts({
   'Crush Card Virus': { effs: [{ type: 'act', tags: { destroy: 1 },
       // what it would destroy: the opponent's face-up monsters with 1500 or more ATK (Stardust ruling 7; Starlight Road ruling 9: face-down ones don't count)
       destroys: (g, c, p) => monsOf(g, opp(p)).filter(m => faceUp(m) && stat(g, m, 'atk') >= 1500),
-      cond: (g, c, p) => monsOf(g, p).some(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000),
-      cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute a DARK monster with 1000 or less ATK', monsOf(g, p).filter(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000),
+      cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute a DARK monster with 1000 or less ATK', E.lib.tribPool(g, p, { known: true }).filter(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
       res: function* (g, c, p) {
         const o = opp(p);
         const h = g.p[o].hand; log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand: ${h.length ? h.map(x => D(x).n).join(', ') : 'empty'}.`);
@@ -483,8 +483,8 @@ E.addScripts({
       res: function* (g, c, p, L2) { if (c.zone !== 'gy') return; const ts = live(L2).filter(x => x.pos === 'set'); c.f36fig = ts.map(x => ({ u: x.u, t: x.turnIn })); if (ts.length) log(g, `${ts.length} Set card${ts.length > 1 ? 's' : ''} can't be activated while Cursed Fig is in the GY.`); } }] },
   // Tributing the Tuner is the cost; the target is another monster in your GY with its Attribute and Level.
   'Cyborg Doctor': { effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Tribute a Tuner: revive a monster',
-    cond: (g, c, p) => monsOf(g, p).some(t => D(t).tu && g.p[p].gy.some(y => isMon(y) && attr(y) === attr(t) && lv(y) === lv(t) && canSS(g, p, y))),
-    cost: function* (g, c, p, L2) { const [t] = yield* pick(g, p, 'Tribute which Tuner?', monsOf(g, p).filter(t => D(t).tu && g.p[p].gy.some(y => isMon(y) && attr(y) === attr(t) && lv(y) === lv(t))), 1, 1, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(t => D(t).tu && g.p[p].gy.some(y => isMon(y) && attr(y) === attr(t) && lv(y) === lv(t) && canSS(g, p, y))),
+    cost: function* (g, c, p, L2) { const [t] = yield* pick(g, p, 'Tribute which Tuner?', E.lib.tribPool(g, p, { known: true }).filter(t => D(t).tu && g.p[p].gy.some(y => isMon(y) && attr(y) === attr(t) && lv(y) === lv(t))), 1, 1, 'cost');
       L2.data.a = attr(t); L2.data.lv = lv(t); L2.data.u = t.u; move(g, t, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(t).n}.`); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which monster from your GY?', g.p[p].gy.filter(y => y.u !== L2.data.u && isMon(y) && attr(y) === L2.data.a && lv(y) === L2.data.lv && canSS(g, p, y)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, t, 'atk'); } }] },

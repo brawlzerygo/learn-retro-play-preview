@@ -136,8 +136,8 @@ E.addScripts({
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
   'Exxod, Master of The Guard': {
     proc: { label: 'Special Summon (Tribute a Sphinx monster)',
-      cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && /Sphinx/i.test(name(x))) && markProc(g, c),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Sphinx monster?', monsOf(g, p).filter(x => faceUp(x) && /Sphinx/i.test(name(x))), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } } },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && /Sphinx/i.test(name(x))) && markProc(g, c),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Sphinx monster?', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && /Sphinx/i.test(name(x))), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } } },
     effs: [lockInstall,
       { type: 'trig', mand: true, label: '1000 damage', on: (g, ev, c) => ev.type === 'summon' && ev.how === 'flip' && ev.cs.some(x => E.lib.isAttr(x, 'EARTH') && x !== c),
         res: function* (g, c, p) { if (onField(c) && faceUp(c)) damage(g, opp(p), 1000, { src: c, srcP: p }); } }] },
@@ -245,8 +245,8 @@ E.addScripts({
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 500 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500) && (yield* yn(g, p, 'Pay 500 LP to keep Firewall?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
   'Fish Depth Charge': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Fish') && fieldOf(g, opp(p)).length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Fish monster', monsOf(g, p).filter(x => race(x) === 'Fish'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => race(x) === 'Fish') && fieldOf(g, opp(p)).length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Fish monster', E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Fish'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which card?', fieldOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { if (destroy(g, live(L2), { by: p, src: c }).length) draw(g, p, 1); } }] },
   'Flash of the Forbidden Spell': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => monsOf(g, opp(p)).length === 5,
@@ -281,8 +281,8 @@ E.addScripts({
     cond: (g, c, p) => g.p[p].deck.some(x => /Alien/.test(D(x).n)) && !forbid(g, { type: 'search', p }),
     res: function* (g, c, p, L2) { const x = L2.ev.c; if (x.zone === 'hand') { move(g, x, 'deckTop', { reason: 'effect' }); log(g, `${PN(g, p)} put the drawn card back on top of the Deck.`); }
       yield* search(g, p, y => /Alien/.test(D(y).n), 'Add an Alien card from your Deck'); } }] },
-  'Fog Control': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && /Cloudian/.test(name(x))) && fieldMons(g).filter(faceUp).length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Cloudian monster', monsOf(g, p).filter(x => faceUp(x) && /Cloudian/.test(name(x))), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+  'Fog Control': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && /Cloudian/.test(name(x))) && fieldMons(g).filter(faceUp).length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Cloudian monster', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && /Cloudian/.test(name(x))), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Place 3 Fog Counters on which monster?', fieldMons(g).filter(faceUp), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { addCtr(g, t, 'fog', 3); log(g, `3 Fog Counters were placed on ${name(t)}.`); } } }] },
   // Normal Summon with 0 or 1 Tribute (PARTIAL: the standard 2 Tributes is still offered); it can't be Set.
@@ -310,7 +310,7 @@ E.addScripts({
       return false; } }] },
   'Fortune Lady Earth': { self: { atk: (g, c) => lv(c) * 400, def: (g, c) => lv(c) * 400 },
     effs: [{ type: 'trig', mand: true, label: 'Level up', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c) && lv(c) < 12,
-      res: function* (g, c) { if (onField(c) && faceUp(c) && lv(c) < 12) { c.flags.lv = lv(c) + 1; log(g, `${name(c)} is now Level ${lv(c)}.`); c.flags.f38lv = lv(c); damage(g, opp(c.ctrl), 400, { src: c, srcP: c.ctrl }); } } },
+      res: function* (g, c) { if (onField(c) && faceUp(c) && lv(c) < 12) { E.lib.addMod(g, c, { lvd: 1, own: true }); g.seq++; log(g, `${name(c)} is now Level ${lv(c)}.`); c.flags.f38lv = lv(c); damage(g, opp(c.ctrl), 400, { src: c, srcP: c.ctrl }); } } },
       // "When the Level of this card increases" by another effect: seen by comparing its Level at each event (its own level
       // up inflicts the damage in the same resolution). PARTIAL: that damage isn't a chain link of its own.
       { type: 'trig', mand: true, label: '400 damage', on: (g, ev, c) => { const n = lv(c), prev = c.flags.f38lv; c.flags.f38lv = n; return prev != null && n > prev; },
@@ -318,7 +318,7 @@ E.addScripts({
   // PARTIAL: "by the effect of a Fortune Lady card" is read as: another Fortune Lady of yours used an effect this turn.
   'Fortune Lady Fire': { self: { atk: (g, c) => lv(c) * 200, def: (g, c) => lv(c) * 200 },
     effs: [{ type: 'trig', mand: true, opt: true, label: 'Level up', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c) && lv(c) < 12,
-      res: function* (g, c) { if (onField(c) && faceUp(c) && lv(c) < 12) { c.flags.lv = lv(c) + 1; log(g, `${name(c)} is now Level ${lv(c)}.`); } } },
+      res: function* (g, c) { if (onField(c) && faceUp(c) && lv(c) < 12) { E.lib.addMod(g, c, { lvd: 1, own: true }); g.seq++; log(g, `${name(c)} is now Level ${lv(c)}.`); } } },
       { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy a monster and inflict its ATK',
         on: (g, ev, c) => evSummoned(ev, c) && SPECIAL(ev) && ev.byEffect && c.pos === 'atk'
           && L.allCards(g, 'gy').concat(L.allCards(g, 'm'), L.allCards(g, 'hand'), L.allCards(g, 'ban')).some(x => x !== c && x.owner === c.owner && /^Fortune Lady/.test(D(x).n) && Object.values(x.used || {}).includes(g.turnNo)),

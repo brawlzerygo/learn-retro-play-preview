@@ -146,8 +146,8 @@ E.addScripts({
           if (nFreeM(g, r.p) < r.n) { log(g, 'Not enough free zones for the Ghost Tokens.'); return; }
           tokens(g, r.p, { n: 'Ghost Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 0, def: 0 }, r.n, 'def'); } }] },
   // Tribute a DARK (cost, face-down too). The opponent may reveal a Spell from the hand when it resolves to negate the draw.
-  'Dark Spirit Art - Greed': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 2 && monsOf(g, p).some(x => E.lib.isAttr(x, 'DARK')),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which DARK monster?', monsOf(g, p).filter(x => E.lib.isAttr(x, 'DARK')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+  'Dark Spirit Art - Greed': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 2 && E.lib.tribPool(g, p, { known: true }).some(x => E.lib.isAttr(x, 'DARK')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which DARK monster?', E.lib.tribPool(g, p, { known: true }).filter(x => E.lib.isAttr(x, 'DARK')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { const o = opp(p), sp = g.p[o].hand.filter(isSpell);
       if (sp.length && (yield* yn(g, o, 'Reveal a Spell Card from your hand to negate Dark Spirit Art - Greed?'))) { const [x] = yield* pick(g, o, 'Reveal which Spell Card?', sp, 1, 1, 'cost'); log(g, `${PN(g, o)} revealed ${D(x).n}. The effect was negated.`); return; }
       draw(g, p, 2); } }] },
@@ -218,8 +218,8 @@ E.addScripts({
     proc: { label: 'Special Summon (Tribute 3, including a Destiny HERO)',
       cond: (g, c, p) => monsOf(g, p).length >= 3 && monsOf(g, p).some(dhMon),
       cost: function* (g, c, p, grp) {
-        const [a] = yield* pick(g, p, 'Tribute which Destiny HERO?', monsOf(g, p).filter(dhMon), 1, 1, 'cost');
-        const rest = yield* pick(g, p, 'Tribute 2 more monsters', monsOf(g, p).filter(x => x !== a), 2, 2, 'cost');
+        const [a] = yield* pick(g, p, 'Tribute which Destiny HERO?', E.lib.tribPool(g, p, { known: true }).filter(dhMon), 1, 1, 'cost');
+        const rest = yield* pick(g, p, 'Tribute 2 more monsters', E.lib.tribPool(g, p).filter(x => x !== a), 2, 2, 'cost');
         const ts = [a, ...rest]; for (const t of ts) move(g, t, 'gy', { reason: 'tribute', by: p, group: grp });
         log(g, `${PN(g, p)} Tributed ${ts.map(x => D(x).n).join(', ')}.`); c.flags.dogma = g.turnNo; } },
     effs: [lockEff, markProper(['special']),
@@ -370,8 +370,8 @@ E.addScripts({
     res: function* (g, c, p, L2) { const xs = L2.t.filter(x => x.zone === 'gy'); for (const x of xs) move(g, x, 'hand', { reason: 'effect', by: p }); if (xs.length) log(g, `${PN(g, p)} added ${xs.map(x => D(x).n).join(' and ')} to the hand.`); } }] },
   'Earthbound Immortal Uru': { self: eiSelf, cont: eiCont, effs: [eiSelfDestroy,
     { type: 'ign', opt: true, label: 'Tribute a monster: take control of a monster',
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c) && oppFaceUp(g, p).length > 0,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p).filter(x => x !== c), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+      cond: (g, c, p) => E.lib.tribPool(g, p).some(x => x !== c) && oppFaceUp(g, p).length > 0,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p).filter(x => x !== c), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Take control of which face-up monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && t.ctrl !== p) takeControl(g, p, t, true); } }] },
   'Earthbound Immortal Wiraqocha Rasca': { self: eiSelf, cont: eiCont, effs: [eiSelfDestroy,

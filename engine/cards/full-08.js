@@ -148,8 +148,8 @@ E.addScripts({
   // PARTIAL: offers a 1-Tribute Summon of a Level 7+ FIRE monster while this card is face-up, but the engine lets any one monster be the Tribute.
   'Flame Ruler': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && E.lib.isAttr(c, 'FIRE') ? 1 : null } },
   'Flame Spirit Ignis': { effs: [{ type: 'ign', label: 'Tribute a FIRE: burn',
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 face-up FIRE monster', monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 face-up FIRE monster', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { const n = g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'FIRE')).length; damage(g, opp(p), 100 * n, { src: c, srcP: p }); } }] },
   'Flint': {
     cont: { atk: (g, src, m) => src.equipTo === m.u && !flintImmune(g, m) ? -300 : 0,
@@ -222,8 +222,8 @@ E.addScripts({
     cont: { atk: (g, src, c) => faceUp(c) && E.lib.isAttr(c, 'EARTH') ? 500 : 0, def: (g, src, c) => faceUp(c) && E.lib.isAttr(c, 'EARTH') ? -400 : 0 } },
   'Gaia Soul the Combustible Collective': { self: { piercing: true },
     effs: [{ type: 'ign', opt: true, label: 'Tribute Pyros for ATK',
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && race(x) === 'Pyro'),
-      cost: function* (g, c, p, L2) { const cs = monsOf(g, p).filter(x => x !== c && race(x) === 'Pyro'); const xs = yield* pick(g, p, 'Tribute up to 2 Pyro monsters', cs, 1, 2, 'cost');
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && race(x) === 'Pyro'),
+      cost: function* (g, c, p, L2) { const cs = E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && race(x) === 'Pyro'); const xs = yield* pick(g, p, 'Tribute up to 2 Pyro monsters', cs, 1, 2, 'cost');
         for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); L2.data.n = xs.length; },
       res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000 * L2.data.n, own: true }); log(g, `${name(c)} gained ${1000 * L2.data.n} ATK.`); } } },
       { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end',

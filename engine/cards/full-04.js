@@ -128,8 +128,8 @@ E.addScripts({
   // Continuous Spell: the Tribute is the cost, any number of times (ruling: used like an Ignition Effect)
   'Cocoon Rebirth': { effs: [{ type: 'act', res: noop },
     { type: 'ign', loc: 'st', tags: { ss: 1 }, label: 'Tribute a Chrysalis: summon its Neo-Spacian',
-      cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isChrysalis(x) && nsOf(x) && allCards(g, 'gy').some(y => named(y, nsOf(x)) && !forbid(g, { type: 'ss', c: y, p, how: 'special' }))),
-      cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which Chrysalis monster?', monsOf(g, p).filter(x => faceUp(x) && isChrysalis(x) && nsOf(x) && allCards(g, 'gy').some(y => named(y, nsOf(x)))), 1, 1, 'cost');
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && isChrysalis(x) && nsOf(x) && allCards(g, 'gy').some(y => named(y, nsOf(x)) && !forbid(g, { type: 'ss', c: y, p, how: 'special' }))),
+      cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which Chrysalis monster?', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && isChrysalis(x) && nsOf(x) && allCards(g, 'gy').some(y => named(y, nsOf(x)))), 1, 1, 'cost');
         L2.data.ns = nsOf(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g, c, p, L2) { const cands = allCards(g, 'gy').filter(y => named(y, L2.data.ns)); if (!cands.length || freeM(g, p) < 0) return;
         const [x] = yield* pick(g, p, `Special Summon ${L2.data.ns} from either GY`, cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
@@ -374,11 +374,13 @@ E.addScripts({
 
   /* ----- D.D. ----- */
   // Port of goat-4.js
-  'D.D. Assailant': { effs: [{ type: 'trig', loc: 'any', mand: true, label: 'Banish both monsters',
-    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.wasField && !!ev.killer && ev.killer.ctrl !== ev.prevCtrl,
-    res: function* (g, c, p, L2) { const k = L2.ev.killer;
+  // "After damage calculation, when this card is destroyed by battle": it activates after damage calculation, while both are still on the
+  // field (EDOPro EVENT_BATTLED), so an equal-ATK monster is banished, not sent to the GY (findings goat-04; 2026-11-28 audit, E4c)
+  'D.D. Assailant': { effs: [{ type: 'trig', mand: true, label: 'Banish both monsters',
+    on: (g, ev, c) => { if (ev.type !== 'afterCalc' || (ev.a !== c && ev.t !== c) || !c.flags.battleDoomed) return false; const o = ev.a === c ? ev.t : ev.a; return !!o && o.ctrl !== c.ctrl; },
+    res: function* (g, c, p, L2) { const k = L2.ev.a === c ? L2.ev.t : L2.ev.a;
       if (k && onField(k)) { move(g, k, 'ban', { reason: 'effect', by: p }); log(g, `${D(k).n} was banished.`); }
-      if (c.zone === 'gy') { move(g, c, 'ban', { reason: 'effect', by: p }); log(g, 'D.D. Assailant was banished.'); } } }] },
+      if (onField(c) || c.zone === 'gy') { move(g, c, 'ban', { reason: 'effect', by: p }); log(g, 'D.D. Assailant was banished.'); } } }] },
   // PARTIAL: "can't conduct the Battle Phase" removes the Battle Phase option when an event shows the condition, and
   // attacks are forbidden as a fallback (a Set D.D. Borderline flipped up makes no event).
   'D.D. Borderline': {

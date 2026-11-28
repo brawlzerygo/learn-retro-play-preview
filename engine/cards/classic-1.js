@@ -158,8 +158,8 @@ E.addScripts({
     proc: { label: 'Special Summon (Tribute 2, incl. Grand Tiki Elder or Melchid)',
       cond: (g, c, p) => monsOf(g, p).length >= 2 && monsOf(g, p).some(x => faceUp(x) && (named(x, 'Grand Tiki Elder') || named(x, 'Melchid the Four-Face Beast'))),
       cost: function* (g, c, p) {
-        const [a] = yield* pick(g, p, 'Tribute Grand Tiki Elder or Melchid the Four-Face Beast', monsOf(g, p).filter(x => faceUp(x) && (named(x, 'Grand Tiki Elder') || named(x, 'Melchid the Four-Face Beast'))), 1, 1, 'cost');
-        const [b] = yield* pick(g, p, 'Tribute 1 more monster', monsOf(g, p).filter(x => x !== a), 1, 1, 'cost');
+        const [a] = yield* pick(g, p, 'Tribute Grand Tiki Elder or Melchid the Four-Face Beast', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && (named(x, 'Grand Tiki Elder') || named(x, 'Melchid the Four-Face Beast'))), 1, 1, 'cost');
+        const [b] = yield* pick(g, p, 'Tribute 1 more monster', E.lib.tribPool(g, p).filter(x => x !== a), 1, 1, 'cost');
         for (const x of [a, b]) if (x) move(g, x, 'gy', { reason: 'tribute', by: p });
         log(g, `${PN(g, p)} Tributed ${[a, b].filter(Boolean).map(x => D(x).n).join(' and ')}.`);
       } },

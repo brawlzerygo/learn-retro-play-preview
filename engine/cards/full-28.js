@@ -132,7 +132,7 @@ E.addScripts({
   'Timidity': { cont: { loc: 'gy', replaceDestroy: (g, src, c) => { const t = g.f28timid && g.f28timid[src.u]; if (t == null || g.turnNo > t || !['st', 'fz'].includes(c.zone) || c.pos !== 'set') return false; log(g, `${PN(g, c.ctrl)}'s Set card can’t be destroyed (Timidity).`); return true; } },
     effs: [{ type: 'act', res: function* (g, c, p) { (g.f28timid || (g.f28timid = {}))[c.u] = g.turnNo + 1; log(g, 'Set Spell and Trap Cards can’t be destroyed until the opponent’s next End Phase.'); } }] },
   'Token Thanksgiving': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: g => fieldMons(g).some(x => D(x).k === 'token'),
-    res: function* (g, c, p) { const out = destroy(g, fieldMons(g).filter(x => D(x).k === 'token'), { by: p, src: c }); if (out.length) gain(g, p, 800 * out.length); } }] },
+    res: function* (g, c, p) { const out = destroy(g, fieldMons(g).filter(x => D(x).k === 'token'), { by: p, src: c }); if (out.length) gain(g, p, 800 * out.length, { same: true }); } }] },
   // Paying 500 is a cost: a player who can't pay can't declare the attack. Each Toll is paid separately.
   'Toll': { cont: { forbid: (g, src, a) => a.type === 'attack' && a.c && !E.lib.canPay(g, a.c.ctrl, 500 * allField(g).filter(x => faceUp(x) && named(x, 'Toll')).length) },
     effs: [actNoop,
@@ -155,8 +155,8 @@ E.addScripts({
         for (const e of es) destroy(g, monsOf(g, e.p).filter(x => isNormalMon(x) && lv(x) === 1), { by: e.p, src: c }); } }] },
   // The Level 7 monster must be one that can be Normal Summoned/Set; it can't attack this turn.
   'Tribute Doll': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).length > 0 && g.p[p].hand.some(x => x !== c && canNS(x) && lv(x) === 7 && canSS(g, p, x)),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p), 1, 1, 'cost'); if (x) { const n = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${n}.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p).length > 0 && g.p[p].hand.some(x => x !== c && canNS(x) && lv(x) === 7 && canSS(g, p, x)),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', E.lib.tribPool(g, p), 1, 1, 'cost'); if (x) { const n = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${n}.`); } },
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => canNS(x) && lv(x) === 7 && canSS(g, p, x)); if (!cs.length || freeM(g, p) < 0) return;
       const [x] = yield* pick(g, p, 'Special Summon which Level 7 monster?', cs, 1, 1, 'good'); if (x && ss(g, p, x, 'atk')) addRule(g, (g2, a) => a.type === 'attack' && a.c === x, { end: g.turnNo }); } }] },
   'Tribute to the Doomed': { effs: [{ type: 'act', tags: { destroy: 1 },
@@ -174,8 +174,8 @@ E.addScripts({
   'United We Stand': { cont: { atk: (g, src, m) => src.equipTo === m.u ? 800 * monsOf(g, src.ctrl).filter(faceUp).length : 0, def: (g, src, m) => src.equipTo === m.u ? 800 * monsOf(g, src.ctrl).filter(faceUp).length : 0 },
     effs: [equipAct()] },
   'Ultra Evolution Pill': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Reptile') && g.p[p].hand.some(x => x !== c && isMon(x) && race(x) === 'Dinosaur' && D(x).k !== 'ritual' && canSS(g, p, x)),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Reptile monster', monsOf(g, p).filter(x => race(x) === 'Reptile'), 1, 1, 'cost'); if (x) { const n = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${n}.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => race(x) === 'Reptile') && g.p[p].hand.some(x => x !== c && isMon(x) && race(x) === 'Dinosaur' && D(x).k !== 'ritual' && canSS(g, p, x)),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Reptile monster', E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Reptile'), 1, 1, 'cost'); if (x) { const n = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${n}.`); } },
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && race(x) === 'Dinosaur' && D(x).k !== 'ritual' && canSS(g, p, x)); if (!cs.length || freeM(g, p) < 0) return;
       const [x] = yield* pick(g, p, 'Special Summon which Dinosaur?', cs, 1, 1, 'good'); if (x) ss(g, p, x, yield* pos2(g, p, x)); } }] },
   'Vile Germs': { cont: eqBonus(300, 300), effs: [equipAct(m => race(m) === 'Plant', 'Equip Vile Germs to which Plant?')] },
@@ -259,8 +259,8 @@ E.addScripts({
   // A Fusion Monster turned face-down before then is not destroyed (its mark is cleared).
   'Summoner of Illusions': { effs: [
     flip('Tribute a monster: summon a Fusion Monster', { tags: { ss: 1 },
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c) && g.p[p].extra.some(x => D(x).k === 'fusion' && canSS(g, p, x)),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 other monster', monsOf(g, p).filter(x => x !== c), 1, 1, 'cost'); if (x) { const n = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${n}.`); } },
+      cond: (g, c, p) => E.lib.tribPool(g, p).some(x => x !== c) && g.p[p].extra.some(x => D(x).k === 'fusion' && canSS(g, p, x)),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 other monster', E.lib.tribPool(g, p).filter(x => x !== c), 1, 1, 'cost'); if (x) { const n = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${n}.`); } },
       res: function* (g, c, p) { const cs = g.p[p].extra.filter(x => D(x).k === 'fusion' && canSS(g, p, x)); if (!cs.length || freeM(g, p) < 0) return;
         const [x] = yield* pick(g, p, 'Special Summon which Fusion Monster?', cs, 1, 1, 'good'); if (x && ss(g, p, x, 'atk')) { x.flags.f28soi = { turn: g.turnNo, src: c.u }; log(g, `${name(x)} will be destroyed in the End Phase.`); } } }),
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, label: 'Destroy the Fusion Monster',

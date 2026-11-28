@@ -243,8 +243,8 @@ E.addScripts({
       const x = h[Math.floor(g.rnd() * h.length)]; log(g, `${PN(g, opp(p))} picked ${nm(x)} at random.`);
       if (canBeSSFromHand(x) && freeM(g, p) >= 0 && !forbid(g, { type: 'ss', c: x, p, how: 'special' })) { ss(g, p, x, yield* posPick(g, p, x)); return; }
       move(g, x, 'gy', { reason: 'effect' }); log(g, `${nm(x)} was sent to the GY.`); } }] },
-  'A Major Upset': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => x.pos === 'atk' && lv(x) <= 2),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute an Attack Position Level 2 or lower monster', monsOf(g, p).filter(x => x.pos === 'atk' && lv(x) <= 2), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm(x)}.`); },
+  'A Major Upset': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x.pos === 'atk' && lv(x) <= 2),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute an Attack Position Level 2 or lower monster', E.lib.tribPool(g, p, { known: true }).filter(x => x.pos === 'atk' && lv(x) <= 2), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm(x)}.`); },
     res: function* (g, c, p) { const xs = fieldMons(g).filter(x => faceUp(x) && lv(x) >= 7 && wasSS(x)); for (const x of xs) move(g, x, 'hand', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.map(nm).join(', ')} returned to the hand.`); } }] },
   'A Man with Wdjat': { effs: [{ type: 'trig', mand: true, label: 'Look at a Set card',
     on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute']) || (ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl),
@@ -266,8 +266,8 @@ E.addScripts({
     res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
 
   /* ===== Amazoness ===== */
-  'Amazoness Archer': { effs: [{ type: 'ign', label: 'Tribute 2: 1200 damage', cond: (g, c, p) => monsOf(g, p).length >= 2,
-    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 monsters', monsOf(g, p), 2, 2, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(nm).join(' and ')}.`); },
+  'Amazoness Archer': { effs: [{ type: 'ign', label: 'Tribute 2: 1200 damage', cond: (g, c, p) => E.lib.tribPool(g, p).length >= 2,
+    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 monsters', E.lib.tribPool(g, p), 2, 2, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(nm).join(' and ')}.`); },
     res: function* (g, c, p) { damage(g, opp(p), 1200, { src: c, srcP: p }); } }] },
   // PARTIAL: "they must attack this turn, if able" isn't enforced (ENGINE: no forced attacks).
   'Amazoness Archers': { effs: [{ type: 'act', cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && monsOf(g, p).some(x => faceUp(x) && isAmz(x)),
@@ -400,8 +400,8 @@ E.addScripts({
   'Anti Raigeki': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p, x) => spellTrapAct(x.top) && x.top.p !== p && !x.top.negated && nm(x.top.c) === 'Raigeki',
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { L2.data.L.negBy = p; L2.data.L.negated = true; log(g, "Raigeki's effect was negated."); destroy(g, monsOf(g, opp(p)), { by: p, src: c }); } }] },
-  'Anti-Aircraft Flower': { effs: [{ type: 'ign', label: 'Tribute an Insect: 800 damage', cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Insect'),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Insect?', monsOf(g, p).filter(x => race(x) === 'Insect'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm(x)}.`); },
+  'Anti-Aircraft Flower': { effs: [{ type: 'ign', label: 'Tribute an Insect: 800 damage', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => race(x) === 'Insect'),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Insect?', E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Insect'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm(x)}.`); },
     res: function* (g, c, p) { damage(g, opp(p), 800, { src: c, srcP: p }); } }] },
   'Anti-Fusion Device': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: g => fieldMons(g).some(x => faceUp(x) && D(x).k === 'fusion'),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Fusion Monster?', fieldMons(g).filter(x => faceUp(x) && D(x).k === 'fusion'), 1, 1, 'bad'); },

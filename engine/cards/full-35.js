@@ -64,8 +64,8 @@ const artRituals = (g, p) => g.p[p].hand.filter(x => isMon(x) && D(x).k === 'rit
  is destroyed when the summoner leaves the field face-up (not if she was face-down, or it was flipped face-down). */
 const summoner = (A, self) => ({ effs: [
   { type: 'ign', opt: true, tags: { ss: 1 }, label: `Tribute a ${A}: summon a ${A} from your hand`,
-    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && attr(x) === A) && g.p[p].hand.some(x => isMon(x) && attr(x) === A && !isExtraD(D(x)) && D(x).k !== 'ritual' && canSS(g, p, x)),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, `Tribute which ${A} monster?`, monsOf(g, p).filter(x => x !== c && attr(x) === A), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && attr(x) === A) && g.p[p].hand.some(x => isMon(x) && attr(x) === A && !isExtraD(D(x)) && D(x).k !== 'ritual' && canSS(g, p, x)),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, `Tribute which ${A} monster?`, E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && attr(x) === A), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
     res: function* (g, c, p) {
       if (freeM(g, p) < 0) return; const xs = g.p[p].hand.filter(x => isMon(x) && attr(x) === A && !isExtraD(D(x)) && D(x).k !== 'ritual' && canSS(g, p, x)); if (!xs.length) return;
       const [x] = yield* pick(g, p, `Special Summon which ${A} monster from your hand?`, xs, 1, 1, 'good');
@@ -261,8 +261,8 @@ E.addScripts({
   'Axe of Despair (Archfiend)': { cont: { atk: (g, src, m) => src.equipTo === m.u ? 1000 : 0 },
     effs: [equipAct(),
       { type: 'trig', loc: 'gy', when: true, label: 'Tribute 1 monster: put it on top of the Deck',
-        on: (g, ev, c) => fromFieldToGY(ev, c), cond: (g, c, p) => c.zone === 'gy' && monsOf(g, p).length > 0,
-        cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
+        on: (g, ev, c) => fromFieldToGY(ev, c), cond: (g, c, p) => c.zone === 'gy' && E.lib.tribPool(g, p).length > 0,
+        cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', E.lib.tribPool(g, p), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
         res: function* (g, c) { if (c.zone === 'gy') { move(g, c, 'deckTop', { reason: 'effect' }); log(g, `${D(c).n} was put on top of the Deck.`); } } }] },
 
   /* ----- B ----- */
@@ -282,8 +282,8 @@ E.addScripts({
       if (xs.length > n) xs = yield* pick(g, p, `Special Summon which ${n} Six Samurai monster${n > 1 ? 's' : ''}?`, xs, n, n, 'good');
       const grp = g.group; for (const x of xs) ss(g, p, x, 'atk', { group: grp }); } }] },
   'Bamboo Scrap': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Plant') && nFreeM(g, opp(p)) >= 2,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Plant monster?', monsOf(g, p).filter(x => race(x) === 'Plant'), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => race(x) === 'Plant') && nFreeM(g, opp(p)) >= 2,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Plant monster?', E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Plant'), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
     res: function* (g, c, p) { tokens(g, opp(p), { n: 'Plant Token', a: 'EARTH', r: 'Plant', lv: 1, atk: 800, def: 500 }, 2, 'def'); } }] },
   // The bonus is counted once for all copies (the first face-up Batteryman C applies it).
   'Batteryman C': { cont: {

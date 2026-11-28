@@ -307,8 +307,8 @@ E.addScripts({
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
 
   'Mormolith': { effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Tribute an EARTH monster: destroy monsters',
-    cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && E.lib.isAttr(m, 'EARTH')),
-    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which face-up EARTH monster?', monsOf(g, p).filter(m => faceUp(m) && E.lib.isAttr(m, 'EARTH')), 1, 1, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(m => faceUp(m) && E.lib.isAttr(m, 'EARTH')),
+    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which face-up EARTH monster?', E.lib.tribPool(g, p, { known: true }).filter(m => faceUp(m) && E.lib.isAttr(m, 'EARTH')), 1, 1, 'cost');
       L2.data.n = atk(g, x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n} (${L2.data.n} ATK).`); },
     res: function* (g, c, p, L2) { const xs = fieldMons(g).filter(m => faceUp(m) && def(g, m) <= L2.data.n); if (xs.length) destroy(g, xs, { by: p }); } }] },
 
@@ -347,8 +347,8 @@ E.addScripts({
       for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} sent ${xs.map(x => D(x).n).join(' and ')} to the GY.`); } } },
 
   // Port of classic-4.js
-  'Multiply': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && name(m) === 'Kuriboh'),
-    cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which Kuriboh?', monsOf(g, p).filter(m => faceUp(m) && name(m) === 'Kuriboh'), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Kuriboh.`); } },
+  'Multiply': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(m => faceUp(m) && name(m) === 'Kuriboh'),
+    cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which Kuriboh?', E.lib.tribPool(g, p, { known: true }).filter(m => faceUp(m) && name(m) === 'Kuriboh'), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Kuriboh.`); } },
     res: function* (g, c, p) { const n = nFreeM(g, p); if (n) tokens(g, p, { n: 'Kuriboh Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 300, def: 200 }, n, 'def', { noTribute: 'summon' }); } }] },
 
   // Port of full-25.js's Goat "Mushroom Man #2": LP lost, not damage

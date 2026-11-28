@@ -380,8 +380,8 @@ E.addScripts({
     if (flag !== 'noBattleDestroy' || c.ctrl !== src.ctrl || !g.battle || !inBattle(g, c)) return false;
     const o = g.battle.a === c ? g.battle.t : g.battle.a; return !!o && onField(o) && ATK(g, o) === ATK(g, c); } } },
   "Knight's Title": { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && named(x, 'Dark Magician')) && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Dark Magician Knight')),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 face-up Dark Magician', monsOf(g, p).filter(x => faceUp(x) && named(x, 'Dark Magician')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Dark Magician.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && named(x, 'Dark Magician')) && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Dark Magician Knight')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 face-up Dark Magician', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && named(x, 'Dark Magician')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Dark Magician.`); } },
     res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => named(x, 'Dark Magician Knight')); if (!cs.length || freeM(g, p) < 0) return;
       const [x] = yield* pick(g, p, 'Special Summon which Dark Magician Knight?', cs, 1, 1, 'good'); if (!x) return; const fromDeck = x.zone === 'deck'; ss(g, p, x, 'atk'); if (fromDeck) shuffleDeck(g, p); } }] },
   'Koitsu': union('Koitsu', 'Aitsu', {

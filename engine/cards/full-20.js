@@ -87,8 +87,8 @@ E.addScripts({
       res: function* (g, c, p) { (g.f20shabti || (g.f20shabti = {}))[p] = g.turnNo; g.seq++; log(g, `${PN(g, p)}'s Gravekeeper's monsters can't be destroyed by battle this turn.`); } }] },
   'Charubin the Fire Knight': { effs: [] },
   'Checkmate': { effs: [cleanup, { type: 'act',
-    cond: (g, c, p) => monsOf(g, p).some(x => isArchfiend(x) && monsOf(g, p).some(t => t !== x && faceUp(t) && named(t, 'Terrorking Archfiend'))),
-    cost: function* (g, c, p) { const ms = monsOf(g, p); const [x] = yield* pick(g, p, 'Tribute 1 Archfiend monster', ms.filter(x => isArchfiend(x) && ms.some(t => t !== x && named(t, 'Terrorking Archfiend'))), 1, 1, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => isArchfiend(x) && monsOf(g, p).some(t => t !== x && faceUp(t) && named(t, 'Terrorking Archfiend'))),
+    cost: function* (g, c, p) { const ms = monsOf(g, p); const [x] = yield* pick(g, p, 'Tribute 1 Archfiend monster', E.lib.tribPool(g, p, { known: true }).filter(x => isArchfiend(x) && ms.some(t => t !== x && named(t, 'Terrorking Archfiend'))), 1, 1, 'cost');
       if (x) { const n = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${n}.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Terrorking Archfiend can attack directly?', monsOf(g, p).filter(t => faceUp(t) && named(t, 'Terrorking Archfiend')), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { turnDirect(g, t); log(g, `${name(t)} can attack directly this turn.`); } } }] },
@@ -232,8 +232,8 @@ E.addScripts({
     { type: 'trig', mand: true, label: 'Discard a random card', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.direct && ev.src === c && ev.p !== c.ctrl,
       res: function* (g, c, p) { discardRandom(g, opp(p), p); } }] },
   'Dedication through Light and Darkness': (() => { const dmoc = (g, p) => [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => named(x, 'Dark Magician of Chaos'));
-    return { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(x => named(x, 'Dark Magician')) && dmoc(g, p).length > 0,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Dark Magician', monsOf(g, p).filter(x => named(x, 'Dark Magician')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Dark Magician.`); } },
+    return { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => named(x, 'Dark Magician')) && dmoc(g, p).length > 0,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Dark Magician', E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Dark Magician')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Dark Magician.`); } },
       res: function* (g, c, p) { const cs = dmoc(g, p); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which Dark Magician of Chaos?', cs, 1, 1, 'good'); if (!x) return;
         const fromDeck = x.zone === 'deck'; ss(g, p, x); if (fromDeck) shuffleDeck(g, p); } }] }; })(),
   'Delinquent Duo': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 1000, c) && g.p[opp(p)].hand.length > 0,
@@ -307,11 +307,13 @@ E.addScripts({
   'Don Zaloog': { effs: [{ type: 'trig', when: true, label: 'Discard or mill 2',
     on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl,
     cond: (g, c, p) => g.p[opp(p)].hand.length > 0 || g.p[opp(p)].deck.length > 0,
-    res: function* (g, c, p) { const o = opp(p), opts = [];
+    // the effect is chosen as it is activated ("select and activate 1 of the following"; findings goat-12, 2026-11-28 audit E4c)
+    target: function* (g, c, p, L2) { const o = opp(p), opts = [];
       if (g.p[o].hand.length) opts.push('Discard 1 random card from their hand');
       if (g.p[o].deck.length) opts.push('Send the top 2 cards of their Deck to the GY');
-      if (!opts.length) return; const i = opts.length > 1 ? yield* choose(g, p, 'Don Zaloog: which effect?', opts) : 0;
-      if (/random/.test(opts[i])) discardRandom(g, o, p); else mill(g, o, 2); } }] },
+      const i = opts.length > 1 ? yield* choose(g, p, 'Don Zaloog: which effect?', opts) : 0; L2.data.mode = /random/.test(opts[i] || '') ? 'discard' : 'mill';
+      log(g, `Don Zaloog: ${L2.data.mode === 'discard' ? 'discard 1 random card' : 'send the top 2 cards of the Deck to the GY'}.`); },
+    res: function* (g, c, p, L2) { const o = opp(p); if (L2.data.mode === 'discard') { if (g.p[o].hand.length) discardRandom(g, o, p); } else mill(g, o, 2); } }] },
   // The first Normal Summon of the next turn counts, whatever its Level.
   'Dora of Fate': { effs: [
     { type: 'act', cond: (g, c, p) => g.tp !== p && oppFaceUp(g, p).length > 0,

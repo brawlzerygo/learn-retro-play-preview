@@ -161,17 +161,17 @@ E.addScripts({
 
   /* ----- Spiritual Arts ----- */
   'Spiritual Earth Art - Kurogane': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => E.lib.isAttr(x, 'EARTH')) && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'EARTH') && lv(x) <= 4 && canSS(g, p, x)),
-    cost: function* (g, c, p, L2) { L2.data.tr = yield* tribute(g, p, monsOf(g, p).filter(x => E.lib.isAttr(x, 'EARTH')), 'Tribute which EARTH monster?'); },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => E.lib.isAttr(x, 'EARTH')) && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'EARTH') && lv(x) <= 4 && canSS(g, p, x)),
+    cost: function* (g, c, p, L2) { L2.data.tr = yield* tribute(g, p, E.lib.tribPool(g, p, { known: true }).filter(x => E.lib.isAttr(x, 'EARTH')), 'Tribute which EARTH monster?'); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Level 4 or lower EARTH monster?', g.p[p].gy.filter(x => x !== L2.data.tr && isMon(x) && E.lib.isAttr(x, 'EARTH') && lv(x) <= 4 && canSS(g, p, x)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   'Spiritual Fire Art - Kurenai': { effs: [{ type: 'act',
-    cond: (g, c, p) => monsOf(g, p).some(x => E.lib.isAttr(x, 'FIRE')),
-    cost: function* (g, c, p, L2) { const x = yield* tribute(g, p, monsOf(g, p).filter(x => E.lib.isAttr(x, 'FIRE')), 'Tribute which FIRE monster?'); L2.data.n = x ? baseAtk(x) : 0; },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => E.lib.isAttr(x, 'FIRE')),
+    cost: function* (g, c, p, L2) { const x = yield* tribute(g, p, E.lib.tribPool(g, p, { known: true }).filter(x => E.lib.isAttr(x, 'FIRE')), 'Tribute which FIRE monster?'); L2.data.n = x ? baseAtk(x) : 0; },
     res: function* (g, c, p, L2) { damage(g, opp(p), L2.data.n, { src: c, srcP: p }); } }] },
   'Spiritual Wind Art - Miyabi': { effs: [{ type: 'act',
-    cond: (g, c, p) => monsOf(g, p).some(x => E.lib.isAttr(x, 'WIND')) && fieldOf(g, opp(p)).length > 0,
-    cost: function* (g, c, p) { yield* tribute(g, p, monsOf(g, p).filter(x => E.lib.isAttr(x, 'WIND')), 'Tribute which WIND monster?'); },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => E.lib.isAttr(x, 'WIND')) && fieldOf(g, opp(p)).length > 0,
+    cost: function* (g, c, p) { yield* tribute(g, p, E.lib.tribPool(g, p, { known: true }).filter(x => E.lib.isAttr(x, 'WIND')), 'Tribute which WIND monster?'); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Place which card on the bottom of the Deck?', fieldOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; const n = D(t).n; toBottom(g, t); log(g, `${n} was placed on the bottom of the Deck.`); } }] },
 
@@ -242,8 +242,8 @@ E.addScripts({
   // You take no damage until the End Phase of the next turn (read from the GY, where the card is once used).
   // PARTIAL: if every Synchro Barrier leaves the GY, the effect stops.
   'Synchro Barrier': { cont: { loc: 'gy', dmg: (g, src, p) => g.f34bar && g.f34bar[p] != null && g.turnNo <= g.f34bar[p] ? 0 : undefined },
-    effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(isSynchro),
-      cost: function* (g, c, p) { yield* tribute(g, p, monsOf(g, p).filter(isSynchro), 'Tribute which Synchro Monster?'); },
+    effs: [{ type: 'act', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(isSynchro),
+      cost: function* (g, c, p) { yield* tribute(g, p, E.lib.tribPool(g, p, { known: true }).filter(isSynchro), 'Tribute which Synchro Monster?'); },
       res: function* (g, c, p) { (g.f34bar || (g.f34bar = {}))[p] = g.turnNo + 1; log(g, `${PN(g, p)} takes no damage until the End Phase of the next turn.`); } }] },
   'Synchro Blast Wave': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isSynchro(x)) && monsOf(g, opp(p)).length > 0,
@@ -436,8 +436,8 @@ E.addScripts({
     { type: 'trig', loc: 'st', mand: true, tags: { destroy: 1 }, label: 'Destroy the equipped monster',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp !== c.ctrl && c.f34adh != null && g.turnNo > c.f34adh && !!equippedTo(g, c),
       res: function* (g, c, p) { const m = equippedTo(g, c); c.f34adh = null; if (m) destroy(g, [m], { by: p }); } }] },
-  'Advance Draw': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && lv(x) >= 8),
-    cost: function* (g, c, p) { yield* tribute(g, p, monsOf(g, p).filter(x => faceUp(x) && lv(x) >= 8), 'Tribute which Level 8 or higher monster?'); },
+  'Advance Draw': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && lv(x) >= 8),
+    cost: function* (g, c, p) { yield* tribute(g, p, E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && lv(x) >= 8), 'Tribute which Level 8 or higher monster?'); },
     res: function* (g, c, p) { draw(g, p, 2); } }] },
   // ENGINE: no per-summon Tribute restriction, so the single Tribute can be any monster (offered only while you have a Level 5+).
   'Advance Force': { effs: [actNoop],

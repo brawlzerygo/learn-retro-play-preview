@@ -160,8 +160,8 @@ E.addScripts({
   // The summoned monster is destroyed if this card leaves the field while face-up (not if either was turned face-down).
   'Raging Eria': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Tribute a WATER: Special Summon a WATER',
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && E.lib.isAttr(x, 'WATER')) && g.p[p].hand.some(x => ssable(x) && E.lib.isAttr(x, 'WATER')),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WATER monster?', monsOf(g, p).filter(x => x !== c && E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && E.lib.isAttr(x, 'WATER')) && g.p[p].hand.some(x => ssable(x) && E.lib.isAttr(x, 'WATER')),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WATER monster?', E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => ssable(x) && E.lib.isAttr(x, 'WATER')); if (!cs.length || freeM(g, p) < 0) return;
         const [x] = yield* pick(g, p, 'Special Summon which WATER monster?', cs, 1, 1, 'good');
         if (x && ss(g, p, x, 'atk') && onField(c) && faceUp(c)) { x.flags.f13eria = c.u; c.flags.f13eriaKids = [...(c.flags.f13eriaKids || []), x.u]; } } },
@@ -263,8 +263,8 @@ E.addScripts({
     res: function* (g, c, p, L2) { const xs = live(L2); for (const t of xs) move(g, t, 'hand', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.map(x => D(x).n).join(', ')} returned to the hand.`); } }] },
   'Red-Eyes Black Metal Dragon': { effs: [lockEff, markProper, metalSummon] },
   'Red-Eyes Darkness Dragon': {
-    proc: { label: 'Special Summon (Tribute Red-Eyes B. Dragon)', cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && isREBD(m)),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Red-Eyes B. Dragon?', monsOf(g, p).filter(m => faceUp(m) && isREBD(m)), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } } },
+    proc: { label: 'Special Summon (Tribute Red-Eyes B. Dragon)', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(m => faceUp(m) && isREBD(m)),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Red-Eyes B. Dragon?', E.lib.tribPool(g, p, { known: true }).filter(m => faceUp(m) && isREBD(m)), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } } },
     self: { atk: (g, c) => 300 * g.p[c.ctrl].gy.filter(x => isMon(x) && race(x) === 'Dragon').length },
     effs: [lockEff] },
   // PARTIAL: the 1-Tribute Summon is offered when you control a Zombie, but any monster can be Tributed and it can be Set.
@@ -278,8 +278,8 @@ E.addScripts({
   'Release from Stone': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].ban.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Rock' && !x.flags.faceDownBan),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which banished Rock monster?', g.p[p].ban.filter(x => isMon(x) && race(x) === 'Rock' && !x.flags.faceDownBan), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'ban' && onField(c) && ss(g, p, t, 'atk')) link(g, c, t); } }] },
-  'Release Restraint': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(m => named(m, 'Gearfried the Iron Knight')),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Gearfried the Iron Knight?', monsOf(g, p).filter(m => named(m, 'Gearfried the Iron Knight')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Gearfried the Iron Knight.`); } },
+  'Release Restraint': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(m => named(m, 'Gearfried the Iron Knight')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Gearfried the Iron Knight?', E.lib.tribPool(g, p, { known: true }).filter(m => named(m, 'Gearfried the Iron Knight')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Gearfried the Iron Knight.`); } },
     res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, 'Gearfried the Swordmaster')); if (!cs.length || freeM(g, p) < 0) { log(g, `${PN(g, p)} has no Gearfried the Swordmaster to summon.`); shuffleDeck(g, p); return; }
       const [x] = yield* pick(g, p, 'Special Summon which Gearfried the Swordmaster?', cs, 1, 1, 'good'); const fromDeck = x && x.zone === 'deck'; if (x) ss(g, p, x, 'atk'); if (fromDeck) shuffleDeck(g, p); } }] },
   'Release Restraint Wave': { effs: [{ type: 'act', tags: { destroy: 1 },

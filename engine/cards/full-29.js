@@ -348,7 +348,8 @@ E.addScripts({
     res: function* (g, c, p) { if (c.zone === 'hand') ss(g, p, c, 'atk'); } }] },
   // Counts your Standby Phases since it was activated; the send is a cost. (It may be sent the turn it was activated, for 0.)
   'Wave-Motion Cannon': { effs: [actNoop,
-    { type: 'trig', loc: 'st', res: noop, on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c)) addCtr(g, c, 'wave', 1); return false; } },
+    // a count of the Standby Phases passed (its text), not an effect: kept under Imperial Order (rule; 2026-11-28 audit, pass2 goat-03)
+    { type: 'trig', loc: 'st', rule: true, res: noop, on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c)) addCtr(g, c, 'wave', 1); return false; } },
     { type: 'ign', loc: 'st', label: 'Send it: 1000 damage per Standby Phase',
       cost: function* (g, c, p, L2) { L2.data.n = ctr(c, 'wave'); move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent Wave-Motion Cannon to the GY.`); },
       res: function* (g, c, p, L2) { if (L2.data.n > 0) damage(g, opp(p), 1000 * L2.data.n, { src: c, srcP: p }); else log(g, 'No Standby Phases have passed, so no damage.'); } }] },
@@ -418,10 +419,12 @@ E.addScripts({
       (g.f29ws || (g.f29ws = [])).push({ u: fu, turn }); g.seq++; log(g, `${D(T.c).n} is negated this turn.`); addRule(g, (g2, a) => a.type === 'activate' && a.c && a.c.u === fu && g2.turnNo === turn, { end: turn }); } }] },
   'Wynn the Wind Charmer': charmer('WIND'),
   'Xing Zhen Hu': {
-    cont: { forbid: (g, src, a) => a.type === 'activate' && (src.flags.xing || []).includes(a.c.u) && a.c.zone === 'st' },
-    effs: [{ type: 'act', cond: (g, c) => allField(g).filter(x => x !== c && x.zone === 'st' && x.pos === 'set').length >= 2,
-      target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target 2 Set Spell/Trap Cards', allField(g).filter(x => x !== c && x.zone === 'st' && x.pos === 'set'), 2, 2, 'bad'); },
-      res: function* (g, c, p, L2) { const ts = live(L2).filter(x => x.pos === 'set'); if (!onField(c) || !ts.length) return; c.flags.xing = ts.map(x => x.u); g.seq++; log(g, `${ts.length} Set card${ts.length > 1 ? 's' : ''} can't be activated.`); } }] },
+    // each locked card is remembered with its visit to the field (c.moved), so one returned to the hand and Set again is a new card; Set
+    // cards in the Field Zone count (findings goat-12; 2026-11-28 audit, E4c)
+    cont: { forbid: (g, src, a) => a.type === 'activate' && ['st', 'fz'].includes(a.c.zone) && (src.flags.xing || []).includes(a.c.u + ':' + a.c.moved) },
+    effs: [{ type: 'act', cond: (g, c) => allField(g).filter(x => x !== c && ['st', 'fz'].includes(x.zone) && x.pos === 'set').length >= 2,
+      target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target 2 Set Spell/Trap Cards', allField(g).filter(x => x !== c && ['st', 'fz'].includes(x.zone) && x.pos === 'set'), 2, 2, 'bad'); },
+      res: function* (g, c, p, L2) { const ts = live(L2).filter(x => x.pos === 'set'); if (!onField(c) || !ts.length) return; c.flags.xing = ts.map(x => x.u + ':' + x.moved); g.seq++; log(g, `${ts.length} Set card${ts.length > 1 ? 's' : ''} can't be activated.`); } }] },
   'XY-Dragon Cannon': xyzFusion(['X-Head Cannon', 'Y-Dragon Head'],
     xyzDestroy('Discard: destroy a face-up Spell/Trap', 'Destroy which face-up Spell/Trap?', (g, p) => stOf(g, opp(p)).filter(faceUp))),
   'XYZ-Dragon Cannon': xyzFusion(['X-Head Cannon', 'Y-Dragon Head', 'Z-Metal Tank'],

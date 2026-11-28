@@ -80,8 +80,8 @@ E.addScripts({
       log(g, `${PN(g, p)} added Neo Space from the ${from === 'deck' ? 'Deck' : 'GY'} to the hand.`); } }] },
   'Neo-Parshath, the Sky Paladin': {
     proc: { label: 'Special Summon (Tribute Airknight Parshath)',
-      cond: (g, c, p) => monsOf(g, p).some(x => named(x, 'Airknight Parshath')),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Airknight Parshath?', monsOf(g, p).filter(x => named(x, 'Airknight Parshath')), 1, 1, 'cost');
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => named(x, 'Airknight Parshath')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Airknight Parshath?', E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Airknight Parshath')), 1, 1, 'cost');
         if (x) { move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Airknight Parshath.`); } } },
     self: { piercing: true,
       atk: (g, c) => { const me = g.p[c.ctrl].lp, them = g.p[opp(c.ctrl)].lp; return sanctuary(g) && me > them ? me - them : 0; },
@@ -121,8 +121,8 @@ E.addScripts({
       const xs = yield* pick(g, p, `Destroy ${n} Spell/Trap card${n > 1 ? 's' : ''}`, cs, n, n, 'bad'); destroy(g, xs, { by: p, src: c }); } }] },
   // Rose Bud leaves the field first, so full-07.js's Poison Rose lock (only with a Rose Bud) lets the summon through.
   'Rose Bud': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => named(x, 'Elemental HERO Knospe')) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Elemental HERO Poison Rose')),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Elemental HERO Knospe?', monsOf(g, p).filter(x => named(x, 'Elemental HERO Knospe')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Elemental HERO Knospe.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => named(x, 'Elemental HERO Knospe')) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Elemental HERO Poison Rose')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Elemental HERO Knospe?', E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Elemental HERO Knospe')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Elemental HERO Knospe.`); } },
     res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, 'Elemental HERO Poison Rose')); if (!cs.length || freeM(g, p) < 0) return;
       const [x] = yield* pick(g, p, 'Special Summon which Elemental HERO Poison Rose?', cs, 1, 1, 'good'); if (!x) return;
       const fromDeck = x.zone === 'deck'; if (onField(c)) move(g, c, 'gy', { reason: 'rule' }); ss(g, p, x, 'atk'); if (fromDeck) shuffleDeck(g, p); } }] },
@@ -201,8 +201,8 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && destroy(g, [t], { by: p, src: c }).length) damage(g, opp(p), 300 * L2.data.lv, { src: c, srcP: p });
       if (onField(c)) move(g, c, 'gy', { reason: 'rule' }); } }] },
   'Psi-Impulse': { effs: [{ type: 'act',
-    cond: (g, c, p) => monsOf(g, p).some(isPsy) && g.p[opp(p)].hand.length > 0 && g.p[opp(p)].deck.length >= 3,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Psychic monster?', monsOf(g, p).filter(isPsy), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(isPsy) && g.p[opp(p)].hand.length > 0 && g.p[opp(p)].deck.length >= 3,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Psychic monster?', E.lib.tribPool(g, p, { known: true }).filter(isPsy), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand.slice(); if (!h.length) return;
       for (const x of h) move(g, x, 'deck', { reason: 'effect', by: p }); log(g, `${PN(g, o)} shuffled ${h.length} card${h.length > 1 ? 's' : ''} from the hand into the Deck.`); draw(g, o, 3); } }] },
   'Psi-Station': { effs: [actNoop, { type: 'trig', loc: 'st', when: true, label: 'Pay 500: +1 Level and +300 ATK',
@@ -248,8 +248,8 @@ E.addScripts({
     // keeps the 2 attacks up every turn while that monster stays face-up (the flag goes when it leaves the field)
     { type: 'trig', loc: 'any', res: noop, on: (g, ev) => { if (ev.type === 'phase') for (const x of fieldMons(g)) if (x.flags.f33snail && faceUp(x)) { x.flags.maxAttacks = 2; x.flags.maxAttacksTurn = g.turnNo; } return false; } }] },
   'Psychic Soul': { effs: [{ type: 'act',
-    cond: (g, c, p) => monsOf(g, p).some(isPsy),
-    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which Psychic monster?', monsOf(g, p).filter(isPsy), 1, 1, 'cost'); if (!x) return; L2.data.lv = lv(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(isPsy),
+    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which Psychic monster?', E.lib.tribPool(g, p, { known: true }).filter(isPsy), 1, 1, 'cost'); if (!x) return; L2.data.lv = lv(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     res: function* (g, c, p, L2) { if (L2.data.lv) gain(g, p, 300 * L2.data.lv); } }] },
   'Psychic Sword': { cont: { atk: (g, src, m) => { if (src.equipTo !== m.u) return 0; const me = g.p[src.ctrl].lp, them = g.p[opp(src.ctrl)].lp; return me < them ? Math.min(2000, them - me) : 0; } },
     effs: [equipAct(isPsy, 'Equip to which Psychic monster?')] },

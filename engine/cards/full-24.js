@@ -31,7 +31,7 @@ const flipDown = { type: 'ign', opt: true, label: 'Flip it face-down',
   cond: (g, c) => c.pos !== 'set',
   res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; setFaceDown(g, c); c.posChanged = true; armMSG(g, c); } };
 function discardRandom(g, p, by) { const h = g.p[p].hand; if (!h.length) return null; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard', by }); log(g, `${PN(g, p)} discarded ${name(x)} at random.`); return x; }
-function* tributeCost(g, p, text, filter = () => true) { const [x] = yield* pick(g, p, text, monsOf(g, p).filter(filter), 1, 1, 'cost'); if (!x) return null; const nm = shownName(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); return x; }
+function* tributeCost(g, p, text, filter) { const [x] = yield* pick(g, p, text, filter ? E.lib.tribPool(g, p, { known: true }).filter(filter) : E.lib.tribPool(g, p), 1, 1, 'cost'); if (!x) return null; const nm = shownName(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); return x; }
 // Both players take damage at the same time (Ring of Destruction style): lower the opponent's LP first, then damage() checks both.
 function bothDamage(g, p, n, src) { L.damageMany(g, [[opp(p), n], [p, n]], { src, srcP: p }); }
 // Equip Spells
@@ -274,7 +274,7 @@ E.addScripts({
       let k = 0; for (const x of xs) { if (freeST(g, p) < 0) break; move(g, x, 'st', { ctrl: p, pos: 'set', reason: 'set' }); x.turnIn = g.turnNo - 1; k++; }
       if (k) log(g, `${PN(g, p)} Set ${k === 1 ? 'a Trap' : k + ' Traps'} from the hand. They can be activated this turn.`); } }] },
   'Man-Thro\' Tro\'': { effs: [{ type: 'ign', label: 'Tribute a Normal Monster: 800 damage',
-    cond: (g, c, p) => monsOf(g, p).some(x => D(x).k === 'normal'),
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => D(x).k === 'normal'),
     cost: function* (g, c, p) { yield* tributeCost(g, p, 'Tribute 1 Normal Monster', x => D(x).k === 'normal'); },
     res: function* (g, c, p) { damage(g, opp(p), 800, { src: c, srcP: p }); } }] },
   'Manga Ryu-Ran': toon(2),
@@ -299,7 +299,7 @@ E.addScripts({
     cost: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Maryokutai.`); },
     res: function* (g, c, p, L2) { const t = L2.data.L; if (!t || t.negated) return; t.negBy = p; negate(g, t, true); } }] },
   'Mass Driver': { effs: [{ type: 'act', res: noop },
-    { type: 'ign', loc: 'st', label: 'Tribute: 400 damage', cond: (g, c, p) => monsOf(g, p).length > 0,
+    { type: 'ign', loc: 'st', label: 'Tribute: 400 damage', cond: (g, c, p) => E.lib.tribPool(g, p).length > 0,
       cost: function* (g, c, p) { yield* tributeCost(g, p, 'Tribute 1 monster'); },
       res: function* (g, c, p) { damage(g, opp(p), 400, { src: c, srcP: p }); } }] },
   // Control can't switch while it is face-up: it goes back to the player who controlled it when it was face-up.
@@ -312,8 +312,8 @@ E.addScripts({
       return false; } }] },
   'Mazera DeVille': {
     proc: { label: 'Special Summon (Tribute Warrior of Zera, Pandemonium)',
-      cond: (g, c, p) => stOnField(g).some(x => faceUp(x) && named(x, 'Pandemonium')) && monsOf(g, p).some(m => faceUp(m) && named(m, 'Warrior of Zera')),
-      cost: function* (g, c, p, grp) { const [m] = yield* pick(g, p, 'Tribute which Warrior of Zera?', monsOf(g, p).filter(m => faceUp(m) && named(m, 'Warrior of Zera')), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Warrior of Zera.`); } } },
+      cond: (g, c, p) => stOnField(g).some(x => faceUp(x) && named(x, 'Pandemonium')) && E.lib.tribPool(g, p, { known: true }).some(m => faceUp(m) && named(m, 'Warrior of Zera')),
+      cost: function* (g, c, p, grp) { const [m] = yield* pick(g, p, 'Tribute which Warrior of Zera?', E.lib.tribPool(g, p, { known: true }).filter(m => faceUp(m) && named(m, 'Warrior of Zera')), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Warrior of Zera.`); } } },
     effs: [lockInstall, { type: 'trig', mand: true, label: 'Your opponent discards 3 random cards',
       on: (g, ev, c) => evSummoned(ev, c, ['special']),
       cond: (g, c, p) => stOf(g, p).some(x => faceUp(x) && named(x, 'Pandemonium')),

@@ -96,8 +96,8 @@ const heliosRevive = bonus => [
     cond: (g, c, p) => freeM(g, p) >= 0,
     res: function* (g, c, p) { if (c.zone === 'gy' && ss(g, p, c)) { addMod(g, c, { atk: bonus, def: bonus, own: true }); log(g, `${name(c)} gained ${bonus} ATK and DEF.`); } } }];
 const heliosProc = need => ({ label: `Special Summon (Tribute ${need})`,
-  cond: (g, c, p) => monsOf(g, p).some(x => named(x, need)),
-  cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, `Tribute which ${need}?`, monsOf(g, p).filter(x => named(x, need)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${need}.`); } });
+  cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => named(x, need)),
+  cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, `Tribute which ${need}?`, E.lib.tribPool(g, p, { known: true }).filter(x => named(x, need)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${need}.`); } });
 // Majestic Synchros: "Majestic Dragon" + the named Synchro + 1 non-Tuner
 function majMats(g, p, sx, need) {
   const ms = monsOf(g, p).filter(faceUp), out = [];
@@ -173,8 +173,8 @@ E.addScripts({
     cond: (g, c, p) => g.p[p].deck.length >= 2 && stOf(g, p).some(x => x !== c && faceUp(x) && isSpell(x) && /Bamboo Sword/.test(name(x)) && (D(x).sub === 'Equip' || x.equipTo)),
     res: function* (g, c, p) { draw(g, p, 2); } }] },
   'Golden Flying Fish': { effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Tribute a Fish: destroy a card',
-    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && race(x) === 'Fish') && allField(g).length > 1,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Fish monster?', monsOf(g, p).filter(x => x !== c && race(x) === 'Fish'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && race(x) === 'Fish') && allField(g).length > 1,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Fish monster?', E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && race(x) === 'Fish'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which card?', allField(g), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
   'Golden Homunculus': { self: { atk: (g, c) => 300 * g.p[c.ctrl].ban.length, def: (g, c) => 300 * g.p[c.ctrl].ban.length }, effs: [] },
@@ -338,8 +338,8 @@ E.addScripts({
       res: function* (g, c, p) { if (!trapMonster(g, c, p, { atk: 1000, def: 1000, lv: 4 })) return;
         const u = c.u; addRule(g, (g2, a) => (a.type === 'ns' || a.type === 'ss') && a.p === p && (!a.c || a.c.u !== u), { end: g.turnNo }); } },
     { type: 'ign', opt: true, label: 'Tribute a Machine: gain its ATK',
-      cond: (g, c, p) => c.zone === 'm' && monsOf(g, p).some(x => x !== c && race(x) === 'Machine'),
-      cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which Machine monster?', monsOf(g, p).filter(x => x !== c && race(x) === 'Machine'), 1, 1, 'cost'); L2.data.a = atk(g, x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+      cond: (g, c, p) => c.zone === 'm' && E.lib.tribPool(g, p, { known: true }).some(x => x !== c && race(x) === 'Machine'),
+      cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which Machine monster?', E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && race(x) === 'Machine'), 1, 1, 'cost'); L2.data.a = atk(g, x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g, c, p, L2) { if (onField(c) && faceUp(c) && c.zone === 'm') { addMod(g, c, { atk: L2.data.a, end: true, own: true }); log(g, `${name(c)} gained ${L2.data.a} ATK.`); } } }] },
 
   /* ===== Majestic ===== */
@@ -438,8 +438,8 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Spell or Trap Card?', stOnField(g), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
   'Morphtronic Datatron': { effs: [
-    { type: 'ign', opt: true, label: 'Tribute a monster: 600 damage', cond: (g, c, p) => c.pos === 'atk' && monsOf(g, p).length > 0,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+    { type: 'ign', opt: true, label: 'Tribute a monster: 600 damage', cond: (g, c, p) => c.pos === 'atk' && E.lib.tribPool(g, p).length > 0,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g, c, p) { damage(g, opp(p), 600, { src: c, srcP: p }); } },
     { type: 'ign', opt: true, label: '300 damage', cond: (g, c) => c.pos === 'def',
       res: function* (g, c, p) { damage(g, opp(p), 300, { src: c, srcP: p }); } }] },

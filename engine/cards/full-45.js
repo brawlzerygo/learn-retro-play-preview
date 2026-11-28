@@ -163,7 +163,7 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.destroyed && ev.prevCtrl === c.ctrl && !!ev.snap && ev.snap.race === 'Psychic' && !!ev.killer && !!g.battle && ev.killer === g.battle.a && ev.killer.ctrl !== c.ctrl,
     cond: (g, c, p, x) => !!x.ev && !!x.ev.killer && onField(x.ev.killer),
     target: function* (g, c, p, L2) { L2.t = [L2.ev.killer]; },
-    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; const a = faceUp(t) ? stat(g, t, 'atk') : 0; if (destroy(g, [t], { by: p, src: c }).length) gain(g, p, a); } })] },
+    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; const a = faceUp(t) ? stat(g, t, 'atk') : 0; if (destroy(g, [t], { by: p, src: c }).length) gain(g, p, a, { same: true }); } })] },
   // Paying 800 is the cost. Once per turn.
   'Teleport': { effs: [actNoop,
     { type: 'ign', loc: 'st', opt: true, tags: { ss: 1 }, label: 'Pay 800: Special Summon a Psychic',
@@ -410,8 +410,8 @@ E.addScripts({
   // Tributing a Warrior (face-down or a Token too) Special Summons it with the Warrior's original ATK added.
   'Turret Warrior': {
     self: { atk: (g, c) => c.flags.f45tur || 0 },
-    proc: { label: 'Special Summon (Tribute a Warrior)', cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Warrior' && !E.lib.noTribCost(x)),
-      cost: function* (g, c, p, grp) { const [t] = yield* pick(g, p, 'Tribute which Warrior?', monsOf(g, p).filter(x => race(x) === 'Warrior' && !E.lib.noTribCost(x)), 1, 1, 'cost'); if (!t) return;
+    proc: { label: 'Special Summon (Tribute a Warrior)', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => race(x) === 'Warrior' && !E.lib.noTribCost(x)),
+      cost: function* (g, c, p, grp) { const [t] = yield* pick(g, p, 'Tribute which Warrior?', E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Warrior' && !E.lib.noTribCost(x)), 1, 1, 'cost'); if (!t) return;
         const a = t.flags.tokAtk != null ? t.flags.tokAtk : num(D(t).atk); move(g, t, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(t).n}.`); c.flags.f45tur = a; } } },
   'Twilight Rose Knight': {
     cont: { grant: (g, src, m, flag) => flag === 'noAttackTarget' && m.zone === 'm' && m.ctrl === src.ctrl && faceUp(m) && race(m) === 'Plant' && !negd(g, src),

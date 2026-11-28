@@ -84,7 +84,8 @@ function losesBattle(g, c, a, t) {
 }
 /* Fortune Lady Level up */
 const flLevelUp = (opt) => ({ type: 'trig', mand: true, opt, label: 'Level up', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c) && lv(c) < 12,   // at Level 12 nothing happens (max. 12)
-  res: function* (g, c) { if (onField(c) && faceUp(c) && lv(c) < 12) { c.flags.lv = lv(c) + 1; log(g, `${name(c)} is now Level ${lv(c)}.`); } } });
+  // a Level mod of its own effect (own: dropped for good once it is negated, like its own ATK gains; 2026-11-28 audit, E4c)
+  res: function* (g, c) { if (onField(c) && faceUp(c) && lv(c) < 12) { L.addMod(g, c, { lvd: 1, own: true }); g.seq++; log(g, `${name(c)} is now Level ${lv(c)}.`); } } });
 // a Special Summoned monster: Tokens are always Special Summoned (E4: Koa'ki Meiru Tornado)
 const ssed = x => ['special', 'synchro', 'fusion', 'ritual'].includes(x.summonType) || D(x).k === 'token';
 const flStats = n => ({ atk: (g, c) => lv(c) * n, def: (g, c) => lv(c) * n });
@@ -113,8 +114,8 @@ E.addScripts({
     } }] },
   'Elemental HERO Terra Firma': { mats: [x => D(x).n === 'Elemental HERO Ocean', x => D(x).n === 'Elemental HERO Woodsman'],
     effs: [{ type: 'ign', label: 'Tribute a HERO: gain its ATK',
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && /^Elemental HERO/.test(name(x))),
-      cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which Elemental HERO?', monsOf(g, p).filter(x => x !== c && faceUp(x) && /^Elemental HERO/.test(name(x))), 1, 1, 'cost'); L2.data.a = atk(g, x); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && faceUp(x) && /^Elemental HERO/.test(name(x))),
+      cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which Elemental HERO?', E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && faceUp(x) && /^Elemental HERO/.test(name(x))), 1, 1, 'cost'); L2.data.a = atk(g, x); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: L2.data.a, end: true, own: true }); log(g, `${name(c)} gained ${L2.data.a} ATK.`); } } }] },
   // PARTIAL: original ATK is set by Dark Calling only, and stays while its effects are negated.
   'Evil HERO Dark Gaia': { mats: [() => false, () => false],
@@ -165,7 +166,7 @@ E.addScripts({
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isEI),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Earthbound Immortal?', g.p[p].gy.filter(isEI), 1, 1, 'good'); },
     // its "no battle damage from attacks involving it" can only matter on this turn, when it can't attack
-    res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t)) addRule(g, a => a.type === 'attack' && a.c === t, { end: g.turnNo }); } }] },
+    res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t)) addRule(g, (g2, a) => a.type === 'attack' && a.c === t, { end: g.turnNo }); } }] },
   'Earthbound Wave': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p, x) => spellTrapAct(x.top) && x.top.p !== p && !x.top.negated && monsOf(g, p).some(m => faceUp(m) && isEI(m)),
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
@@ -246,8 +247,8 @@ E.addScripts({
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && E.lib.isAttr(x, 'WIND') && rawAtk(x) <= 1500),
     res: function* (g, c, p) { const [x] = yield* pick(g, p, 'Special Summon a WIND monster with 1500 or less ATK', g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND') && rawAtk(x) <= 1500), 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   'Bee List Soldier': { effs: [{ type: 'ign', label: 'Tribute 2 Insects: draw 2',
-    cond: (g, c, p) => g.p[p].deck.length >= 2 && monsOf(g, p).some(x => x !== c && faceUp(x) && race(x) === 'Insect' && D(x).n !== 'Bee List Soldier'),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which other Insect?', monsOf(g, p).filter(x => x !== c && faceUp(x) && race(x) === 'Insect' && D(x).n !== 'Bee List Soldier'), 1, 1, 'cost'); move(g, c, 'gy', { reason: 'cost' }); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed Bee List Soldier and ${D(x).n}.`); },
+    cond: (g, c, p) => g.p[p].deck.length >= 2 && E.lib.tribPool(g, p, { known: true }).some(x => x !== c && faceUp(x) && race(x) === 'Insect' && D(x).n !== 'Bee List Soldier'),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which other Insect?', E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && faceUp(x) && race(x) === 'Insect' && D(x).n !== 'Bee List Soldier'), 1, 1, 'cost'); move(g, c, 'gy', { reason: 'cost' }); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed Bee List Soldier and ${D(x).n}.`); },
     res: function* (g, c, p) { draw(g, p, 2); } }] },
   'Arsenal Bug': { effs: [], self: { atk: (g, c) => monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && race(x) === 'Insect') ? 0 : -1000,
     def: (g, c) => monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && race(x) === 'Insect') ? 0 : -1000 } },
@@ -320,8 +321,8 @@ E.addScripts({
   // Summon). ENGINE: a hook for alternative Tribute counts.
   "Koa'ki Meiru Rooklord": {
     proc: { label: "Tribute Summon (Tribute 1 Koa'ki Meiru)", how: 'tribute',
-      cond: (g, c, p) => g.ns[p] < 1 && !g.noSummon[p] && monsOf(g, p).some(isKMMon) && !L.forbid(g, { type: 'ns', c, p }),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, "Tribute which Koa'ki Meiru monster?", monsOf(g, p).filter(isKMMon), 1, 1, 'cost'); g.ns[p]++; move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+      cond: (g, c, p) => g.ns[p] < 1 && !g.noSummon[p] && E.lib.tribPool(g, p, { known: true }).some(isKMMon) && !L.forbid(g, { type: 'ns', c, p }),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, "Tribute which Koa'ki Meiru monster?", E.lib.tribPool(g, p, { known: true }).filter(isKMMon), 1, 1, 'cost'); g.ns[p]++; move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     effs: [maint('Reveal a Warrior monster', x => isMon(x) && race(x) === 'Warrior', ICsend),
       { type: 'trig', when: true, tags: { destroy: 1 }, label: 'Destroy up to 2 cards',
         on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute']),

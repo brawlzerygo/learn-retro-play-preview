@@ -248,8 +248,8 @@ E.addScripts({
   // Special Summoned from the hand by Tributing 1 Ocean's Keeper. ENGINE: no revealed-hand state, so the opponent's hand
   // is shown in the log when this card is summoned and at the start of each of your turns.
   'Thousand-Eyes Jellyfish': {
-    proc: { label: "Special Summon (Tribute Ocean's Keeper)", cond: (g, c, p) => monsOf(g, p).some(x => named(x, "Ocean's Keeper")),
-      cost: function* (g, c, p, grp) { const ks = monsOf(g, p).filter(x => named(x, "Ocean's Keeper")); const [x] = ks.length > 1 ? yield* pick(g, p, "Tribute which Ocean's Keeper?", ks, 1, 1, 'cost') : ks;
+    proc: { label: "Special Summon (Tribute Ocean's Keeper)", cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => named(x, "Ocean's Keeper")),
+      cost: function* (g, c, p, grp) { const ks = E.lib.tribPool(g, p, { known: true }).filter(x => named(x, "Ocean's Keeper")); const [x] = ks.length > 1 ? yield* pick(g, p, "Tribute which Ocean's Keeper?", ks, 1, 1, 'cost') : ks;
         move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Ocean's Keeper.`); } },
     effs: [lockEff, { type: 'trig', res: noop, on: (g, ev, c) => {
       if (faceUp(c) && (evSummoned(ev, c) || (ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl))) { const h = g.p[opp(c.ctrl)].hand; log(g, `${PN(g, opp(c.ctrl))}'s revealed hand: ${h.length ? h.map(x => D(x).n).join(', ') : 'empty'}.`); }
@@ -304,9 +304,9 @@ E.addScripts({
   'Time Passage': { effs: [
     { type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && /^Fortune Lady/.test(name(x))),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Raise the Level of which Fortune Lady?', monsOf(g, p).filter(x => faceUp(x) && /^Fortune Lady/.test(name(x))), 1, 1, 'good'); },
-      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; t.flags.lv = lv(t) + 3; g.seq++; (g.f17tp = g.f17tp || []).push({ u: t.u, turn: g.turnNo }); log(g, `${name(t)} is now Level ${lv(t)}.`); } },
+      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; E.lib.addMod(g, t, { lvd: 3, end: true, tp17: true }); g.seq++;   /* a Level mod, so it stacks with Fortune Ladies' own (E4c) */ (g.f17tp = g.f17tp || []).push({ u: t.u, turn: g.turnNo }); log(g, `${name(t)} is now Level ${lv(t)}.`); } },
     { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => {
-      if (ev.type === 'phase' && ev.ph === 'end' && g.f17tp && g.f17tp.length) { for (const e of g.f17tp.filter(e => e.turn <= g.turnNo)) { const m = fieldMons(g).find(x => x.u === e.u); if (m && m.flags.lv) { m.flags.lv = Math.max(1, m.flags.lv - 3); g.seq++; log(g, `${name(m)} is Level ${lv(m)} again.`); } } g.f17tp = g.f17tp.filter(e => e.turn > g.turnNo); }
+      if (ev.type === 'phase' && ev.ph === 'end' && g.f17tp && g.f17tp.length) { for (const e of g.f17tp.filter(e => e.turn <= g.turnNo)) { const m = fieldMons(g).find(x => x.u === e.u); if (m && m.mods.some(x => x.tp17)) { m.mods = m.mods.filter(x => !x.tp17); g.seq++; log(g, `${name(m)} is Level ${lv(m)} again.`); } } g.f17tp = g.f17tp.filter(e => e.turn > g.turnNo); }
       return false; } }] },
   // Ported from classic-5.js.
   'Time Seal': { effs: [{ type: 'act', res: function* (g, c, p) { const o = opp(p), when = g.tp === o ? g.turnNo + 2 : g.turnNo + 1;

@@ -14,16 +14,18 @@ const { tgt, move, name, isSpell, log, PN, evSummoned } = L;
 E.addScripts({
   // Kept. 2005: "When this card is Normal or Special Summoned, you can add 1 Spell from your GY to your hand during the End Phase.
   // When this card destroys a monster by battle, remove that monster from play. If this card would leave the field, remove it from play instead."
-  // (The Spell-return timing, a summon trigger per the archive errata, is Group E4's: findings goat-03 (1).)
   'Dark Magician of Chaos': { effs: [
-    { type: 'trig', label: 'Add a Spell from the GY', on: (g, ev, c) => { if (evSummoned(ev, c) && ev.how !== 'flip') { c.flags.dmoc = g.turnNo; c.flags.banishOnLeave = true; } if (ev.type === 'flip' && ev.c === c) c.flags.banishOnLeave = true; return ev.type === 'phase' && ev.ph === 'end' && c.flags.dmoc === g.turnNo; },
+    // a summon trigger (archive errata and rulings, findings goat-03 (1); 2026-11-28 audit, E4c): "When this card is Normal Summoned or
+    // Special Summoned, you can add 1 Spell Card from your Graveyard to your hand"; it can miss the timing; the Spell is a target
+    { type: 'trig', when: true, label: 'Add a Spell from the GY', on: (g, ev, c) => evSummoned(ev, c) && ev.how !== 'flip',
       cond: (g, c, p) => g.p[p].gy.some(isSpell),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which Spell from your GY to your hand?', g.p[p].gy.filter(isSpell), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } },
   ],
     // 2005 text: "A monster that is destroyed by this monster as a result of battle is removed from play instead of going to the Graveyard":
     // a replacement (engine damageStep, self.battleBanish), so it never reaches the GY (2026-11-28 audit: Sangan searched; equal ATK, both banished).
-    // full-05.js follows Edison's text (banish from the field after damage calculation).
-    self: { battleBanish: true } },
+    // full-05.js follows Edison's text (banish from the field after damage calculation). "If this card would leave the field, remove it
+    // from play instead": self.banishLeave, read in move() while it is face-up (not stopped by Skill Drain, ruling 18).
+    self: { battleBanish: true, banishLeave: true } },
 }, 'goat');
 })();

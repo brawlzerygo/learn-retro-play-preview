@@ -183,8 +183,9 @@ E.addScripts({
   // chain has resolved. Other equips (Union, monster equips) are caught by comparing the equips at each event.
   'Gearfried the Swordmaster': { effs: [lockInstall, nomiMark,
     { type: 'trig', mand: true, ds: true, tags: { destroy: 1 }, label: 'Destroy a monster',
-      on: (g, ev, c) => { if (ev.type === 'move' && ev.to === 'st' && ev.reason === 'activate' && isSpell(ev.c) && D(ev.c).sub === 'Equip') return true;
-        const now = equipsOn(g, c).map(x => x.u), seen = c.flags.f22eq || []; c.flags.f22eq = now; if (now.some(u => !seen.includes(u))) { c.flags.f22due = true; return true; } return false; },
+      // when it becomes equipped (the engine's equip event), not when an Equip Spell is activated: after Snatch Steal the new controller
+      // uses it (pass2 goat-01, Snatch Steal ruling 2), and a negated Equip Spell triggers nothing (2026-11-28 audit, E4c)
+      on: (g, ev, c) => { const now = equipsOn(g, c).map(x => x.u), seen = c.flags.f22eq || []; c.flags.f22eq = now; if (now.some(u => !seen.includes(u))) { c.flags.f22due = true; return true; } return false; },
       cond: (g, c, p) => monsOf(g, opp(p)).length > 0 && (!!c.flags.f22due || equipsOn(g, c).some(x => !(c.flags.f22eq || []).includes(x.u))),
       target: function* (g, c, p, L2) { c.flags.f22due = false; c.flags.f22eq = equipsOn(g, c).map(x => x.u); yield* tgt(g, p, L2, 'Destroy which of their monsters?', monsOf(g, opp(p)), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
@@ -237,9 +238,10 @@ E.addScripts({
     effs: [{ type: 'ign', opt: true, label: 'Pay 800: attack directly', cond: (g, c, p) => g.phase === 'main1' && E.lib.canPay(g, p, 800),
       cost: function* (g, c, p) { pay(g, p, 800); },
       res: function* (g, c) { if (onField(c)) { c.flags.gearDirect = g.turnNo; log(g, `${name(c)} can attack directly this turn.`); } } }] },
-  // Mandatory. PARTIAL: an equip that lands without an event (an Equip Spell resolving) is caught at the next game event.
+  // Mandatory. Equips through equip() are destroyed at once (self.destroyEquips); the trigger below catches any other way an Equip lands.
   // a continuous effect, no chain (goat-09: Netrep, Trap Hole and Snatch Steal Q&A; EDOPro): the Equip Card is destroyed at once
-  'Gearfried the Iron Knight': { effs: [{ type: 'trig', mand: true, noChain: true, tags: { destroy: 1 }, label: 'Destroy the Equip Card',
+  'Gearfried the Iron Knight': { self: { destroyEquips: true },   // engine equip(): destroyed the moment it is equipped, even inside a chain
+    effs: [{ type: 'trig', mand: true, noChain: true, tags: { destroy: 1 }, label: 'Destroy the Equip Card',
     on: (g, ev, c) => equipsOn(g, c).length > 0 || (ev.type === 'move' && ev.to === 'st' && ev.reason === 'activate' && isSpell(ev.c) && D(ev.c).sub === 'Equip'),
     cond: (g, c) => equipsOn(g, c).length > 0,
     res: function* (g, c, p) { if (onField(c) && faceUp(c)) destroy(g, equipsOn(g, c), { by: p, src: c }); } }] },
@@ -301,8 +303,8 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return up to 3 monsters to the hand', fieldMons(g), 1, 3, 'bad'); },
     res: function* (g, c, p, L2) { const ts = live(L2); for (const t of ts) move(g, t, 'hand', { reason: 'effect', by: p }); if (ts.length) log(g, `${ts.length} monster${ts.length > 1 ? 's' : ''} returned to the hand.`); } }] },
   'Hand of Nephthys': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Tribute 2: summon Sacred Phoenix',
-    cond: (g, c, p) => monsOf(g, p).some(x => x !== c) && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Sacred Phoenix of Nephthys') && !forbid(g, { type: 'ss', c: x, p, how: 'special' })),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which other monster?', monsOf(g, p).filter(x => x !== c), 1, 1, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p).some(x => x !== c) && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Sacred Phoenix of Nephthys') && !forbid(g, { type: 'ss', c: x, p, how: 'special' })),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which other monster?', E.lib.tribPool(g, p).filter(x => x !== c), 1, 1, 'cost');
       move(g, c, 'gy', { reason: 'cost', by: p }); if (x) move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Hand of Nephthys${x ? ' and ' + (faceUp(x) || x.zone !== 'm' ? D(x).n : 'a face-down monster') : ''}.`); },
     res: function* (g, c, p) { yield* ssFrom(g, p, x => named(x, 'Sacred Phoenix of Nephthys'), 'Special Summon Sacred Phoenix of Nephthys', ['hand', 'deck']); } }] },
   'Hane-Hane': { effs: [{ type: 'trig', mand: true, faceDownOk: true, label: 'Return a monster to the hand', on: flipOn,
@@ -340,7 +342,7 @@ E.addScripts({
         if (i >= 0 && Z.some(z => z.p === ev.c.ctrl && z.i === i)) { const j = row.findIndex((x, k) => !x && !Z.some(z => z.p === ev.c.ctrl && z.i === k)); if (j >= 0) { row[i] = null; row[j] = ev.c; g.seq++; } }
         return false; } }] },
   "Gryphon's Feather Duster": { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => stOf(g, p).some(x => x !== c),
-    res: function* (g, c, p) { const n = destroy(g, stOf(g, p).filter(x => x !== c), { by: p, src: c }).length; if (n) gain(g, p, 500 * n); } }] },
+    res: function* (g, c, p) { const n = destroy(g, stOf(g, p).filter(x => x !== c), { by: p, src: c }).length; if (n) gain(g, p, 500 * n, { same: true }); } }] },
   // ATK ties: the activating player chooses (ruling: chosen at resolution).
   'Hammer Shot': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: g => fieldMons(g).some(x => x.pos === 'atk'),
     res: function* (g, c, p) { const ms = fieldMons(g).filter(x => x.pos === 'atk' && faceUp(x)); if (!ms.length) return; const top = Math.max(...ms.map(x => atk(g, x)));

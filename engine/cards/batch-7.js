@@ -137,8 +137,8 @@ E.addScripts({
   'Morphtronic Slingen': { // ● Defense Position: "you can destroy another Morphtronic monster you control instead" (replaceOther, 2026-11-28 audit)
     self: { replaceAsk: L.replaceOther((g, c) => monsOf(g, c.ctrl).filter(morphMon), 'Destroy another Morphtronic monster instead of %s?', 'Destroy which Morphtronic instead?', 'destroy', (g, c) => c.pos === 'def') },
     effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Tribute a Morphtronic: destroy a card',
-      cond: (g, c, p) => c.pos === 'atk' && monsOf(g, p).some(x => morphMon(x) && D(x).n !== 'Morphtronic Slingen') && allField(g).length > 1,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Morphtronic monster', monsOf(g, p).filter(x => morphMon(x) && D(x).n !== 'Morphtronic Slingen'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+      cond: (g, c, p) => c.pos === 'atk' && E.lib.tribPool(g, p, { known: true }).some(x => morphMon(x) && D(x).n !== 'Morphtronic Slingen') && allField(g).length > 1,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Morphtronic monster', E.lib.tribPool(g, p, { known: true }).filter(x => morphMon(x) && D(x).n !== 'Morphtronic Slingen'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       target: function* (g, c, p, L) { const cs = allField(g); if (cs.length) yield* tgt(g, p, L, 'Destroy which card?', cs, 1, 1, 'bad'); },
       res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'Machine Duplication': { effs: [{ type: 'act', tags: { ss: 1 },
@@ -197,10 +197,10 @@ E.addScripts({
         const xs = yield* pick(g, p, 'Reveal 3 Equip Spells from your Deck', cs, 3, 3, 'good'); log(g, `${PN(g, p)} revealed ${xs.map(name).join(', ')}.`);
         const x = xs[Math.floor(g.rnd() * xs.length)]; move(g, x, 'hand', { reason: 'effect' }); log(g, `${PN(g, opp(p))} picked one at random; ${PN(g, p)} added it to the hand.`); shuffleDeck(g, p); } }] },
   // Up to 2 of the opponent's empty Monster Zones are locked when it becomes face-up (the engine's cont.lockZones, as Ojama King; 2026-11-28
-  // audit, E4b: real zones, so a Fusion that frees zones works; none after a control change, site ruling 2). PARTIAL: picked automatically.
+  // audit, E4b: real zones, so a Fusion that frees zones works; none after a control change, site ruling 2), chosen by its controller (full-12 chooseKingZones).
   'Ojama Knight': { mats: [c => isOjama(c), c => isOjama(c)],
     cont: { lockZones: (g, src) => E.lib.kingZones(g, src, 2) },
-    effs: [{ type: 'trig', on: (g, ev, c) => { if (evSummoned(ev, c) || (ev.type === 'flip' && ev.c === c)) { c.flags.ojamaZones = null; const Z = E.lib.kingZones(g, c, 2); if (Z && Z.zs.length) log(g, `${PN(g, Z.p)}'s Monster Zones ${Z.zs.map(i => i + 1).join(', ')} can't be used.`); } return false; }, res: function* () {} }] },
+    effs: [{ type: 'trig', mand: true, noChain: true, label: "Choose up to 2 of the opponent's unused Monster Zones", on: (g, ev, c) => E.lib.kingZoneTrig(2).on(g, ev, c), res: function* (g, c) { yield* E.lib.kingZoneTrig(2).res(g, c); } }] },   // full-12's Ojama King step
   'Dragoness the Wicked Knight': { effs: [] },
 
   /* ----- Psychic ----- */
@@ -295,8 +295,8 @@ E.addScripts({
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Add which Six Samurai from your GY?', g.p[p].gy.filter(sixSam), 1, 1, 'good'); },
       res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } }] },
   'Hand of the Six Samurai': { effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Tribute a Six Samurai: destroy a monster',
-    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && sixSam(x)) && fieldMons(g).length >= 2,   // "another" face-up Six Samurai
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Six Samurai monster', monsOf(g, p).filter(x => sixSam(x)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && faceUp(x) && sixSam(x)) && fieldMons(g).length >= 2,   // "another" face-up Six Samurai
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Six Samurai monster', E.lib.tribPool(g, p, { known: true }).filter(x => sixSam(x)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     target: function* (g, c, p, L) { const cs = fieldMons(g); if (cs.length) yield* tgt(g, p, L, 'Destroy which monster?', cs, 1, 1, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'The Six Samurai - Irou': { self: { replaceAsk: samRepl }, effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos === 'set',
@@ -372,10 +372,13 @@ E.addScripts({
       if (L.data.mode === 0 && onField(c)) { c.flags.extraAttack = g.turnNo; log(g, 'Lord British Space Fighter can attack again.'); }
       if (L.data.mode === 1) destroy(g, live(L).filter(x => x.pos === 'set'), { by: p });
       if (L.data.mode === 2) tokens(g, p, { n: 'Multi Token', a: 'LIGHT', r: 'Machine', lv: 4, atk: 1200, def: 1200 }, 1, 'atk'); } }] },
-  'Creature Swap': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).length > 0 && monsOf(g, opp(p)).length > 0,
+  'Creature Swap': { effs: [{ type: 'act', cond: (g, c, p) => { const okC = x => E.format() !== 'goat' || !(faceUp(x) && E.lib.has(g, x, 'noCtrlSwitch')); return monsOf(g, p).some(okC) && monsOf(g, opp(p)).some(okC); },
     res: function* (g, c, p) { const o = opp(p); if (!monsOf(g, p).length || !monsOf(g, o).length) return;
-      const [a] = yield* pick(g, p, 'Give which of your monsters?', monsOf(g, p), 1, 1, 'cost');
-      const [b] = yield* pick(g, o, 'Give which of your monsters?', monsOf(g, o), 1, 1, 'cost');
+      // Goat (Netrep): a face-up monster whose control can't switch (Blindly Loyal Goblin) can't be chosen; Edison (site ruling): it can,
+      // and then neither switches (2026-11-28 audit, pass2 goat-04)
+      const okC = x => E.format() !== 'goat' || !(faceUp(x) && E.lib.has(g, x, 'noCtrlSwitch'));
+      const [a] = yield* pick(g, p, 'Give which of your monsters?', monsOf(g, p).filter(okC), 1, 1, 'cost');
+      const [b] = yield* pick(g, o, 'Give which of your monsters?', monsOf(g, o).filter(okC), 1, 1, 'cost');
       if (!a || !b || !onField(a) || !onField(b)) return;
       if ([a, b].some(x => faceUp(x) && E.lib.has(g, x, 'noCtrlSwitch'))) { log(g, 'Control of those monsters can\'t switch.'); return; }   // neither switches (E4)
       const ia = g.p[p].m.indexOf(a), ib = g.p[o].m.indexOf(b); g.p[p].m[ia] = b; g.p[o].m[ib] = a; a.ctrl = o; b.ctrl = p;
@@ -437,7 +440,7 @@ E.addScripts({
   'Fake Trap': { effs: [{ type: 'act',
     cond: (g, c, p, x) => { const top = x.top; if (!top || top.p === p || top.negated || !(top.tags && top.tags.destroy)) return false;
       const mine = stOf(g, p).filter(t => t !== c && isTrap(t)); if (!mine.length) return false;
-      return L.wouldDestroy(g, top).some(t => mine.includes(t)); },
+      return L.wouldDestroy(g, top, { ifResolves: true }).some(t => mine.includes(t)); },   // Blowback Dragon too (archive)
     target: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L) {
       const L2 = L.data.L, prot = stOf(g, p).filter(t => t !== c && isTrap(t) && t.zone === 'st'); if (!prot.length) return;
@@ -462,8 +465,8 @@ E.addScripts({
       res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   'X-Saber Galahad': { self: { atk: (g, c) => { const b = g.battle; if (!g.inDS || !b) return 0; if (b.a === c && b.t) return 300; if (b.t === c && b.a && b.a.ctrl !== c.ctrl) return -500; return 0; } },
     effs: [{ type: 'trig', label: 'Tribute a Saber: negate the attack', on: (g, ev, c) => ev.type === 'attack' && ev.t === c,
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && isMon(x) && /Saber/.test(name(x))),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Saber monster', monsOf(g, p).filter(x => x !== c && isMon(x) && /Saber/.test(name(x))), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && isMon(x) && /Saber/.test(name(x))),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Saber monster', E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && isMon(x) && /Saber/.test(name(x))), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g) { negateAttack(g); } }] },
   'XX-Saber Ragigura': { effs: [{ type: 'trig', when: true, on: (g, ev, c) => evSummoned(ev, c) && !['flip', 'gemini'].includes(ev.how),
     cond: (g, c, p) => g.p[p].gy.some(xSaber),

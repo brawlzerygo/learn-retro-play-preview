@@ -278,8 +278,8 @@ E.addScripts({
     res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t) && t.ctrl !== p && ['Machine', 'Dragon'].includes(race(t))) takeControl(g, p, t, true); } }] },
   'Eradicator Epidemic Virus': { effs: [
     { type: 'act', tags: { destroy: 1 },
-      cond: (g, c, p) => monsOf(g, p).some(x => E.lib.isAttr(x, 'DARK') && atk(g, x) >= 2500),
-      cost: function* (g, c, p, L) { const [x] = yield* pick(g, p, 'Tribute a DARK monster with 2500 or more ATK', monsOf(g, p).filter(x => E.lib.isAttr(x, 'DARK') && atk(g, x) >= 2500), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`);
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => E.lib.isAttr(x, 'DARK') && atk(g, x) >= 2500),
+      cost: function* (g, c, p, L) { const [x] = yield* pick(g, p, 'Tribute a DARK monster with 2500 or more ATK', E.lib.tribPool(g, p, { known: true }).filter(x => E.lib.isAttr(x, 'DARK') && atk(g, x) >= 2500), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`);
         L.data.kind = (yield* choose(g, p, 'Declare a card type', ['Spell Cards', 'Trap Cards'])) ? 'trap' : 'spell'; log(g, `${PN(g, p)} declared ${L.data.kind === 'spell' ? 'Spell' : 'Trap'} Cards.`); },
       res: function* (g, c, p, L) { const o = opp(p), kind = L.data.kind, is = x => D(x).k === kind;
         log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand: ${g.p[o].hand.map(x => D(x).n).join(', ') || 'no cards'}.`);
@@ -334,7 +334,8 @@ E.addScripts({
       { type: 'trig', loc: 'st', mand: true,
         on: (g, ev, c) => faceUp(c) && (ev.type === 'summon' || ev.type === 'flip' || (ev.type === 'move' && ev.to === 'm')) && warMixed(g),
         res: function* (g) { yield* warlords(g); } }],
-    cont: { forbid: (g, src, a) => { if (!['ns', 'ss'].includes(a.type) || !a.c || !isMon(a.c)) return false; const ts = new Set(monsOf(g, a.p).filter(faceUp).map(race)); if (ts.size !== 1) return false; if (a.type === 'ns' && tribFor(a.c) > 0) return false; return !ts.has(race(a.c)); } } },
+    // a per-Type lock, not a blanket "can't Special Summon": ssBlanket's stand-ins pass (tag outs, Test Tiger, Geartown stay on; pass2 edison-11)
+    cont: { forbid: (g, src, a) => { if (!['ns', 'ss'].includes(a.type) || !a.c || !isMon(a.c) || a.probe) return false; const ts = new Set(monsOf(g, a.p).filter(faceUp).map(race)); if (ts.size !== 1) return false; if (a.type === 'ns' && tribFor(a.c) > 0) return false; return !ts.has(race(a.c)); } } },
 
   /* ----- Machina Roid ----- */
   'Expressroid': { effs: [{ type: 'trig', when: true, label: 'Add 2 "roid" monsters',
@@ -463,8 +464,8 @@ E.addScripts({
     target: function* (g, c, p, L) { const [r] = yield* pick(g, p, 'Target which face-up Reptile you control?', monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Reptile'), 1, 1, 'cost'); const ts = yield* pick(g, p, 'Target which 2 cards your opponent controls?', fieldOf(g, opp(p)), 2, 2, 'bad'); L.t = [r, ...ts]; },
     res: function* (g, c, p, L) { if (live(L).length < 3) { log(g, 'A target left the field, so nothing happened.'); return; } destroy(g, L.t, { by: p, src: c }); } }] },
   'Planet Pollutant Virus': { effs: [
-    { type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => monsOf(g, p).some(x => /Alien/.test(D(x).n)),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute an Alien monster', monsOf(g, p).filter(x => /Alien/.test(D(x).n)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+    { type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => /Alien/.test(D(x).n)),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute an Alien monster', E.lib.tribPool(g, p, { known: true }).filter(x => /Alien/.test(D(x).n)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g, c, p) { destroy(g, monsOf(g, opp(p)).filter(x => faceUp(x) && !ctr(x, 'A')), { by: p, src: c }); g.ppv = g.ppv || {}; g.ppv[c.u] = { o: opp(p), until: thirdTurn(g, p) }; log(g, `${PN(g, opp(p))}'s monsters get an A-Counter when Summoned.`); } },
     // lingering: an A-Counter on each monster they Summon (no chain)
     { type: 'trig', loc: 'any', on: (g, ev, c) => { const r = g.ppv && g.ppv[c.u]; if (r && ev.type === 'summon' && ev.p === r.o && g.turnNo <= r.until) for (const m of ev.cs) if (onField(m) && faceUp(m)) addCtr(g, m, 'A', 1); return false; }, res: function* () {} }] },

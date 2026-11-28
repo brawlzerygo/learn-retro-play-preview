@@ -341,9 +341,11 @@ E.addScripts({
   'Skull Invitation': { effs: [
     { type: 'act', res: noop },
     { type: 'trig', loc: 'st', mand: true, label: '300 damage per card sent to the GY',
-      on: (g, ev, c) => { if (!faceUp(c) || ev.type !== 'move' || ev.to !== 'gy' || ev.c === c) return false; const s = c.flags.skull || (c.flags.skull = [0, 0]); s[ev.c.owner]++; return true; },
-      res: function* (g, c) { const s = c.flags.skull || [0, 0]; c.flags.skull = [0, 0];
-        for (const q of [g.tp, opp(g.tp)]) if (s[q]) damage(g, q, 300 * s[q], { src: c, srcP: c.ctrl }); } }] },
+      // counted per event group, each group its own application (Graceful Charity ruling 2: 600 for the 2 discards; the resolved Spell
+      // leaving at the end of the chain is a second application after them (ruling: "then you lose 600"); 2026-11-28 audit, pass2 goat-01)
+      on: (g, ev, c) => { if (!faceUp(c) || ev.type !== 'move' || ev.to !== 'gy' || ev.c === c) return false; const m = c.flags.skull && !Array.isArray(c.flags.skull) ? c.flags.skull : (c.flags.skull = {}); const k = ev.group + (ev.chainEnd ? ':end' : ''); const s = m[k] || (m[k] = [0, 0]); s[ev.c.owner]++; return true; },
+      res: function* (g, c, p, L2) { const m = c.flags.skull || {}, k = L2 && L2.ev ? L2.ev.group : null; if (k == null) return;
+        for (const key of [k, k + ':end']) { const s = m[key]; delete m[key]; if (s) for (const q of [g.tp, opp(g.tp)]) if (s[q]) damage(g, q, 300 * s[q], { src: c, srcP: c.ctrl }); } } }] },
   'Skull Knight': { effs: [] },
   'Skull Knight 2': skullKnight2,
   // A Spell Speed 2 effect of the face-up Trap; banishing the monsters is the cost.

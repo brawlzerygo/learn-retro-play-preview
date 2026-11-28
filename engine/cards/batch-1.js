@@ -18,7 +18,10 @@ const named = (c, n) => D(c).n === n;
 // Instant Fusion: a Level 5 or lower Fusion it can summon; not one that "can only be conducted with the above Fusion Material Monsters" (site ruling 1)
 const ifOk = (g, p, fx) => D(fx).k === 'fusion' && L.num(D(fx).lv) <= 5 && !/can only be (?:conducted|Fusion Summoned) with the above/i.test(D(fx).tx || '') && !L.forbid(g, { type: 'ss', c: fx, p, how: 'fusion' });
 // Phoenix Wing Wind Blast (and other "return a card" targets): a face-up Normal/Quick-Play Spell or Normal/Counter Trap is resolving or waiting to leave
-const pwwbOk = x => !(isST(x) && faceUp(x) && !L.isTrapMon(x) && !['Continuous', 'Equip', 'Field'].includes(D(x).sub));
+// only one on the chain or waiting to leave after it; a face-up Normal Spell that stays (Swords of Revealing Light) is a target (pass2 edison-05)
+// a Normal Monster in the GY, Gemini monsters included (Hero Blast archive; pass2 edison-07)
+const heroNormal = x => isMon(x) && (D(x).k === 'normal' || (L.isGemini(x) && x.zone === 'gy'));
+const pwwbOk = (g, x) => !(isST(x) && faceUp(x) && !L.isTrapMon(x) && !['Continuous', 'Equip', 'Field'].includes(D(x).sub) && (x.pendLeave || g.chain.some(l => l.c === x)));
 const upNamed = (g, n) => allField(g).filter(x => faceUp(x) && D(x).n === n);
 // a face-up Trap applies unless its effects are negated (Royal Decree, Jinzo, Trap Stun: the engine's negd, 2026-11-28 audit: Mask of Restrict
 // and Light-Imprisoning Mirror kept applying under Jinzo; two Royal Decrees: the one face-up first applies, engine negLive)
@@ -74,7 +77,7 @@ function hubInit(g) {
       if ((n === 'Five-Headed Dragon' || n === 'Elemental HERO Mariner') && a.how !== 'fusion') return true;
       if (n === 'Trident Dragion' && a.how !== 'synchro') return true;
     }
-    if (a.type === 'activate' && a.c.flags && a.c.flags.b1hades && a.c.zone === 'gy') return true;
+    // (a GY effect of a Ha Des-negated monster can be activated and resolves negated: engine activate's L.gyNegated; pass2 edison-06)
     return false;
   });
 }
@@ -90,7 +93,8 @@ function hub(g, ev) {
   if (ev.type === 'move' && ev.from === 'gy' && ev.c && ev.c.flags && ev.c.flags.b1hades) { delete ev.c.flags.b1hades; delete ev.c.flags.negated; }
   if (ev.type === 'move' && ev.battle && ev.to === 'gy' && ev.killer && race(ev.killer) === 'Zombie' && hades(ev.killer.ctrl) && ev.c.zone === 'gy' && D(ev.c).k !== 'normal') { ev.c.flags.negated = true; ev.c.flags.b1hades = true; }
   // Doomkaiser Dragon: the Zombie it summoned is destroyed when it leaves the field
-  if (ev.type === 'move' && ev.wasField && D(ev.c).n === 'Doomkaiser Dragon') for (const x of fieldMons(g)) if (x.flags.b1doom === ev.c.u) g.laterDestroy.push(x);
+  // the tie is kept on Doomkaiser too (flags.b1doomTie), so turning it face-down (setFaceDown clears its flags) ends it (EDOPro RESET_TURN_SET; pass2 edison-06)
+  if (ev.type === 'move' && ev.wasField && D(ev.c).n === 'Doomkaiser Dragon') for (const x of fieldMons(g)) if (x.flags.b1doom === ev.c.u && ev.snap && ev.snap.flags && (ev.snap.flags.b1doomTie || []).includes(x.u)) g.laterDestroy.push(x);
   // Super Rejuvenation: Dragons discarded or Tributed this turn
   if (ev.type === 'move' && ev.to === 'gy') {
     const fromHand = ev.from === 'hand' && ['discard', 'cost'].includes(ev.reason);
@@ -213,22 +217,22 @@ const S = {
   'Book of Life': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isZombie(x) && E.lib.ssable(g, p, x) && L.canTarget(g, x, { c, p })) && g.p[opp(p)].gy.some(x => isMon(x) && L.canTarget(g, x, { c, p })),
     target: function* (g, c, p, L2) { const [a] = yield* pick(g, p, 'Special Summon which Zombie from your GY?', g.p[p].gy.filter(x => isZombie(x) && L.canTarget(g, x, L2)), 1, 1, 'good'); const [b] = yield* pick(g, p, 'Banish which monster from their GY?', g.p[opp(p)].gy.filter(x => isMon(x) && L.canTarget(g, x, L2)), 1, 1, 'bad'); L2.t = [a, b].filter(Boolean); L2.data.a = a; L2.data.b = b; },
-    res: function* (g, c, p, L2) { const { a, b } = L2.data; if (a && a.zone === 'gy' && isZombie(a)) ss(g, p, a); if (b && b.zone === 'gy') { move(g, b, 'ban', { reason: 'effect', by: p }); log(g, `${name(b)} was banished.`); } } }] },
+    res: function* (g, c, p, L2) { const { a, b } = L2.data; if (a && a.zone === 'gy' && isZombie(a)) ss(g, p, a); if (b && b.zone === 'gy') { move(g, b, 'ban', { reason: 'effect', by: p }); if (b.zone === 'ban') log(g, `${name(b)} was banished.`); } } }] },
   'Foolish Burial': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.some(isMon),
     res: function* (g, c, p) { yield* search(g, p, isMon, 'Send a monster from your Deck to the GY', 'gy'); } }] },
   'Mind Control': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, opp(p)).length > 0 && freeM(g, p) >= 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Take control of which monster?', monsOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || t.ctrl === p) return; if (!takeControl(g, p, t, true)) return;
       t.flags.noTribute = true; t.flags.b1mc = g.turnNo; const u = t.u; addRule(g, (g2, a) => a.type === 'attack' && a.c.u === u, { end: g.turnNo }); } }, HOOK] },
-  'Phoenix Wing Wind Blast': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.length > 0 && fieldOf(g, opp(p)).some(pwwbOk),
+  'Phoenix Wing Wind Blast': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.length > 0 && fieldOf(g, opp(p)).some(x => pwwbOk(g, x)),
     cost: function* (g, c, p) { yield* discardN(g, p, 1); },
     // ruling 1 and archive: not a face-up Normal/Quick-Play Spell or Normal/Counter Trap (it is already resolving or waiting to leave)
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Put which card on top of the Deck?', fieldOf(g, opp(p)).filter(pwwbOk), 1, 1, 'bad'); },
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Put which card on top of the Deck?', fieldOf(g, opp(p)).filter(x => pwwbOk(g, x)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t) { move(g, t, 'deckTop', { reason: 'effect', by: p }); log(g, `${D(t).n} was put on top of the Deck.`); } } }] },
   'Doomkaiser Dragon': { hook: true, effs: [{ type: 'trig', when: true, tags: { ss: 1 }, on: (g, ev, c) => evSummoned(ev, c, ['special', 'synchro', 'fusion', 'ritual']),
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[opp(p)].gy.filter(x => E.lib.ssable(g, p, x)).some(isZombie),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Zombie from their GY?', g.p[opp(p)].gy.filter(isZombie), 1, 1, 'good'); },
-    res: function* (g, c, p, L2) { const t = L2.t[0]; if (!t || t.zone !== 'gy' || !isZombie(t)) return; if (ss(g, p, t, 'atk') && onField(c) && faceUp(c)) t.flags.b1doom = c.u; else if (!onField(c) && onField(t)) destroy(g, [t], { by: p }); } }] },
+    res: function* (g, c, p, L2) { const t = L2.t[0]; if (!t || t.zone !== 'gy' || !isZombie(t)) return; if (ss(g, p, t, 'atk') && onField(c) && faceUp(c)) { t.flags.b1doom = c.u; (c.flags.b1doomTie = c.flags.b1doomTie || []).push(t.u); } else if (!onField(c) && onField(t)) destroy(g, [t], { by: p }); } }] },
   // PARTIAL: effects activated by a negated monster are stopped before they reach the chain instead of being negated on it.
   'Revived King Ha Des': { hook: true, effs: [] },
   // PARTIAL: LIGHT monster effects on the field or in the GY are stopped from activating (Ignition/Quick) or reaching the chain (Triggers) instead of being negated after activating.
@@ -243,7 +247,9 @@ const S = {
         const xs = yield* pick(g, p, `Special Summon ${n} banished monster${n > 1 ? 's' : ''}`, cands, n, n, 'good'); const grp = g.group, out = [];
         for (const x of xs) if (x.zone === 'ban' && freeM(g, p) >= 0 && ss(g, p, x, 'atk', { group: grp })) { x.flags.b1rfdd = c.u; out.push(x); }
       } },
-    { type: 'trig', loc: 'any', mand: true, label: 'Banish the summoned monsters', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.b1rfdd === c.u),
+    // a lingering effect with no chain (archive; site rulings 2 and 5: a Jinzo it summoned is still banished, D.D. Survivor returns that End
+    // Phase): noChain + rule, so the face-up Trap lock and negation don't stop it (2026-11-28 audit, pass2 edison-05)
+    { type: 'trig', loc: 'any', mand: true, noChain: true, rule: true, label: 'Banish the summoned monsters', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.b1rfdd === c.u),
       // ruling 6 and archive: a monster unaffected by Traps (Elemental HERO Wildheart) stays
       res: function* (g, c, p) { const xs = fieldMons(g).filter(x => x.flags.b1rfdd === c.u && !(faceUp(x) && has(g, x, 'unaffectedTraps'))); for (const x of xs) move(g, x, 'ban', { reason: 'effect' }); if (xs.length) log(g, `${xs.map(x => D(x).n).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished.`); } }] },
   /* ----- Diva Hero ----- */
@@ -266,7 +272,7 @@ const S = {
       on: (g, ev, c) => { if (ev.type !== 'phase' || ev.ph !== 'standby' || ev.tp !== c.ctrl || !c.flags.b1ff || c.flags.b1ff.done || !faceUp(c)) return false; c.flags.b1ff.n++; return c.flags.b1ff.n === 2; },
       res: function* (g, c, p) { const f = c.flags.b1ff; if (!f || !onField(c)) return; f.done = true; const fx = g.p[p].extra.find(x => D(x).n === f.name);
         if (fx && freeM(g, p) >= 0 && ss(g, p, fx, 'atk', { how: 'fusion' })) link(g, c, fx); } }] },
-  'Consecrated Light': { cont: { forbid: (g, src, a) => (['ns', 'ss'].includes(a.type) && E.lib.isAttr(a.c, 'DARK')) || (a.type === 'attack' && E.lib.isAttr(a.c, 'DARK')) },
+  'Consecrated Light': { cont: { forbid: (g, src, a) => (['ns', 'ss'].includes(a.type) && E.lib.isAttr(a.c, 'DARK') && !(a.type === 'ns' && a.tribs && a.tribs.includes(src))) || (a.type === 'attack' && E.lib.isAttr(a.c, 'DARK')) },   // site ruling: it can be Tributed for a DARK's Tribute Summon
     self: { noBattleDestroy: (g, c) => !!(g.battle && [g.battle.a, g.battle.t].some(x => x && x !== c && E.lib.isAttr(x, 'DARK'))),
       noBattleDamage: (g, c) => !!(g.battle && [g.battle.a, g.battle.t].includes(c) && [g.battle.a, g.battle.t].some(x => x && x !== c && E.lib.isAttr(x, 'DARK'))) }, effs: [] },
   'Smashing Ground': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => oppFaceUp(g, p).length > 0,
@@ -312,8 +318,8 @@ const S = {
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'atk')) link(g, c, t); } }] },
   // tags.destroy + destroys: "destroy 1 of them" is certain when one would be there (site: Stardust "only if there is a monster on the field
   // that would be destroyed"); which one is chosen at resolution, so it is a maybe of 1 (engine wouldDestroy)
-  'Hero Blast': { effs: [{ type: 'act', tags: { destroy: 1 }, destroys: (g, c, p, L2) => { const t = L2.t[0]; if (!t || t.zone !== 'gy') return []; const cs = oppFaceUp(g, p).filter(x => atk(g, x) <= baseAtk(t)); return Object.assign([], cs.length ? { maybe: cs, n: 1 } : {}); }, cond: (g, c, p) => g.p[p].gy.some(x => D(x).k === 'normal' && /^Elemental HERO/.test(D(x).n)),
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which Elemental HERO Normal Monster?', g.p[p].gy.filter(x => D(x).k === 'normal' && /^Elemental HERO/.test(D(x).n)), 1, 1, 'good'); },
+  'Hero Blast': { effs: [{ type: 'act', tags: { destroy: 1 }, destroys: (g, c, p, L2) => { const t = L2.t[0]; if (!t || t.zone !== 'gy') return []; const cs = oppFaceUp(g, p).filter(x => atk(g, x) <= baseAtk(t)); return Object.assign([], cs.length ? { maybe: cs, n: 1 } : {}); }, cond: (g, c, p) => g.p[p].gy.some(x => heroNormal(x) && /^Elemental HERO/.test(D(x).n)),
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which Elemental HERO Normal Monster?', g.p[p].gy.filter(x => heroNormal(x) && /^Elemental HERO/.test(D(x).n)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (!t || t.zone !== 'gy') return; move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`);
       const A = baseAtk(t), cs = oppFaceUp(g, p).filter(x => atk(g, x) <= A); if (!cs.length) return; const [x] = yield* pick(g, p, 'Destroy which monster?', cs, 1, 1, 'bad'); if (x) destroy(g, [x], { by: p, src: c }); } }] },
   'Sea Dragon Lord Gishilnodon': { hook: true, effs: [{ type: 'trig', mand: true,
@@ -349,7 +355,7 @@ const S = {
   'Prime Material Dragon': { cont: { dmg: (g, src, p, n, o) => (o && o.battle) ? undefined : { gain: n } },
     effs: [{ type: 'quick', ds: true, label: 'Discard to negate',
       cond: (g, c, p, x) => g.p[p].hand.length > 0 && x.top && L.destroysSome(g, x.top, y => y.zone === 'm'),
-      cost: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; yield* discardN(g, p, 1, null, 'Send a card from your hand to the GY'); },
+      cost: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; const [x] = yield* pick(g, p, 'Send a card from your hand to the GY', g.p[p].hand, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${name(x)} from the hand to the GY.`); } },   // "send", not a discard (Super Rejuvenation doesn't count it; pass2 edison-07)
       res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
   'Red-Eyes Darkness Metal Dragon': { proc: { label: 'Special Summon (banish a face-up Dragon)', cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isDragon(x)),
       cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish a face-up Dragon you control', monsOf(g, p).filter(x => faceUp(x) && isDragon(x)), 1, 1, 'cost'); move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${D(x).n}.`); } },
@@ -391,7 +397,8 @@ const S = {
   // PARTIAL: the End Phase draw is a trigger on the chain (it should resolve without starting a chain).
   'Super Rejuvenation': { hook: true, effs: [
     { type: 'act', res: function* (g, c, p) { g.b1rejQ = g.b1rejQ || []; g.b1rejQ.push({ u: c.u, p, turn: g.turnNo }); log(g, 'Dragons discarded or Tributed this turn will be counted in the End Phase.'); } },
-    { type: 'trig', loc: 'any', mand: true, label: 'Draw for each Dragon', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && (g.b1rejQ || []).some(r => r.u === c.u && r.turn === g.turnNo),
+    // the End Phase draw doesn't start a chain (its site rulings; pass2 edison-07)
+    { type: 'trig', loc: 'any', mand: true, noChain: true, label: 'Draw for each Dragon', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && (g.b1rejQ || []).some(r => r.u === c.u && r.turn === g.turnNo),
       res: function* (g, c) { const rs = g.b1rejQ.filter(r => r.u === c.u && r.turn === g.turnNo); g.b1rejQ = g.b1rejQ.filter(r => !rs.includes(r));
         for (const r of rs) { const n = g.b1 && g.b1.rej.turn === g.turnNo ? g.b1.rej.n[r.p] : 0; if (n) draw(g, r.p, n); else log(g, 'Super Rejuvenation: no Dragons were discarded or Tributed.'); } } }] },
   'Trade-In': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 2 && g.p[p].hand.some(x => isMon(x) && lv(x) === 8),
@@ -414,7 +421,7 @@ const S = {
     { type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Destroy all Field Spells', destroys: g => [g.p[0].fz, g.p[1].fz].filter(Boolean),
       cond: g => !!(g.p[0].fz || g.p[1].fz),
       res: function* (g, c, p) { const fz = [g.p[0].fz, g.p[1].fz].filter(Boolean); if (!fz.length || !destroy(g, fz, { by: p }).length) return;
-        gain(g, p, 1000); if (g.p[p].deck.some(y => D(y).sub === 'Field') && (yield* yn(g, p, 'Add a Field Spell from your Deck?'))) yield* search(g, p, y => D(y).sub === 'Field', 'Add a Field Spell'); } }] },
+        gain(g, p, 1000, { same: true }); if (g.p[p].deck.some(y => D(y).sub === 'Field') && (yield* yn(g, p, 'Add a Field Spell from your Deck?'))) yield* search(g, p, y => D(y).sub === 'Field', 'Add a Field Spell'); } }] },
   'Exploder Dragonwing': { hook: true, effs: [{ type: 'trig', tags: { destroy: 1 }, label: 'Destroy it and inflict its ATK',
     on: (g, ev, c) => ev.type === 'dsStart' && ev.t && (ev.a === c || ev.t === c),
     // RULING? decided (EDOPro): only against a face-up monster

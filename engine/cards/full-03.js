@@ -165,8 +165,8 @@ E.addScripts({
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
   'Blue Medicine': { effs: [{ type: 'act', res: function* (g, c, p) { gain(g, p, 400); } }] },
   'Blue-Eyes Shining Dragon': {
-    proc: { label: 'Special Summon (Tribute Blue-Eyes Ultimate Dragon)', cond: (g, c, p) => monsOf(g, p).some(x => named(x, 'Blue-Eyes Ultimate Dragon')),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute Blue-Eyes Ultimate Dragon', monsOf(g, p).filter(x => named(x, 'Blue-Eyes Ultimate Dragon')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Blue-Eyes Ultimate Dragon.`); } } },
+    proc: { label: 'Special Summon (Tribute Blue-Eyes Ultimate Dragon)', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => named(x, 'Blue-Eyes Ultimate Dragon')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute Blue-Eyes Ultimate Dragon', E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Blue-Eyes Ultimate Dragon')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Blue-Eyes Ultimate Dragon.`); } } },
     self: { atk: (g, c) => 300 * g.p[c.ctrl].gy.filter(x => isMon(x) && race(x) === 'Dragon').length },
     effs: [summonRules,
       { type: 'quick', ds: true, label: 'Negate an effect that targets it',
@@ -176,7 +176,7 @@ E.addScripts({
   // Ported from classic-1.js (toon(2)).
   'Blue-Eyes Toon Dragon': {
     proc: { label: 'Special Summon (Tribute 2, Toon World)', cond: (g, c, p) => toonWorld(g, p) && tributeCands(g, p).length >= 2,
-      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Tribute 2 monsters', monsOf(g, p), 2, 2, 'cost');
+      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Tribute 2 monsters', E.lib.tribPool(g, p), 2, 2, 'cost');
         for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${xs.map(x => x.pos === 'set' ? 'a face-down monster' : name(x)).join(' and ')}.`); } },
     self: {
       cantAttack: (g, c) => c.turnIn === g.turnNo,
@@ -294,8 +294,8 @@ E.addScripts({
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'ban') { move(g, t, 'gy', { reason: 'effect' }); log(g, 'Skull Flame returned to the GY.'); } } }] },
   'Burning Spear': { cont: eqBonus(400, -200), effs: [equipAct(m => E.lib.isAttr(m, 'FIRE'), 'Equip to which face-up FIRE monster?')] },
   'Burst Breath': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Dragon'),
-    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute 1 Dragon monster', monsOf(g, p).filter(x => race(x) === 'Dragon'), 1, 1, 'cost'); if (!x) return;
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => race(x) === 'Dragon'),
+    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute 1 Dragon monster', E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Dragon'), 1, 1, 'cost'); if (!x) return;
       L2.data.n = faceUp(x) ? atk(g, x) : baseAtk(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n} (${L2.data.n} ATK).`); },
     res: function* (g, c, p, L2) { const n = L2.data.n || 0; destroy(g, fieldMons(g).filter(x => faceUp(x) && def(g, x) <= n), { by: p, src: c }); } }] },
   'Burst Return': { effs: [{ type: 'act',
@@ -400,8 +400,8 @@ E.addScripts({
       res: function* (g, c, p) { draw(g, p, 1); } }] },
   'Castle Gate': { self: { noBattleDestroy: true },
     effs: [{ type: 'ign', opt: true, label: 'Tribute: damage equal to its ATK',
-      cond: (g, c, p) => c.pos === 'atk' && monsOf(g, p).some(x => x !== c && lv(x) <= 5),
-      cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute a Level 5 or lower monster', monsOf(g, p).filter(x => x !== c && lv(x) <= 5), 1, 1, 'cost'); if (!x) return;
+      cond: (g, c, p) => c.pos === 'atk' && E.lib.tribPool(g, p, { known: true }).some(x => x !== c && lv(x) <= 5),
+      cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute a Level 5 or lower monster', E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && lv(x) <= 5), 1, 1, 'cost'); if (!x) return;
         L2.data.n = num(D(x).atk); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g, c, p, L2) { if (L2.data.n > 0) damage(g, opp(p), L2.data.n, { src: c, srcP: p }); } }] },
   // Ported from classic-2.js. PARTIAL: the boost is on every face-up Zombie while this card is face-up, including Zombies that
@@ -444,18 +444,19 @@ E.addScripts({
       const o = opp(p); const xs = ns.flatMap(n => sameName(g, o, n)); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); shuffleDeck(g, o);
       if (xs.length) log(g, `${PN(g, o)} banished ${xs.length} more card${xs.length > 1 ? 's' : ''} with the same name from the hand and Deck.`); } }] },
   // Ported from goat-7.js. PARTIAL: the 500 is paid as each card leaves the hand (not as a cost before it), and actions are
-  // blocked while a player couldn't pay (500 LP or less for each face-up Chain Energy).
+  // blocked while a player couldn't pay (500 LP or less for each face-up Chain Energy). Only cards a player plays pay, not ones an effect
+  // puts on the field (archive ruling 1, Netrep).
   'Chain Energy': {
     cont: { forbid: (g, src, a) => {
       if (a.p == null || E.lib.canPay(g, a.p, 500 * chainEnergies(g).length)) return false;
       if (a.type === 'ns' || a.type === 'set' || a.type === 'setST') return true;
-      if (a.type === 'ss') return !!(a.c && a.c.zone === 'hand');
+      if (a.type === 'ss') return !!(a.c && a.c.zone === 'hand' && a.proc);   // its own procedure only: another card's effect summoning it doesn't pay (archive ruling 1, Netrep)
       if (a.type === 'activate') return a.c.zone === 'hand' && a.c !== src;   // monster effects from the hand too (Kuriboh: Netrep; 2026-11-28 audit)
       return false; },
       // a monster effect activated from the hand pays 500 per Chain Energy as a cost (Netrep Kuriboh; EDOPro ACTIVATE_COST); a card activated from the hand pays as it moves (below)
       actCost: (g, src, L2) => L2.actZone === 'hand' && L2.eff.type !== 'act' ? 500 : 0 },
     effs: [noop,
-      { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'move' && ev.c !== c && ev.from === 'hand' && ['m', 'st', 'fz'].includes(ev.to)) pay(g, ev.c.ctrl, 500); return false; }, res: function* () {} }] },
+      { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'move' && ev.c !== c && ev.from === 'hand' && ['m', 'st', 'fz'].includes(ev.to) && !g.resolvingL && !E.lib.negd(g, c)) pay(g, ev.c.ctrl, 500); return false; }, res: function* () {} }] },   // played by its player (Summon, Set, activation, own procedure); not put there by a resolving effect (Cyber Jar, Monster Reborn, Marauding Captain: archive ruling 1, Netrep; RULING? decided 2026-11-28 E4c)
   'Chain Healing': { effs: [{ type: 'act', cond: (g, c) => !(g.chain.length >= 1 && g.chain.length <= 2 && L.toDeckBlocked(g, c, true)),   // G.B. Hunter ruling 3: not as Chain Link 2 or 3
     res: function* (g, c, p, L2) { gain(g, p, 500); chainReturn(g, c, L2); } }] },
   // ENGINE: the engine's Fusion Summon helper has no hook for "banish materials from the field, Deck, hand or GY instead".
@@ -486,8 +487,8 @@ E.addScripts({
       g.ns[p] -= 2; log(g, `${PN(g, p)} can conduct up to 3 Normal Summons or Sets this turn.`); } }] },
   'Chain Thrasher': { effs: [], self: { maxAttacks: (g, c) => 1 + g.p[c.ctrl].gy.filter(x => named(x, 'Chain Thrasher')).length } },
   'Chaos Burst': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && monsOf(g, p).length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p), 1, 1, 'cost'); if (x) { const n = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${n}.`); } },
+    cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && E.lib.tribPool(g, p).length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', E.lib.tribPool(g, p), 1, 1, 'cost'); if (x) { const n = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${n}.`); } },
     target: function* (g, c, p, L2) { L2.t = g.aw ? [g.aw.a] : []; },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && t.zone === 'm' && destroy(g, [t], { by: p, src: c }).length) damage(g, opp(p), 1000, { src: c, srcP: p }); } }] },
   // PARTIAL: it is a continuous negation; the engine has no hook for it, so it is applied (no prompt) the next time its

@@ -151,8 +151,8 @@ E.addScripts({
       return false; }, res: noop }] },
   // Tribute 1 Insect (face-down too) as the cost; the Tokens can't be Tributed for a Tribute Summon.
   'Multiplication of Ants': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => { const ins = monsOf(g, p).filter(x => race(x) === 'Insect'); return ins.length > 0 && nFreeM(g, p) + 1 >= 2; },
-    cost: function* (g, c, p) { yield* tributeCost(g, p, monsOf(g, p).filter(x => race(x) === 'Insect'), 'Tribute 1 Insect monster'); },
+    cond: (g, c, p) => { const ins = E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Insect'); return ins.length > 0 && nFreeM(g, p) + 1 >= 2; },
+    cost: function* (g, c, p) { yield* tributeCost(g, p, E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Insect'), 'Tribute 1 Insect monster'); },
     res: function* (g, c, p) { if (nFreeM(g, p) < 2) return; tokens(g, p, { n: 'Army Ant Token', a: 'EARTH', r: 'Insect', lv: 4, atk: 500, def: 1200 }, 2, 'def', { noTribute: 'summon' }); } }] },
   // Any number of differently named "Dark Scorpion" monsters from the hand (it resolves even if Don Zaloog is gone).
   'Mustering of the Dark Scorpions': { effs: [{ type: 'act', tags: { ss: 1 },
@@ -169,7 +169,7 @@ E.addScripts({
   // ATK or DEF is chosen when it is activated (ruling): the current value of the Tributed monster.
   'Mystik Wok': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).length > 0,
     cost: function* (g, c, p, L2) {
-      const s = yield* tributeCost(g, p, monsOf(g, p), 'Tribute which monster?'); if (!s) return;
+      const s = yield* tributeCost(g, p, E.lib.tribPool(g, p), 'Tribute which monster?'); if (!s) return;
       const i = yield* choose(g, p, 'Mystik Wok: gain which?', [`ATK (${s.atk})`, `DEF (${s.def})`]); L2.data.n = i ? s.def : s.atk; },
     res: function* (g, c, p, L2) { if (L2.data.n) gain(g, p, L2.data.n); } }] },
 
@@ -221,8 +221,8 @@ E.addScripts({
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && onField(c)) { t.flags.f25decoy = c.u; g.seq++; log(g, `${name(t)} can't be destroyed by battle.`); } } }] },
   // Tribute a face-up Ninja (cost); its Level on the field +3 is the limit. When this card leaves the field, the monster is destroyed.
   'Ninjitsu Art of Transformation': { effs: [{ type: 'act', tags: { ss: 1 },
-      cond: (g, c, p) => monsOf(g, p).some(n => faceUp(n) && isNinja(n) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && ['Beast', 'Winged Beast', 'Insect'].includes(race(x)) && D(x).k !== 'ritual' && lv(x) <= lv(n) + 3)),
-      cost: function* (g, c, p, L2) { const s = yield* tributeCost(g, p, monsOf(g, p).filter(n => faceUp(n) && isNinja(n)), 'Tribute 1 face-up Ninja monster'); L2.data.lv = s ? s.lv : 0; },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(n => faceUp(n) && isNinja(n) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && ['Beast', 'Winged Beast', 'Insect'].includes(race(x)) && D(x).k !== 'ritual' && lv(x) <= lv(n) + 3)),
+      cost: function* (g, c, p, L2) { const s = yield* tributeCost(g, p, E.lib.tribPool(g, p, { known: true }).filter(n => faceUp(n) && isNinja(n)), 'Tribute 1 face-up Ninja monster'); L2.data.lv = s ? s.lv : 0; },
       res: function* (g, c, p, L2) {
         if (!onField(c) || freeM(g, p) < 0) return;
         const xs = [...g.p[p].hand, ...g.p[p].deck].filter(x => isMon(x) && ['Beast', 'Winged Beast', 'Insect'].includes(race(x)) && D(x).k !== 'ritual' && lv(x) <= L2.data.lv + 3 && canSS(g, p, x));
@@ -294,13 +294,13 @@ E.addScripts({
   // The Tribute is the cost (face-down too); the destroy targets.
   'Orca Mega-Fortress of Darkness': { effs: [
     { type: 'ign', label: 'Tribute Torpedo Fish: destroy a monster', tags: { destroy: 1 },
-      cond: (g, c, p) => monsOf(g, p).some(x => named(x, 'Torpedo Fish')) && fieldMons(g).some(x => !named(x, 'Torpedo Fish') || monsOf(g, p).filter(y => named(y, 'Torpedo Fish')).length > 1 || x.ctrl !== p),
-      cost: function* (g, c, p) { yield* tributeCost(g, p, monsOf(g, p).filter(x => named(x, 'Torpedo Fish')), 'Tribute 1 Torpedo Fish'); },
+      cond: (g, c, p) => { const tf = E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Torpedo Fish')); return tf.length > 0 && fieldMons(g).some(x => !tf.includes(x) || tf.length > 1); },   // a target is left after the Tribute
+      cost: function* (g, c, p) { yield* tributeCost(g, p, E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Torpedo Fish')), 'Tribute 1 Torpedo Fish'); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which monster?', fieldMons(g), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } },
     { type: 'ign', label: 'Tribute Cannonball Spear Shellfish: destroy a Spell or Trap', tags: { destroy: 1 },
-      cond: (g, c, p) => monsOf(g, p).some(x => named(x, 'Cannonball Spear Shellfish')) && [...stOf(g, 0), ...stOf(g, 1)].length > 0,
-      cost: function* (g, c, p) { yield* tributeCost(g, p, monsOf(g, p).filter(x => named(x, 'Cannonball Spear Shellfish')), 'Tribute 1 Cannonball Spear Shellfish'); },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => named(x, 'Cannonball Spear Shellfish')) && [...stOf(g, 0), ...stOf(g, 1)].length > 0,
+      cost: function* (g, c, p) { yield* tributeCost(g, p, E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Cannonball Spear Shellfish')), 'Tribute 1 Cannonball Spear Shellfish'); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Spell or Trap Card?', [...stOf(g, opp(p)), ...stOf(g, p)], 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
   // Each attack of an opponent's monster; you need a card in hand (rulings).

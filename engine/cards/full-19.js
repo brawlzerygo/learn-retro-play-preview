@@ -93,8 +93,8 @@ E.addScripts({
   /* ----- A ----- */
   'Archlord Zerato': {
     proc: { label: 'Special Summon (Tribute Warrior of Zera)',
-      cond: (g, c, p) => allField(g).some(f => f.zone === 'fz' && faceUp(f) && named(f, 'The Sanctuary in the Sky')) && monsOf(g, p).some(m => faceUp(m) && name(m) === 'Warrior of Zera'),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Warrior of Zera?', monsOf(g, p).filter(m => faceUp(m) && name(m) === 'Warrior of Zera'), 1, 1, 'cost');
+      cond: (g, c, p) => allField(g).some(f => f.zone === 'fz' && faceUp(f) && named(f, 'The Sanctuary in the Sky')) && E.lib.tribPool(g, p, { known: true }).some(m => faceUp(m) && name(m) === 'Warrior of Zera'),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Warrior of Zera?', E.lib.tribPool(g, p, { known: true }).filter(m => faceUp(m) && name(m) === 'Warrior of Zera'), 1, 1, 'cost');
         if (x) { move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Warrior of Zera.`); } } },
     effs: [lockInstall,
       { type: 'ign', tags: { destroy: 1 }, label: 'Discard a LIGHT: destroy all their monsters',
@@ -286,7 +286,7 @@ E.addScripts({
   // Port of goat-3.js
   'Blade Knight': {
     self: { atk: (g, c) => g.p[c.ctrl].hand.length <= 1 ? 400 : 0 },
-    cont: { negates: (g, src, c) => c !== src && isFlipMon(c) && !!c.flags.battleDoomed && inBattle(g, src) && inBattle(g, c) && monsOf(g, src.ctrl).every(x => x === src) },
+    cont: { negVisit: true, negates: (g, src, c) => c !== src && isFlipMon(c) && !!c.flags.battleDoomed && inBattle(g, src) && inBattle(g, c) && monsOf(g, src.ctrl).every(x => x === src) },   // negVisit: stays negated in the GY (engine move)
     effs: [] },
   'Blade Rabbit': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy a monster',
     on: (g, ev, c) => ev.type === 'pos' && ev.c === c && c.pos === 'def' && (ev.from ? ev.from === 'atk' : true),
@@ -361,16 +361,16 @@ E.addScripts({
     res: function* (g) { const cs = allField(g).filter(x => x.pos === 'set'); for (const x of cs) move(g, x, 'hand', { reason: 'effect' }); if (cs.length) log(g, `${cs.length} Set card${cs.length > 1 ? 's' : ''} returned to the hand.`); } }] },
 
   /* ----- C ----- */
-  'Cannon Soldier': { effs: [{ type: 'ign', label: 'Tribute: 500 damage', cond: (g, c, p) => monsOf(g, p).length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p), 1, 1, 'cost'); if (!x) return; const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); },
+  'Cannon Soldier': { effs: [{ type: 'ign', label: 'Tribute: 500 damage', cond: (g, c, p) => E.lib.tribPool(g, p).length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', E.lib.tribPool(g, p), 1, 1, 'cost'); if (!x) return; const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); },
     res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
   // PARTIAL: the engine's "unaffected by Spells" only covers destruction by Spells.
   'Cannonball Spear Shellfish': { self: { unaffectedSpells: g => umiOn(g) }, effs: [] },
   // The opponent's monster's original ATK becomes 200 for the Damage Step of a battle with this card during their turn.
   'Cat\'s Ear Tribe': { cont: { atk: (g, src, m) => battling(g, src, m) && m.ctrl !== src.ctrl && g.tp === m.ctrl ? 200 - baseAtk(m) : 0 }, effs: [] },
   'Catapult Turtle': { effs: [{ type: 'ign', label: 'Tribute a monster: damage',
-    cond: (g, c, p) => monsOf(g, p).length > 0,
-    cost: function* (g, c, p, L2) { const [m] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p), 1, 1, 'cost'); if (!m) return;
+    cond: (g, c, p) => E.lib.tribPool(g, p).length > 0,
+    cost: function* (g, c, p, L2) { const [m] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p), 1, 1, 'cost'); if (!m) return;
       L2.data.n = Math.floor(stat(g, m, 'atk') / 2); const nm = m.pos === 'set' ? 'a face-down monster' : name(m);
       move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); },
     res: function* (g, c, p, L2) { if (L2.data.n > 0) damage(g, opp(p), L2.data.n, { src: c, srcP: p }); } }] },

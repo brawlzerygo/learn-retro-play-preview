@@ -141,7 +141,7 @@ E.addScripts({
 
   /* ----- De- cards ----- */
   // Port of classic-4.js: the Fusion Materials are found from the summon (matHook) or Polymerization's note.
-  'De-Fusion': { effs: [{ type: 'act', cond: g => fieldMons(g).some(m => faceUp(m) && D(m).k === 'fusion' && !L.toDeckBlocked(g, m)),   // G.B. Hunter ruling 1
+  'De-Fusion': { effs: [{ type: 'act', cond: (g, c, p) => fieldMons(g).some(m => faceUp(m) && D(m).k === 'fusion' && !L.toDeckBlocked(g, m) && L.canTarget(g, m, { c, p, eff: { type: 'act' }, cardAct: true })),   // a target it can target (King Dragun: pass2 goat-05)   // G.B. Hunter ruling 1
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Fusion Monster to the Extra Deck?', fieldMons(g).filter(m => faceUp(m) && D(m).k === 'fusion' && !L.toDeckBlocked(g, m)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) yield* returnAndRevive(g, p, t, 'Fusion'); } }, matHook] },
   // Port of classic-4.js.
@@ -384,8 +384,8 @@ E.addScripts({
 
   /* ----- Divine ----- */
   'Divine Dragon Aquabizarre': { effs: [{ type: 'ign', opt: true, label: 'Tribute a WATER: return a Spell to the Deck',
-    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'WATER')) && g.p[p].gy.some(x => isSpell(x) && ['Continuous', 'Field'].includes(D(x).sub)),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 other face-up WATER monster', monsOf(g, p).filter(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'WATER')) && g.p[p].gy.some(x => isSpell(x) && ['Continuous', 'Field'].includes(D(x).sub)),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 other face-up WATER monster', E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Continuous or Field Spell to the top of your Deck?', g.p[p].gy.filter(x => isSpell(x) && ['Continuous', 'Field'].includes(D(x).sub)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'deckTop', { reason: 'effect' }); log(g, `${D(t).n} was put on top of the Deck.`); } } }] },
   'Divine Knight Ishzark': { effs: [{ type: 'trig', mand: true, label: 'Banish the destroyed monster',

@@ -119,8 +119,8 @@ E.addScripts({
     res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && /^Blackwing/.test(D(x).n), 'Add which Blackwing monster to your hand?'); } }] },
   // Phantasm Tokens can't declare an attack, even under Skill Drain (a flag on the Token).
   'Raviel, Lord of Phantasms': {
-    proc: { label: 'Special Summon (Tribute 3 Fiends)', cond: (g, c, p) => monsOf(g, p).filter(x => race(x) === 'Fiend').length >= 3,
-      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Tribute 3 Fiend monsters', monsOf(g, p).filter(x => race(x) === 'Fiend'), 3, 3, 'cost');
+    proc: { label: 'Special Summon (Tribute 3 Fiends)', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Fiend').length >= 3,
+      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Tribute 3 Fiend monsters', E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Fiend'), 3, 3, 'cost');
         for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(', ')}.`); } },
     effs: [lockInstall,
       { type: 'trig', mand: true, tags: { ss: 1 }, label: 'Special Summon Phantasm Tokens',
@@ -128,8 +128,8 @@ E.addScripts({
         res: function* (g, c, p, L2) { const n = Math.min(L2.ev.cs.length, nFreeM(g, p)); if (n <= 0) return;
           const pos = yield* askPos(g, p, 'Phantasm Token');
           for (const t of tokens(g, p, { n: 'Phantasm Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 1000, def: 1000 }, n, pos)) t.flags.cantAttack = true; } },
-      { type: 'ign', opt: true, label: 'Tribute a monster: gain its ATK', cond: (g, c, p) => monsOf(g, p).some(x => x !== c),
-        cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p).filter(x => x !== c), 1, 1, 'cost');
+      { type: 'ign', opt: true, label: 'Tribute a monster: gain its ATK', cond: (g, c, p) => E.lib.tribPool(g, p).some(x => x !== c),
+        cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p).filter(x => x !== c), 1, 1, 'cost');
           if (!x) return; L2.data.n = baseAtk(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
         res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: L2.data.n || 0, end: true, own: true }); log(g, `${name(c)} gained ${L2.data.n || 0} ATK.`); } }] },
   // Destroyed at the start of the Damage Step, before it is flipped, so there is no damage calculation.
@@ -467,8 +467,8 @@ E.addScripts({
     cont: { grant: (g, src, c, flag) => { if (flag !== 'noBattleDestroy' || c.ctrl === src.ctrl || c.zone !== 'm' || c.pos !== 'atk') return false;
       const f = foeOf(g, c); return !!f && /^Reptilianne/.test(name(f)) && atk(g, c) === 0; } } },
   'Shadowpriestess of Ohm': { effs: [{ type: 'ign', label: 'Tribute a DARK monster: 800 damage',
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && E.lib.isAttr(x, 'DARK')),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which face-up DARK monster?', monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'DARK')), 1, 1, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && E.lib.isAttr(x, 'DARK')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which face-up DARK monster?', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && E.lib.isAttr(x, 'DARK')), 1, 1, 'cost');
       if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { damage(g, opp(p), 800, { src: c, srcP: p }); } }] },
   'Shark Cruiser': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Special Summon up to 2 WATER monsters',

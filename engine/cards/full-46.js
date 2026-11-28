@@ -178,8 +178,8 @@ E.addScripts({
     effs: [lockInstall] },
   // Negates an inherent summon (Normal, Flip, Synchro, a summon by a card's own rule) with no chain going.
   'Vanquishing Light': { effs: [{ type: 'act', negSummon: true, tags: { destroy: 1 },
-    cond: (g, c, p, x) => !x.top && !!g.attempt && monsOf(g, p).some(isLightsworn),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Lightsworn monster', monsOf(g, p).filter(isLightsworn), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p, x) => !x.top && !!g.attempt && E.lib.tribPool(g, p, { known: true }).some(isLightsworn),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Lightsworn monster', E.lib.tribPool(g, p, { known: true }).filter(isLightsworn), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g) { if (g.attempt) { g.attempt.negated = true; log(g, 'The summon was negated.'); } } }] },
   'Variety Comes Out': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => monsOf(g, p).some(x => varietyOk(g, p, x)),
@@ -291,8 +291,8 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && !!c.f46vr && c.f46vr.turn === g.turnNo,
       res: function* (g, c, p) { const r = c.f46vr; c.f46vr = null; const t = r && fieldMons(g).find(x => x.u === r.u && x.turnIn === r.turnIn); if (t) destroy(g, [t], { by: p, src: c }); } }] },
   'Virus Cannon': { effs: [{ type: 'act',
-    cond: (g, c, p) => monsOf(g, p).some(x => D(x).k !== 'token'),
-    cost: function* (g, c, p, L2) { const cs = monsOf(g, p).filter(x => D(x).k !== 'token'); const xs = yield* pick(g, p, 'Tribute any number of monsters (not Tokens)', cs, 1, cs.length, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => D(x).k !== 'token'),
+    cost: function* (g, c, p, L2) { const cs = E.lib.tribPool(g, p, { known: true }).filter(x => D(x).k !== 'token'); const xs = yield* pick(g, p, 'Tribute any number of monsters (not Tokens)', cs, 1, cs.length, 'cost');
       const grp = g.group; for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); L2.data.n = xs.length; log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(', ')}.`); },
     res: function* (g, c, p, L2) { const o = opp(p), sp = g.p[o].deck.filter(isSpell); const n = Math.min(L2.data.n || 0, sp.length);
       if (!n) { log(g, `${PN(g, o)} has no Spells in the Deck.`); return; }
@@ -499,8 +499,8 @@ E.addScripts({
       cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Zero Gardna.`); },
       res: function* (g, c, p) { c.f46zg = g.turnNo; g.p[p].noBattleDamage = g.turnNo; g.seq++; log(g, `${PN(g, p)}'s monsters can't be destroyed by battle and ${PN(g, p)} takes no battle damage this turn.`); } }] },
   'Zeta Reticulant': {
-    proc: { label: 'Special Summon (Tribute 1 Eva Token)', cond: (g, c, p) => monsOf(g, p).some(x => name(x) === 'Eva Token'),
-      cost: function* (g, c, p, grp) { const cs = monsOf(g, p).filter(x => name(x) === 'Eva Token'); const [x] = cs.length > 1 ? yield* pick(g, p, 'Tribute which Eva Token?', cs, 1, 1, 'cost') : cs; if (x) { move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed an Eva Token.`); } } },
+    proc: { label: 'Special Summon (Tribute 1 Eva Token)', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => name(x) === 'Eva Token'),
+      cost: function* (g, c, p, grp) { const cs = E.lib.tribPool(g, p, { known: true }).filter(x => name(x) === 'Eva Token'); const [x] = cs.length > 1 ? yield* pick(g, p, 'Tribute which Eva Token?', cs, 1, 1, 'cost') : cs; if (x) { move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed an Eva Token.`); } } },
     effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon an Eva Token',
       on: (g, ev, c) => ev.type === 'move' && ev.to === 'ban' && ev.wasField && ev.prevCtrl !== c.owner && !!ev.snap && ev.snap.mon,
       cond: (g, c, p) => freeM(g, p) >= 0,

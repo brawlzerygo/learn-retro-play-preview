@@ -99,8 +99,8 @@ E.addScripts({
       on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'end') for (const x of allField(g)) if (x.zone === 'st' && x.pos === 'set' && x.flags.robbedBy === c.u && x.flags.robbedTurn === g.turnNo) { move(g, x, 'gy', { reason: 'rule' }); log(g, `${D(x).n} went back to the GY.`); } return false; },
       res: function* () {} }] },
   'Horn of Heaven': { effs: [{ type: 'act', negSummon: true,
-    cond: (g, c, p, x) => !x.top && !!g.attempt && monsOf(g, p).some(m => !g.attempt.cs.includes(m)),
-    cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p).filter(m => !g.attempt.cs.includes(m)), 1, 1, 'cost'); if (m) { const nm = m.pos === 'set' ? 'a face-down monster' : name(m); move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
+    cond: (g, c, p, x) => !x.top && !!g.attempt && E.lib.tribPool(g, p).some(m => !g.attempt.cs.includes(m)),
+    cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p).filter(m => !g.attempt.cs.includes(m)), 1, 1, 'cost'); if (m) { const nm = m.pos === 'set' ? 'a face-down monster' : name(m); move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
     res: function* (g) { if (g.attempt) { g.attempt.negated = true; log(g, 'The summon was negated.'); } } }] },
   'Kunai with Chain': { effs: [{ type: 'act',
     cond: (g, c, p) => !!(g.aw && g.aw.a.ctrl !== p && g.aw.a.pos === 'atk') || monsOf(g, p).some(faceUp),
@@ -167,8 +167,8 @@ E.addScripts({
   'Crush Card Virus': { effs: [{ type: 'act', tags: { destroy: 1 },
       // what it would destroy: the opponent's face-up monsters with 1500 or more ATK (Stardust ruling 7; Starlight Road ruling 9: face-down ones don't count)
       destroys: (g, c, p) => monsOf(g, opp(p)).filter(m => faceUp(m) && stat(g, m, 'atk') >= 1500),
-      cond: (g, c, p) => monsOf(g, p).some(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000),
-      cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute a DARK monster with 1000 or less ATK', monsOf(g, p).filter(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000),
+      cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute a DARK monster with 1000 or less ATK', E.lib.tribPool(g, p, { known: true }).filter(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
       res: function* (g, c, p) {
         const o = opp(p);
         const h = g.p[o].hand; log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand: ${h.length ? h.map(x => D(x).n).join(', ') : 'empty'}.`);
@@ -319,9 +319,11 @@ E.addScripts({
   'Skull Invitation': { effs: [
     { type: 'act', res: function* () {} },
     { type: 'trig', loc: 'st', mand: true, label: '300 damage per card sent to the GY',
-      on: (g, ev, c) => { if (!faceUp(c) || ev.type !== 'move' || ev.to !== 'gy' || ev.c === c) return false; const s = c.flags.skull || (c.flags.skull = [0, 0]); s[ev.c.owner]++; return true; },
-      res: function* (g, c) { const s = c.flags.skull || [0, 0]; c.flags.skull = [0, 0];
-        for (const q of [g.tp, opp(g.tp)]) if (s[q]) damage(g, q, 300 * s[q], { src: c, srcP: c.ctrl }); } }] },
+      // counted per event group, each group its own application (Graceful Charity ruling 2: 600 for the 2 discards; the resolved Spell
+      // leaving at the end of the chain is a second application after them (ruling: "then you lose 600"); 2026-11-28 audit, pass2 goat-01)
+      on: (g, ev, c) => { if (!faceUp(c) || ev.type !== 'move' || ev.to !== 'gy' || ev.c === c) return false; const m = c.flags.skull && !Array.isArray(c.flags.skull) ? c.flags.skull : (c.flags.skull = {}); const k = ev.group + (ev.chainEnd ? ':end' : ''); const s = m[k] || (m[k] = [0, 0]); s[ev.c.owner]++; return true; },
+      res: function* (g, c, p, L2) { const m = c.flags.skull || {}, k = L2 && L2.ev ? L2.ev.group : null; if (k == null) return;
+        for (const key of [k, k + ':end']) { const s = m[key]; delete m[key]; if (s) for (const q of [g.tp, opp(g.tp)]) if (s[q]) damage(g, q, 300 * s[q], { src: c, srcP: c.ctrl }); } } }] },
   'Time Seal': { effs: [{ type: 'act', res: function* (g, c, p) { const o = opp(p), when = g.tp === o ? g.turnNo + 2 : g.turnNo + 1;
     addRule(g, (g2, a) => a.type === 'draw' && a.p === o && g2.phase === 'draw' && g2.turnNo === when, { end: when });
     log(g, `${PN(g, o)} skips the Draw Phase of their next turn.`); } }] },

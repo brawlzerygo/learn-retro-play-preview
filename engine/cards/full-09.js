@@ -130,8 +130,8 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which card?', allField(g), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
   "Gravekeeper's Cannonholder": { effs: [{ type: 'ign', label: "Tribute a Gravekeeper's: 700 damage",
-    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && isGK(x) && !named(x, "Gravekeeper's Cannonholder") && (faceUp(x) || x.ctrl === p)),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, "Tribute 1 Gravekeeper's monster", monsOf(g, p).filter(x => x !== c && isGK(x) && !named(x, "Gravekeeper's Cannonholder")), 1, 1, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && isGK(x) && !named(x, "Gravekeeper's Cannonholder") && (faceUp(x) || x.ctrl === p)),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, "Tribute 1 Gravekeeper's monster", E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && isGK(x) && !named(x, "Gravekeeper's Cannonholder")), 1, 1, 'cost');
       if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { damage(g, opp(p), 700, { src: c, srcP: p }); } }] },
   // "Your GY is unaffected by Necrovalley": batch-4.js nvRules reads a face-up Chief. Only 1 face-up Chief: Flip Summons aren't stopped.
@@ -356,8 +356,8 @@ E.addScripts({
       res: function* (g, c, p) { const os = monsOf(g, opp(p)); if (!os.length) return; const [t] = yield* pick(g, p, 'Battle damage from which monster becomes 0?', os, 1, 1, 'bad');
         if (t) { (g.f09spirit || (g.f09spirit = [])).push({ p, u: t.u, turn: g.turnNo, c: c.u }); log(g, `Battle damage from ${name(t)} becomes 0 this turn.`); } } }] },
   'Horn of Heaven': { effs: [{ type: 'act', negSummon: true, tags: { destroy: 1 },
-    cond: (g, c, p, x) => !x.top && !!g.attempt && monsOf(g, p).some(m => !g.attempt.cs.includes(m)),
-    cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p).filter(m => !g.attempt.cs.includes(m)), 1, 1, 'cost'); if (m) { const nm = m.pos === 'set' ? 'a face-down monster' : name(m); move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
+    cond: (g, c, p, x) => !x.top && !!g.attempt && E.lib.tribPool(g, p).some(m => !g.attempt.cs.includes(m)),
+    cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p).filter(m => !g.attempt.cs.includes(m)), 1, 1, 'cost'); if (m) { const nm = m.pos === 'set' ? 'a face-down monster' : name(m); move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
     res: function* (g) { if (g.attempt) { g.attempt.negated = true; log(g, 'The summon was negated.'); } } }] },
   'Horn of Light': { cont: eqBonus(0, 800), effs: [equipAct(),
     { type: 'trig', loc: 'gy', when: true, label: 'Pay 500 LP: return it to the top of the Deck',

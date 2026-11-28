@@ -64,6 +64,22 @@ const lwFrom = c => isMon(c) && !isExtraD(D(c)) && !['ritual', 'token'].includes
 const tribs = c => { const l = lv(c); return l >= 7 ? 2 : l >= 5 ? 1 : 0; };
 const lvBase = n => { const m = n.match(/^(.*) LV(\d+)$/); return m ? { base: m[1], lv: +m[2] } : null; };
 
+// Last Turn's summon and battle (after its chain and the triggers it caused; see 'Last Turn')
+L.STEPS.lastTurn = function* (g, st) {
+  const p = st.p, o = opp(p), m = fieldMons(g).find(x => x.u === st.m && x.ctrl === p) || null;
+  const ms = g.p[o].deck.filter(x => isMon(x) && !['ritual', 'token'].includes(D(x).k) && L.ssable(g, o, x));   // summoning conditions (CED, BLS, Spirits)
+  if (!ms.length || freeM(g, o) < 0) return;
+  const [x] = yield* pick(g, o, 'Special Summon which monster from your Deck?', ms, 1, 1, 'good'); shuffleDeck(g, o);
+  if (!x || !ss(g, o, x, 'atk')) return;
+  if (!m || !onField(m) || !onField(x)) return;
+  x.attacks = 1; log(g, `${name(x)} attacks ${m.pos === 'set' ? 'a face-down monster' : name(m)}.`);
+  if (m.pos === 'set') { m.pos = 'def'; g.seq++; log(g, `The face-down monster was ${name(m)}.`); emit(g, { type: 'flip', c: m, p, battle: true }); }
+  const A = stat(g, x, 'atk'); let dead = [];
+  if (m.pos === 'atk') { const T = stat(g, m, 'atk'); if (A > T) dead = [[m, x]]; else if (A < T) dead = [[x, m]]; else if (A > 0) dead = [[m, x], [x, m]]; }
+  else if (A > stat(g, m, 'def')) dead = [[m, x]];
+  for (const [v, k] of dead) destroy(g, [v], { battle: true, killer: k });
+  log(g, 'Battle damage from this battle is 0.');
+};
 E.addScripts({
   /* ----- Hyper ----- */
   // At the end of the Damage Step: the opponent's monster that battled it goes back to the hand if it is still there.
@@ -107,8 +123,8 @@ E.addScripts({
       res: function* (g, c, p) { if (onField(c) && faceUp(c)) destroy(g, [c], { by: p }); } },
     { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Tribute 1 monster: Special Summon this card',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && ev.to === 'gy',
-      cond: (g, c, p) => monsOf(g, p).length > 0,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
+      cond: (g, c, p) => E.lib.tribPool(g, p).length > 0,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', E.lib.tribPool(g, p), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
       res: function* (g, c, p) { if (c.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, c, 'atk'); } }] },
   'Infernal Flame Emperor': { cont: noSSFromGY,
     effs: [{ type: 'trig', when: true, tags: { destroy: 1 }, label: 'Banish FIRE monsters: destroy Spells/Traps',
@@ -131,7 +147,7 @@ E.addScripts({
       cond: (g, c, p) => g.ns[p] < 1 && !g.noSummon[p] && g.p[p].hand.some(x => x !== c) && monsOf(g, p).some(x => faceUp(x) && atk(g, x) >= 2000),
       cost: function* (g, c, p, grp) {
         const rest = g.p[p].hand.filter(x => x !== c); for (const x of rest) move(g, x, 'gy', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} discarded ${rest.length} card(s).`);
-        const [t] = yield* pick(g, p, 'Tribute 1 monster with 2000 or more ATK', monsOf(g, p).filter(x => faceUp(x) && atk(g, x) >= 2000), 1, 1, 'cost');
+        const [t] = yield* pick(g, p, 'Tribute 1 monster with 2000 or more ATK', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && atk(g, x) >= 2000), 1, 1, 'cost');
         if (t) { move(g, t, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(t).n}.`); }
         g.ns[p]++; } } },
   'Inferno': {
@@ -173,8 +189,8 @@ E.addScripts({
   /* ----- Insect ----- */
   'Insect Barrier': { cont: { forbid: (g, src, a) => a.type === 'attack' && a.c && a.c.ctrl !== src.ctrl && faceUp(a.c) && race(a.c) === 'Insect' }, effs: [{ type: 'act', res: noop }] },
   'Insect Imitation': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(m => g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Insect' && lv(x) === lv(m) + 1)),
-    cost: function* (g, c, p, L2) { const [m] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p).filter(m => g.p[p].deck.some(x => isMon(x) && race(x) === 'Insect' && lv(x) === lv(m) + 1)), 1, 1, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(m => g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Insect' && lv(x) === lv(m) + 1)),
+    cost: function* (g, c, p, L2) { const [m] = yield* pick(g, p, 'Tribute 1 monster', E.lib.tribPool(g, p, { known: true }).filter(m => g.p[p].deck.some(x => isMon(x) && race(x) === 'Insect' && lv(x) === lv(m) + 1)), 1, 1, 'cost');
       if (m) { L2.data.lv = lv(m); const nm = m.pos === 'set' ? 'a face-down monster' : name(m); move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
     res: function* (g, c, p, L2) { const cs = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Insect' && lv(x) === L2.data.lv + 1); if (!cs.length || freeM(g, p) < 0) { shuffleDeck(g, p); return; }
       const [x] = yield* pick(g, p, `Special Summon a Level ${L2.data.lv + 1} Insect from your Deck`, cs, 1, 1, 'good'); if (x) ss(g, p, x, yield* pos2(g, p, x)); shuffleDeck(g, p); } }] },
@@ -322,10 +338,10 @@ E.addScripts({
   'Kaiser Sea Horse': { cont: { tributes: (g, s, c, p, need) => need === 2 && s.ctrl === p && c !== s && E.lib.isAttr(c, 'LIGHT') ? 1 : null } },
 
   /* ----- King ----- */
-  // Port of goat-5.js (same Edison text). PARTIAL: other Dragons are untargetable for both players.
+  // Port of goat-5.js (same Edison text). "Your opponent cannot target Dragon monsters": the engine's cont.noTarget, so its controller can
+  // still target their own Dragons (Book of Moon, Equip Spells; 2026-11-28 audit, E4c)
   'King Dragun': {
-    self: { targetFilter: (g, x, L2) => fieldMons(g).some(k => k.zone === 'm' && faceUp(k) && named(k, 'King Dragun') && !negd(g, k) && L2.p !== k.ctrl) },
-    cont: { grant: (g, src, c, flag) => flag === 'cantBeTargeted' && c.zone === 'm' && faceUp(c) && race(c) === 'Dragon' },
+    cont: { noTarget: (g, src, x, L2) => x.zone === 'm' && faceUp(x) && race(x) === 'Dragon' && (!L2 || L2.p == null || L2.p !== src.ctrl) },
     effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Summon a Dragon from your hand',
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && race(x) === 'Dragon' && !forbid(g, { type: 'ss', c: x, p, how: 'special' })),
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && race(x) === 'Dragon'); if (!cs.length || freeM(g, p) < 0) return;
@@ -333,11 +349,11 @@ E.addScripts({
   // From the hand it is a summon rule; from the GY it is offered as an effect. PARTIAL: the GY version uses a chain link.
   'King of the Beasts': {
     cont: { loc: 'hand', forbid: (g, src, a) => a.c === src && ['ns', 'ss'].includes(a.type) && fieldMons(g).some(x => faceUp(x) && named(x, 'King of the Beasts')) },
-    proc: { label: 'Special Summon (Tribute a face-up Moja)', cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && named(x, 'Moja')),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute 1 face-up Moja', monsOf(g, p).filter(x => faceUp(x) && named(x, 'Moja')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Moja.`); } } },
+    proc: { label: 'Special Summon (Tribute a face-up Moja)', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && named(x, 'Moja')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute 1 face-up Moja', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && named(x, 'Moja')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Moja.`); } } },
     effs: [{ type: 'ign', loc: 'gy', tags: { ss: 1 }, label: 'Tribute Moja: Special Summon from the GY',
-      cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && named(x, 'Moja')) && !fieldMons(g).some(x => faceUp(x) && named(x, 'King of the Beasts')),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 face-up Moja', monsOf(g, p).filter(x => faceUp(x) && named(x, 'Moja')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Moja.`); } },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && named(x, 'Moja')) && !fieldMons(g).some(x => faceUp(x) && named(x, 'King of the Beasts')),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 face-up Moja', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && named(x, 'Moja')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Moja.`); } },
       res: function* (g, c, p) { if (c.zone === 'gy' && freeM(g, p) >= 0 && !fieldMons(g).some(x => faceUp(x) && named(x, 'King of the Beasts'))) ss(g, p, c, 'atk'); } }] },
   // PARTIAL: the count is added to its ATK (its printed ATK is ?), so Megamorph style "original ATK" effects don't see it.
   'King of the Skull Servants': {
@@ -388,8 +404,9 @@ E.addScripts({
       move(g, x, 'fz', { ctrl: p, pos: 'up', reason: 'activate' }); shuffleDeck(g, p); log(g, `${PN(g, p)} activated Ancient City - Rainbow Ruins from the Deck.`);
       const of = g.p[opp(p)].fz; if (of && faceUp(of)) destroy(g, [of], { rule: true });
       if (L2.data.had) draw(g, opp(p), 1); } }] },
-  // Port of goat-6.js. PARTIAL: the forced attack is worked out inside the card (no Damage Step windows). The End Phase
-  // check ends the duel: one monster alone on the field wins, else a draw.
+  // Port of goat-6.js. The resolution ends after the cards are sent; the summon and battle are a later step (L.STEPS.lastTurn).
+  // PARTIAL: the forced attack is worked out inside the card (no Damage Step windows, not a real special Battle Phase). The End
+  // Phase check ends the duel: a player with monsters wins if the other has none, else a draw.
   'Last Turn': { effs: [
     { type: 'act', cond: (g, c, p) => g.tp !== p && g.p[p].lp <= 1000 && monsOf(g, p).length > 0,
       res: function* (g, c, p) {
@@ -399,18 +416,9 @@ E.addScripts({
         for (const q of [p, o]) for (const x of g.p[q].hand.slice()) move(g, x, 'gy', { reason: 'effect', by: p });
         log(g, 'Every other card on the field and in both hands went to the GY.');
         g.lastTurn = { turn: g.turnNo, u: c.u };
-        const ms = g.p[o].deck.filter(x => isMon(x) && !['ritual', 'token'].includes(D(x).k) && L.ssable(g, o, x));   // summoning conditions (CED, BLS, Spirits)
-        if (!ms.length || freeM(g, o) < 0) return;
-        const [x] = yield* pick(g, o, 'Special Summon which monster from your Deck?', ms, 1, 1, 'good'); shuffleDeck(g, o);
-        if (!x || !ss(g, o, x, 'atk')) return;
-        if (!m || !onField(m) || !onField(x)) return;
-        x.attacks = 1; log(g, `${name(x)} attacks ${m.pos === 'set' ? 'a face-down monster' : name(m)}.`);
-        if (m.pos === 'set') { m.pos = 'def'; g.seq++; log(g, `The face-down monster was ${name(m)}.`); emit(g, { type: 'flip', c: m, p, battle: true }); }
-        const A = stat(g, x, 'atk'); let dead = [];
-        if (m.pos === 'atk') { const T = stat(g, m, 'atk'); if (A > T) dead = [[m, x]]; else if (A < T) dead = [[x, m]]; else if (A > 0) dead = [[m, x], [x, m]]; }
-        else if (A > stat(g, m, 'def')) dead = [[m, x]];
-        for (const [v, k] of dead) destroy(g, [v], { battle: true, killer: k });
-        log(g, 'Battle damage from this battle is 0.');
+        // the resolution ends here (archive: Despair from the Dark, Regenerating Mummy, Elephant Statue and Night Assailant resolve before the
+        // Special Summon); the summon and the battle are a step after this chain and its triggers (engine g.postSteps)
+        (g.postSteps = g.postSteps || []).push({ k: 'lastTurn', p, m: m ? m.u : 0 });
       } },
     { type: 'trig', loc: 'any', res: noop,
       on: (g, ev, c) => {
@@ -450,7 +458,8 @@ E.addScripts({
       cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Tribute 2 monsters your opponent controls', monsOf(g, opp(p)).filter(x => !L.noTribOf(x) || L.noTribOf(x) === 'summon'), 2, 2, 'bad');
         for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed 2 of ${PN(g, opp(p))}'s monsters.`); } },
     effs: [
-      { type: 'trig', on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c) && !['normal', 'tribute', 'flip', 'gemini'].includes(ev.how)) { const q = ev.p; addRule(g, (g2, a) => (a.type === 'ns' || a.type === 'set') && a.p === q, { end: g.turnNo }); } return false; }, res: noop },
+      // a condition of its summon, not an effect: applies under Skill Drain (Netrep; rule: true; 2026-11-28 audit, pass2 goat-04)
+      { type: 'trig', rule: true, on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c) && !['normal', 'tribute', 'flip', 'gemini'].includes(ev.how)) { const q = ev.p; addRule(g, (g2, a) => (a.type === 'ns' || a.type === 'set') && a.p === q, { end: g.turnNo }); } return false; }, res: noop },
       { type: 'trig', mand: true, label: 'Take 1000 damage', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
         res: function* (g, c, p) { damage(g, p, 1000, { src: c, srcP: p }); } }] },
 

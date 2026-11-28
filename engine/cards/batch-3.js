@@ -122,8 +122,8 @@ E.addScripts({
         for (const x of cands) if (ss(g, p, x, 'atk', { negate: true })) x.flags.cantAttack = true;
         shuffleDeck(g, p); } },
     { type: 'quick', ds: true, label: 'Tribute a Fish: negate', tags: { destroy: 1 },
-      cond: (g, c, p, x) => x.top && !x.top.negated && x.top.p !== undefined && x.top.t && x.top.t.includes(c) && monsOf(g, p).some(y => y !== c && isFish(y)),
-      cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [y] = yield* pick(g, p, 'Tribute a Fish', monsOf(g, p).filter(y => y !== c && isFish(y)), 1, 1, 'cost'); move(g, y, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${nm(y)}.`); },
+      cond: (g, c, p, x) => x.top && !x.top.negated && x.top.p !== undefined && x.top.t && x.top.t.includes(c) && E.lib.tribPool(g, p, { known: true }).some(y => y !== c && isFish(y)),
+      cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [y] = yield* pick(g, p, 'Tribute a Fish', E.lib.tribPool(g, p, { known: true }).filter(y => y !== c && isFish(y)), 1, 1, 'cost'); move(g, y, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${nm(y)}.`); },
       res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
   'Moray of Greed': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 3 && g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER')).length >= 2,
     res: function* (g, c, p) { const w = g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER')); if (w.length < 2) return;
@@ -161,8 +161,8 @@ E.addScripts({
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'FIRE') && num(D(x).def) <= 200 && nm(x) !== 'Flamvell Firedog'); const [x] = yield* pick(g, p, 'Special Summon a FIRE with 200 or less DEF', cs, 1, 1, 'good'); if (x) ss(g, p, x); shuffleDeck(g, p); } }] },
   'Flamvell Magician': { self: { atk: (g, c) => monsOf(g, c.ctrl).some(x => faceUp(x) && /^Ally of Justice/.test(name(x))) ? 400 : 0 }, effs: [] },
   "Gravekeeper's Descendant": { effs: [{ type: 'ign', tags: { destroy: 1 }, label: "Tribute a Gravekeeper's: destroy a card",
-    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && isGK(x)) && fieldOf(g, opp(p)).length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, "Tribute a face-up Gravekeeper's monster", monsOf(g, p).filter(x => x !== c && faceUp(x) && isGK(x)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${nm(x)}.`); },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => x !== c && faceUp(x) && isGK(x)) && fieldOf(g, opp(p)).length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, "Tribute a face-up Gravekeeper's monster", E.lib.tribPool(g, p, { known: true }).filter(x => x !== c && faceUp(x) && isGK(x)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${nm(x)}.`); },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which card?', fieldOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L).filter(x => x.ctrl !== p), { by: p }); } }] },
   "Gravekeeper's Spy": { effs: [{ type: 'trig', mand: true, faceDownOk: true, tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
@@ -181,7 +181,7 @@ E.addScripts({
       res: function* (g, c) { const xs = fieldMons(g).filter(x => x.flags.rekindleBy === c.u && x.flags.rekindleTurn === g.turnNo); for (const x of xs) move(g, x, 'ban', { reason: 'effect' }); if (xs.length) log(g, `${xs.map(nm).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished (Rekindling).`); } }] },
 
   /* ===== Gladiator Beast ===== */
-  'Gladiator Beast Laquari': { self: { atk: (g, c) => c.flags.gb && !c.flags.gbOff ? 300 : 0, onNegated: (g, c) => { c.flags.gbOff = true; } }, effs: [battledHook, tagOut('Gladiator Beast Laquari')] },
+  'Gladiator Beast Laquari': { self: { origAtk: c => c.flags.gb && !c.flags.gbOff ? 2100 : null, onNegated: (g, c) => { c.flags.gbOff = true; } }, effs: [battledHook, tagOut('Gladiator Beast Laquari')] },
   'Gladiator Beast Equeste': { effs: [battledHook, tagOut('Gladiator Beast Equeste'),
     { type: 'trig', mand: true, on: (g, ev, c) => byGB(ev, c), cond: (g, c, p) => g.p[p].gy.some(isGB),
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Return which Gladiator Beast card to your hand?', g.p[p].gy.filter(isGB), 1, 1, 'good'); },
@@ -234,7 +234,7 @@ E.addScripts({
   // Shrink: the original ATK becomes half, then other changes apply on top. A second Shrink does nothing more.
   'Shrink': { effs: [{ type: 'act', ds: true, cond: g => fieldMons(g).some(faceUp),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Halve the original ATK of which monster?', fieldMons(g).filter(faceUp), 1, 1, 'bad'); },
-    res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t) || t.mods.some(m => m.shrink)) return; const b = baseAtk(t) + (t.flags.gb && nm(t) === 'Gladiator Beast Laquari' ? 300 : 0);
+    res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t) || t.mods.some(m => m.shrink)) return; const b = baseAtk(t);   // Laquari's 2100 is its original ATK (self.origAtk)
       // a Token whose "?" ATK is the amount its effect gave (Emissary of Darkness Token): its original ATK is 0, so it becomes 0 (Gorz archive)
       if (t.flags.tokAtk != null && isNaN(parseInt(D(t).atk, 10))) { addMod(g, t, { set: 0, which: 'atk', end: true, shrink: true }); log(g, `${name(t)}'s ATK became 0.`); return; }
       addMod(g, t, { base: Math.ceil(b / 2), which: 'atk', end: true, shrink: true }); log(g, `${name(t)}'s original ATK became ${Math.ceil(b / 2)}.`); } }] },   // a new original ATK: later changes add to it
@@ -261,7 +261,7 @@ E.addScripts({
       res: function* (g, c, p, L) { const t = live(L)[0]; if (t) { move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${D(t).n} returned to the hand.`); } } },
     { type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end',
       res: function* (g, c) { if (onField(c)) { move(g, c, 'extra', { reason: 'effect' }); log(g, 'Elemental HERO Grand Neos was shuffled into the Extra Deck.'); } } }] },
-  'Gladiator Beast Hoplomus': { self: { def: (g, c) => c.flags.gb && !c.flags.gbOff ? 300 : 0, onNegated: (g, c) => { c.flags.gbOff = true; } }, effs: [battledHook, tagOut('Gladiator Beast Hoplomus')] },
+  'Gladiator Beast Hoplomus': { self: { origDef: c => c.flags.gb && !c.flags.gbOff ? 2400 : null, onNegated: (g, c) => { c.flags.gbOff = true; } }, effs: [battledHook, tagOut('Gladiator Beast Hoplomus')] },
   'Neo-Spacian Grand Mole': { effs: [{ type: 'trig', label: 'Return both battling monsters to the hand',
     on: (g, ev, c) => ev.type === 'dsStart' && (ev.a === c || ev.t === c) && !!ev.a && !!ev.t,
     res: function* (g, c, p, L) { const o = L.ev.a === c ? L.ev.t : L.ev.a; if (!onField(c) || !o || !onField(o)) return; move(g, o, 'hand', { reason: 'effect', by: p }); move(g, c, 'hand', { reason: 'effect', by: p }); log(g, `${D(o).n} and Neo-Spacian Grand Mole returned to the hand.`); } }] },
@@ -326,8 +326,8 @@ E.addScripts({
 
   /* ===== Quickdraw Plant ===== */
   'Night Assailant': { effs: [
-    { type: 'trig', mand: true, faceDownOk: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'flip' && ev.c === c, cond: (g, c, p) => monsOf(g, opp(p)).length > 0,
-      target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which monster?', monsOf(g, opp(p)), 1, 1, 'bad'); },
+    { type: 'trig', mand: true, faceDownOk: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'flip' && ev.c === c,   // a Flip effect activates even with no target (pass2 edison-11)
+      target: function* (g, c, p, L) { if (monsOf(g, opp(p)).length) yield* tgt(g, p, L, 'Destroy which monster?', monsOf(g, opp(p)), 1, 1, 'bad'); },
       res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } },
     { type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy',
       cond: (g, c, p) => g.p[p].gy.some(x => x !== c && isMon(x) && hasAb(x, 'Flip')),
@@ -381,7 +381,11 @@ E.addScripts({
     effs: [
       { type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'attack' && ev.a === c && ev.t && faceUp(ev.t) && D(ev.t).k === 'synchro' && lv(ev.t) >= 6,
         res: function* (g, c, p, L) { const t = g.aw ? g.aw.t : L.ev.t; if (!t || !onField(t) || !faceUp(t)) return; const A = atk(g, t); addMod(g, t, { set: Math.ceil(A / 2), which: 'atk', end: true, turbo: c.u }); log(g, `${name(t)}'s ATK was halved.`); } },
-      { type: 'trig', on: (g, ev, c) => { if (ev.type === 'dsEnd' && ev.a === c && ev.t) ev.t.mods = ev.t.mods.filter(m => m.turbo !== c.u); return false; }, res: function* () {} }] },
+      // the halving lasts for that battle only: it ends at the end of the Damage Step, or as soon as the attack is over without one (negated
+      // or stopped before the Damage Step; pass2 edison-09)
+      { type: 'trig', loc: 'any', rule: true, on: (g, ev, c) => { const on = (g.aw && g.aw.a === c) || (g.battle && g.battle.a === c);
+        if ((ev.type === 'dsEnd' && ev.a === c) || !on) for (const m of fieldMons(g)) if (m.mods.some(x => x.turbo === c.u)) { m.mods = m.mods.filter(x => x.turbo !== c.u); g.seq++; }
+        return false; }, res: function* () {} }] },
   // Site ruling 2: under Kycoo the Machines in the GY aren't banished, the ones on the field still are (gyOpt: Kycoo doesn't stop the activation).
   'System Down': { effs: [{ type: 'act', gyOpt: true, cond: (g, c, p) => E.lib.canPay(g, p, 1000, c) && [...monsOf(g, opp(p)).filter(faceUp), ...(L.forbid(g, { type: 'banish', from: 'gy', p }) ? [] : g.p[opp(p)].gy)].some(x => isMon(x) && race(x) === 'Machine'),
     cost: function* (g, c, p) { pay(g, p, 1000); },
@@ -434,7 +438,7 @@ E.addScripts({
       res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(isAG); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon an Ancient Gear monster', cs, 1, 1, 'good'); if (x) { const fromDeck = x.zone === 'deck'; ss(g, p, x); if (fromDeck) shuffleDeck(g, p); } } }] },
   // ① every monster on the field and in the GYs is a Zombie (cont.race); ② only Zombies can be Tribute Summoned
   'Zombie World': { effs: [{ type: 'act', res: function* () {} }],
-    cont: { race: (g, src, c) => onField(c) || c.zone === 'gy' ? 'Zombie' : null, forbid: (g, src, a) => a.type === 'ns' && lv(a.c) >= 5 && race(a.c) !== 'Zombie' } },
+    cont: { race: (g, src, c) => (onField(c) && faceUp(c)) || c.zone === 'gy' ? 'Zombie' : null, forbid: (g, src, a) => a.type === 'ns' && lv(a.c) >= 5 && race(a.c) !== 'Zombie' } },   // race: face-up monsters only (pass2 edison-11)
   'Limiter Removal': { effs: [
     { type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Machine'),
       res: function* (g, c, p) { const ms = monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Machine'); for (const m of ms) { addMod(g, m, { set: 2 * atk(g, m), which: 'atk', end: true }); /* doubling sets the value, like halving (2026-11-28 audit) */ m.flags.limiterBy = c.u; m.flags.limiterTurn = g.turnNo; } if (ms.length) log(g, `${ms.map(name).join(', ')} doubled ATK.`); } },

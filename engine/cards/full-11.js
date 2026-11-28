@@ -133,9 +133,9 @@ E.addScripts({
     { type: 'trig', loc: 'st', mand: true, label: 'Banish the monster it battled',
       on: (g, ev, c) => ev.type === 'dsEnd' && !!c.equipTo && !!ev.t && (ev.a.u === c.equipTo || ev.t.u === c.equipTo),
       res: function* (g, c, p, L2) { const o = L2.ev.a.u === c.equipTo ? L2.ev.t : L2.ev.a; if (o && onField(o) && o.zone === 'm') { move(g, o, 'ban', { reason: 'effect', by: p }); log(g, `${D(o).n} was banished.`); } } }] },
-  // ENGINE: no face-up Defense Normal Summon, and a face-down Special Summon isn't turned face-up; Setting is blocked and
-  // Book of Moon style "turn face-down" cards can't be activated.
-  'Light of Intervention': { cont: { forbid: (g, src, a) => (a.type === 'set' && a.c && isMon(a.c)) ||
+  // The engine's cont.noFaceDown (2026-11-28 audit, E4c, goat-08 and rulings 3 to 5): a Set is a Normal Summon in face-up Defense Position,
+  // a face-down Special Summon is face-up Defense, and no effect turns a monster face-down (setFaceDown refuses; these cards aren't offered).
+  'Light of Intervention': { cont: { noFaceDown: true, forbid: (g, src, a) =>
       (a.type === 'activate' && a.c && (['Book of Moon', 'Darkness Approaches'].includes(D(a.c).n) || /face-down/i.test((a.eff && a.eff.label) || ''))) },
     effs: [noop] },
   'Light of Judgment': { effs: [{ type: 'act',
@@ -363,7 +363,7 @@ E.addScripts({
       cond: (g, c, p) => monsOf(g, p).length >= 2 && monsOf(g, p).some(x => ['Grand Tiki Elder', 'Melchid the Four-Face Beast'].includes(D(x).n)),
       cost: function* (g, c, p, grp) { const key = monsOf(g, p).filter(x => ['Grand Tiki Elder', 'Melchid the Four-Face Beast'].includes(D(x).n));
         const [a] = yield* pick(g, p, 'Tribute Grand Tiki Elder or Melchid the Four-Face Beast', key, 1, 1, 'cost');
-        const [b] = yield* pick(g, p, 'Tribute 1 more monster', monsOf(g, p).filter(x => x !== a), 1, 1, 'cost');
+        const [b] = yield* pick(g, p, 'Tribute 1 more monster', E.lib.tribPool(g, p).filter(x => x !== a), 1, 1, 'cost');
         for (const x of [a, b]) if (x) move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${[a, b].filter(Boolean).map(x => D(x).n).join(' and ')}.`); } },
     cont: { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src },
     effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Equip The Mask of Remnants', on: (g, ev, c) => fromFieldToGY(ev, c),
@@ -387,8 +387,8 @@ E.addScripts({
       const xs = yield* pick(g, p, `Destroy ${n} of their monster${n > 1 ? 's' : ''}`, ms, n, n, 'bad'); destroy(g, xs, { by: p }); } }] },
   // ENGINE: "can't be Special Summoned except by its own rule" is only enforced from the GY.
   'Master Monk': { self: { maxAttacks: () => 2 },
-    proc: { label: 'Special Summon (Tribute Monk Fighter)', cond: (g, c, p) => monsOf(g, p).some(x => named(x, 'Monk Fighter')),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute Monk Fighter', monsOf(g, p).filter(x => named(x, 'Monk Fighter')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Monk Fighter.`); } } },
+    proc: { label: 'Special Summon (Tribute Monk Fighter)', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => named(x, 'Monk Fighter')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute Monk Fighter', E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Monk Fighter')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Monk Fighter.`); } } },
     cont: { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src } },
   'Master of Oz': { effs: [] },
   'Metal Detector': { effs: [{ type: 'act',
@@ -412,19 +412,19 @@ E.addScripts({
     res: function* (g, c, p) { const o = opp(p); log(g, `${PN(g, o)}'s hand: ${g.p[o].hand.map(name).join(', ') || 'no cards'}.`);
       const sets = fieldOf(g, o).filter(x => x.pos === 'set'); log(g, `${PN(g, o)}'s Set cards: ${sets.map(x => D(x).n).join(', ') || 'none'}.`); } }] },
   'Mind Master': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Pay 800, Tribute a Psychic: summon a Psychic',
-    cond: (g, c, p) => E.lib.canPay(g, p, 800) && monsOf(g, p).some(x => isPsy(x) && !named(x, 'Mind Master')) && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isPsy(x) && lv(x) <= 4),
-    cost: function* (g, c, p) { pay(g, p, 800); const [x] = yield* pick(g, p, 'Tribute 1 Psychic monster', monsOf(g, p).filter(x => isPsy(x) && !named(x, 'Mind Master')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p) => E.lib.canPay(g, p, 800) && E.lib.tribPool(g, p, { known: true }).some(x => isPsy(x) && !named(x, 'Mind Master')) && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isPsy(x) && lv(x) <= 4),
+    cost: function* (g, c, p) { pay(g, p, 800); const [x] = yield* pick(g, p, 'Tribute 1 Psychic monster', E.lib.tribPool(g, p, { known: true }).filter(x => isPsy(x) && !named(x, 'Mind Master')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => isPsy(x) && lv(x) <= 4); const [x] = yield* pick(g, p, 'Special Summon a Level 4 or lower Psychic from your Deck', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   // ENGINE: no revealed-hand state; the hand is logged when this card is summoned.
   'Mind on Air': { effs: [{ type: 'trig', on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c) && faceUp(c)) log(g, `${PN(g, opp(c.ctrl))}'s hand: ${g.p[opp(c.ctrl)].hand.map(name).join(', ') || 'no cards'}.`); return false; }, res: function* () {} }] },
   'Mind Over Matter': { effs: [{ type: 'act', negSummon: true,
     cond: (g, c, p, x) => monsOf(g, p).some(isPsy) && ((!x.top && !!g.attempt && g.attempt.how !== 'flip') || (spellTrapAct(x.top) && !x.top.negated)),
     cost: function* (g, c, p, L2) { L2.data.mode = g.chain.length ? 'link' : 'summon'; L2.data.L = g.chain[g.chain.length - 1];
-      const [x] = yield* pick(g, p, 'Tribute 1 Psychic monster', monsOf(g, p).filter(isPsy), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${x.pos === 'set' ? 'a face-down monster' : D(x).n}.`); } },
+      const [x] = yield* pick(g, p, 'Tribute 1 Psychic monster', E.lib.tribPool(g, p, { known: true }).filter(isPsy), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${x.pos === 'set' ? 'a face-down monster' : D(x).n}.`); } },
     res: function* (g, c, p, L2) { if (L2.data.mode === 'summon') { if (g.attempt) { g.attempt.negated = true; log(g, 'The summon was negated.'); } } else { L2.data.L.negBy = p; negate(g, L2.data.L, true); } } }] },
   'Mind Trust': { effs: [{ type: 'act',
-    cond: (g, c, p) => monsOf(g, p).some(m => lv(m) >= 2 && g.p[p].gy.some(x => isMon(x) && D(x).tu && lv(x) <= Math.floor(lv(m) / 2))),
-    cost: function* (g, c, p, L2) { const [m] = yield* pick(g, p, 'Tribute 1 Level 2 or higher monster', monsOf(g, p).filter(m => lv(m) >= 2 && g.p[p].gy.some(x => isMon(x) && D(x).tu && lv(x) <= Math.floor(lv(m) / 2))), 1, 1, 'cost');
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(m => lv(m) >= 2 && g.p[p].gy.some(x => isMon(x) && D(x).tu && lv(x) <= Math.floor(lv(m) / 2))),
+    cost: function* (g, c, p, L2) { const [m] = yield* pick(g, p, 'Tribute 1 Level 2 or higher monster', E.lib.tribPool(g, p, { known: true }).filter(m => lv(m) >= 2 && g.p[p].gy.some(x => isMon(x) && D(x).tu && lv(x) <= Math.floor(lv(m) / 2))), 1, 1, 'cost');
       L2.data.lv = lv(m); move(g, m, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${m.pos === 'set' ? 'a face-down monster' : D(m).n}.`); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which Tuner from your GY?', g.p[p].gy.filter(x => isMon(x) && D(x).tu && lv(x) <= Math.floor(L2.data.lv / 2)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } }] },

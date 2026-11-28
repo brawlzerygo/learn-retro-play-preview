@@ -26,7 +26,8 @@ function millCost(g, p, n) { const out = []; for (let i = 0; i < n && g.p[p].dec
 function* discard1(g, p, cands, text) { const [x] = yield* pick(g, p, text || 'Discard a card', cands, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } return x; }
 function randomDiscard(g, p) { const h = g.p[p].hand; if (!h.length) return; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)} at random.`); }
 /* The Lightsworn End Phase mill: mandatory, only while face-up on the field. */
-const lsEnd = n => ({ type: 'trig', mand: true, on: (g, ev, c) => endPhaseOf(ev, c),
+// each Lightsworn End Phase effect is its own chain, one after another (site ruling; pass2 edison-06/07: ownChain)
+const lsEnd = n => ({ type: 'trig', mand: true, ownChain: true, on: (g, ev, c) => endPhaseOf(ev, c),
   res: function* (g, c, p) { if (onField(c) && faceUp(c)) lsMill(g, p, n, c); } });
 /* Synchro Summons with material restrictions the engine's reader doesn't know. */
 function synMats(g, p, sx, o) {
@@ -117,8 +118,9 @@ E.addScripts({
     res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && isLS(x) && lv(x) <= 4, 'Add a Level 4 or lower Lightsworn'); } }] },
   'Monster Reincarnation': { effs: [{ type: 'act',
     // ruling 1: the discarded monster can be the target, so a monster in the hand is enough (then the discard must be a monster)
-    cond: (g, c, p) => g.p[p].hand.some(x => x !== c) && (g.p[p].gy.some(isMon) || g.p[p].hand.some(x => x !== c && isMon(x))),
-    cost: function* (g, c, p) { yield* discard1(g, p, g.p[p].hand.filter(x => x !== c && (g.p[p].gy.some(isMon) || isMon(x)))); },
+    // (a discarded monster that Dimensional Fissure or Macro Cosmos would banish never reaches the GY: pass2 edison-08)
+    cond: (g, c, p) => g.p[p].hand.some(x => x !== c) && (g.p[p].gy.some(isMon) || g.p[p].hand.some(x => x !== c && isMon(x) && !E.lib.gyBanBy(g, x))),
+    cost: function* (g, c, p) { yield* discard1(g, p, g.p[p].hand.filter(x => x !== c && (g.p[p].gy.some(isMon) || (isMon(x) && !E.lib.gyBanBy(g, x))))); },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Add which monster from your GY to your hand?', g.p[p].gy.filter(isMon), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } }] },
   'Solar Recharge': { effs: [{ type: 'act',
@@ -174,8 +176,8 @@ E.addScripts({
       res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) { t.pos = t.pos === 'atk' ? 'def' : 'atk'; log(g, `${name(t)} changed to ${t.pos === 'atk' ? 'Attack' : 'Defense'} Position.`); } } }] },
   'XX-Saber Gottoms': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => E.lib.isAttr(c, 'EARTH'), tunerAsNon: true }),
     effs: [{ type: 'ign', label: 'Tribute an X-Saber: random discard',
-      cond: (g, c, p) => monsOf(g, p).some(x => isXSaber(x)) && g.p[opp(p)].hand.length > 0,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute an X-Saber monster', monsOf(g, p).filter(x => isXSaber(x)), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+      cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => isXSaber(x)) && g.p[opp(p)].hand.length > 0,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute an X-Saber monster', E.lib.tribPool(g, p, { known: true }).filter(x => isXSaber(x)), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
       res: function* (g, c, p) { randomDiscard(g, opp(p)); } }] },
 
   /* ----- Amaryllis / Plants ----- */
@@ -186,8 +188,8 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'gy',   // archive: it always activates; with under 2 free zones it summons nothing
     res: function* (g, c, p) { if (nFreeM(g, p) >= 2) { tokens(g, p, { n: 'Fluff Token', a: 'WIND', r: 'Plant', lv: 1, atk: 0, def: 0 }, 2, 'def', { noTribute: 'summon' }); if (g.inDS) { g.sw = null; if (g.ssBatch) g.ssBatch.noSw = true; } } } }] },
   'Lonefire Blossom': { effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Tribute a Plant: summon a Plant',
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Plant') && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isPlant(x) && !noSS(x)),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a face-up Plant', monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Plant'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && race(x) === 'Plant') && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isPlant(x) && !noSS(x)),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a face-up Plant', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && race(x) === 'Plant'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { if (freeM(g, p) >= 0) yield* ssFromDeck(g, p, isPlant, 'Special Summon a Plant from your Deck'); } }] },
   'Lord Poison': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 },
     on: (g, ev, c) => takenFromBattle(ev, c) && ev.destroyed,
@@ -211,8 +213,8 @@ E.addScripts({
         cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish a Plant from your GY', g.p[p].gy.filter(x => x !== c && isPlant(x)), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${name(x)}.`); } },
         res: function* (g, c, p) { if (c.zone !== 'gy') return; g.amaOwn = c.u; try { ssx(g, p, c, 'def'); } finally { g.amaOwn = null; } } }] },
   'Tytannial, Princess of Camellias': { effs: [{ type: 'quick', ds: true, label: 'Tribute a Plant: negate',
-    cond: (g, c, p, x) => x.top && !x.top.negated && (x.top.t || []).some(t => t && onField(t)) && monsOf(g, p).some(m => faceUp(m) && race(m) === 'Plant'),
-    cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [x] = yield* pick(g, p, 'Tribute a face-up Plant', monsOf(g, p).filter(m => faceUp(m) && race(m) === 'Plant'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p, x) => x.top && !x.top.negated && (x.top.t || []).some(t => t && onField(t)) && E.lib.tribPool(g, p, { known: true }).some(m => faceUp(m) && race(m) === 'Plant'),
+    cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [x] = yield* pick(g, p, 'Tribute a face-up Plant', E.lib.tribPool(g, p, { known: true }).filter(m => faceUp(m) && race(m) === 'Plant'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
   'D.D.R. - Different Dimension Reincarnation': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => x !== c) && g.p[p].ban.filter(x => E.lib.ssable(g, p, x)).some(isMon),
@@ -242,7 +244,7 @@ E.addScripts({
   'Queen of Thorns': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => race(c) === 'Plant' }),
     // PARTIAL: the 1000 LP is paid as a non-Plant arrives from the hand (not as a cost before it); you can't summon one with 1000 LP or less.
     cont: { forbid: (g, src, a) => contOn(g, src) && ((a.type === 'ns' && a.c.zone === 'hand') || (a.type === 'ss' && a.c.zone === 'hand')) && a.c.id && race(a.c) !== 'Plant' && !E.lib.canPay(g, a.p, 1000) },
-    effs: [{ type: 'trig', mand: true, on: (g, ev, c) => { if (ev.type === 'move' && ev.from === 'hand' && ev.to === 'm' && ev.reason === 'summon' && isMon(ev.c) && race(ev.c) !== 'Plant') pay(g, ev.c.ctrl, 1000); return false; }, res: function* () {} },
+    effs: [{ type: 'trig', mand: true, on: (g, ev, c) => { if (ev.type === 'move' && ev.from === 'hand' && ev.to === 'm' && ev.reason === 'summon' && isMon(ev.c) && race(ev.c) !== 'Plant' && !E.lib.negd(g, c)) pay(g, ev.c.ctrl, 1000); return false; }, res: function* () {} },   // not under Skill Drain (pass2 edison-10)
       // "If you Tribute a face-up Queen of Thorns to Tribute Summon a monster, you must pay 1000 Life Points" (site ruling 2, archive): the
       // Tributes leave before the summon (Group B), so a Queen Tributed face-up remembers the monster and pays from the GY as it lands.
       { type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => { if (ev.type !== 'move') return false;
@@ -328,7 +330,7 @@ E.addScripts({
       res: function* (g, c, p, L) { const k = L.ev.killer; if (k && onField(k) && faceUp(k)) destroy(g, [k], { by: p }); } }] },
   'Soul Taker': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => oppFaceUp(g, p).length > 0,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which face-up monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
-    res: function* (g, c, p, L) { const t = live(L).filter(faceUp); if (destroy(g, t, { by: p, src: c }).length) gain(g, opp(p), 1000); } }] },
+    res: function* (g, c, p, L) { const t = live(L).filter(faceUp); if (destroy(g, t, { by: p, src: c }).length) gain(g, opp(p), 1000, { same: true }); } }] },
 
   /* ----- Fairy ----- */
   'Freed the Brave Wanderer': { effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Banish 2 LIGHTs: destroy a stronger monster',

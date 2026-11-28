@@ -170,8 +170,8 @@ E.addScripts({
   'Dark Effigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && D(c).k === 'normal' && E.lib.isAttr(c, 'DARK') && need === 2 && !negd(g, src) ? 1 : null } },
   'Dark Elf': { self: { attackCost: () => 1000 } },
   'Dark Eradicator Warlock': {
-    proc: { label: 'Special Summon (Tribute Dark Magician)', cond: (g, c, p) => c.zone === 'hand' && monsOf(g, p).some(x => named(x, 'Dark Magician')),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Dark Magician?', monsOf(g, p).filter(x => named(x, 'Dark Magician')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Dark Magician.`); } } },
+    proc: { label: 'Special Summon (Tribute Dark Magician)', cond: (g, c, p) => c.zone === 'hand' && E.lib.tribPool(g, p, { known: true }).some(x => named(x, 'Dark Magician')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Dark Magician?', E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Dark Magician')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Dark Magician.`); } } },
     effs: [lockEff,
       // after a Normal Spell resolves it leaves the field for the GY by rule (a negated and destroyed one leaves by effect)
       { type: 'trig', mand: true, label: '1000 damage',
@@ -341,8 +341,8 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Insect gains 2 Levels?', monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Insect'), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { L.lvAdd(g, t, 2, true); log(g, `${name(t)} is now Level ${lv(t)}.`); } } }] },
   'Dark Strike Fighter': { effs: [{ type: 'ign', opt: true, label: 'Tribute a monster: Level x 200 damage',
-    cond: (g, c, p) => g.phase === 'main1' && monsOf(g, p).length > 0,
-    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p), 1, 1, 'cost'); if (!x) return; L2.data.n = lv(x); const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); },
+    cond: (g, c, p) => g.phase === 'main1' && E.lib.tribPool(g, p).length > 0,
+    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p), 1, 1, 'cost'); if (!x) return; L2.data.n = lv(x); const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); },
     res: function* (g, c, p, L2) { if (L2.data.n) damage(g, opp(p), L2.data.n * 200, { src: c, srcP: p }); } }] },
   'Dark Tinker': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Look at the top card',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to === 'gy' && ev.prevCtrl === c.owner,
@@ -356,8 +356,8 @@ E.addScripts({
     res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c, 'atk'); } }] },
   'Dark Voltanis': { effs: [{ type: 'trig', loc: 'hand', tags: { ss: 1, destroy: 1 }, label: 'Tribute a DARK: Special Summon',
     on: (g, ev, c) => ev.type === 'move' && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule' && isTrap(ev.c) && D(ev.c).sub === 'Counter' && ev.prevCtrl === c.owner,
-    cond: (g, c, p) => c.zone === 'hand' && monsOf(g, p).some(darkMon),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a DARK monster', monsOf(g, p).filter(darkMon), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
+    cond: (g, c, p) => c.zone === 'hand' && E.lib.tribPool(g, p, { known: true }).some(darkMon),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a DARK monster', E.lib.tribPool(g, p, { known: true }).filter(darkMon), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
     res: function* (g, c, p) { if (c.zone !== 'hand' || !ss(g, p, c)) return; const cs = allField(g); if (!cs.length) return;
       const [x] = yield* pick(g, p, 'Destroy 1 card on the field', cs, 1, 1, 'bad'); if (x) destroy(g, [x], { by: p, src: c }); } }] },
   'Dark Zebra': { effs: [{ type: 'trig', mand: true, label: 'Change to Defense Position',

@@ -243,7 +243,7 @@ E.addScripts({
     res: function* (g, c, p) { if (!onField(c)) return; const i = yield* choose(g, p, 'Declare a Type of monster', TYPES); c.flags.f16type = TYPES[i]; log(g, `${PN(g, p)} declared ${TYPES[i]}: those monsters can't attack.`); } },
     { type: 'trig', loc: 'st', mand: true, label: 'Tribute 1 monster or destroy this card',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; const ms = monsOf(g, p);
+      res: function* (g, c, p) { if (!onField(c)) return; const ms = E.lib.tribPool(g, p);
         if (ms.length && (yield* yn(g, p, 'Tribute 1 monster to keep The Regulation of Tribe?'))) { const [x] = yield* pick(g, p, 'Tribute which monster?', ms, 1, 1, 'cost'); if (x) { tribute(g, p, x, 'for The Regulation of Tribe'); return; } }
         destroy(g, [c], { rule: true }); } }],
     cont: { forbid: (g, src, a) => a.type === 'attack' && a.c && !!src.flags.f16type && race(a.c) === src.flags.f16type } },
@@ -361,14 +361,14 @@ E.addScripts({
   // before her (in zone order); the Zombies should all be unaffected.
   'The Lady in Wight': { cont: { grant: (g, src, c, flag) => ['noBattleDestroy', 'unaffectedSpells', 'unaffectedTraps'].includes(flag) && c.zone === 'm' && faceUp(c) && race(c) === 'Zombie' && lv(c) <= 3 && !named(c, 'The Lady in Wight') } },
   // Sets are still allowed (a Set is not a Summon). PARTIAL: Flip Summons aren't stopped (no forbid action for a Flip Summon).
-  'The Last Warrior from Another Planet': { cont: { forbid: (g, src, a) => a.type === 'ns' || a.type === 'ss' || a.type === 'flip' },   // "Neither player can Summon": Flip Summons too
+  'The Last Warrior from Another Planet': { cont: { forbid: (g, src, a) => (a.type === 'ns' && !(a.tribs && a.tribs.includes(src))) || a.type === 'ss' || a.type === 'flip' },   // it can be Tributed for a Tribute Summon (engine nsTribUnlock; pass2 goat-05)   // "Neither player can Summon": Flip Summons too
     effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy your other monsters',
       on: (g, ev, c) => evSummoned(ev, c, ['special', 'fusion', 'ritual', 'synchro']),
       res: function* (g, c, p) { const xs = monsOf(g, p).filter(x => x !== c); if (xs.length) destroy(g, xs, { by: p }); } }] },
   // PARTIAL: "unaffected by Spell effects" covers destruction only (the engine's unaffectedSpells flag).
   'The Legendary Fisherman': { self: { unaffectedSpells: g => umiOn(g), noAttackTarget: g => umiOn(g) } },
-  'The Little Swordsman of Aile': { effs: [{ type: 'ign', label: 'Tribute 1: +700 ATK', cond: (g, c, p) => monsOf(g, p).some(x => x !== c),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p).filter(x => x !== c), 1, 1, 'cost'); if (x) tribute(g, p, x); },
+  'The Little Swordsman of Aile': { effs: [{ type: 'ign', label: 'Tribute 1: +700 ATK', cond: (g, c, p) => E.lib.tribPool(g, p).some(x => x !== c),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p).filter(x => x !== c), 1, 1, 'cost'); if (x) tribute(g, p, x); },
     res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 700, end: true, own: true }); log(g, `${name(c)} gained 700 ATK until the end of the turn.`); } } }] },
   // Ritual Monster: Curse of the Masked Beast (scripted in full-04.js) summons it.
   'The Masked Beast': { effs: [] },
@@ -402,7 +402,7 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
     res: function* (g, c, p) {
       if (!onField(c)) return;
-      const cs = monsOf(g, p).filter(x => x !== c);
+      const cs = E.lib.tribPool(g, p).filter(x => x !== c);
       if (cs.length && (yield* yn(g, p, 'Tribute 1 other monster to keep The Unfriendly Amazon?'))) {
         const [x] = yield* pick(g, p, 'Tribute which monster?', cs, 1, 1, 'cost');
         if (x) { tribute(g, p, x, 'for The Unfriendly Amazon'); return; }

@@ -159,8 +159,8 @@ E.addScripts({
     cond: (g, c, p) => monsOf(g, p).filter(x => named(x, 'Hydrogeddon')).length >= 2 && monsOf(g, p).some(x => named(x, 'Oxygeddon'))
       && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].some(x => named(x, 'Water Dragon') && canSS(g, p, x)),
     cost: function* (g, c, p) {
-      const hs = yield* pick(g, p, 'Tribute 2 Hydrogeddon', monsOf(g, p).filter(x => named(x, 'Hydrogeddon')), 2, 2, 'cost');
-      const [o] = yield* pick(g, p, 'Tribute 1 Oxygeddon', monsOf(g, p).filter(x => named(x, 'Oxygeddon')), 1, 1, 'cost');
+      const hs = yield* pick(g, p, 'Tribute 2 Hydrogeddon', E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Hydrogeddon')), 2, 2, 'cost');
+      const [o] = yield* pick(g, p, 'Tribute 1 Oxygeddon', E.lib.tribPool(g, p, { known: true }).filter(x => named(x, 'Oxygeddon')), 1, 1, 'cost');
       const grp = g.group; for (const x of [...hs, o].filter(Boolean)) move(g, x, 'gy', { reason: 'cost', by: p, group: grp });
       log(g, `${PN(g, p)} Tributed 2 Hydrogeddon and 1 Oxygeddon.`); },
     res: function* (g, c, p) {
@@ -201,8 +201,8 @@ E.addScripts({
       const n = Math.floor(a / 2); if (n > 0) { damage(g, p, n, { src: c, srcP: p }); damage(g, opp(p), n, { src: c, srcP: p }); } } })] },
   'Chthonian Emperor Dragon': { self: { maxAttacks: (g, c) => c.flags.gemini ? 2 : 1 }, effs: [] },
   'Chthonian Polymer': { effs: [{ type: 'act',
-    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && g.sw.how === 'fusion' && g.sw.cs.some(x => onField(x) && x.ctrl !== p) && monsOf(g, p).length > 0,
-    cost: function* (g, c, p, L2) { L2.data.cs = g.sw.cs.slice(); const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && g.sw.how === 'fusion' && g.sw.cs.some(x => onField(x) && x.ctrl !== p) && E.lib.tribPool(g, p).length > 0,
+    cost: function* (g, c, p, L2) { L2.data.cs = g.sw.cs.slice(); const [x] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     target: function* (g, c, p, L2) { L2.t = L2.data.cs.filter(x => onField(x) && x.ctrl !== p); },
     res: function* (g, c, p, L2) { const t = live(L2).find(x => x.ctrl !== p); if (t) takeControl(g, p, t, false); } }] },
   // The damage is effect damage equal to the battle damage its controller took in that battle.

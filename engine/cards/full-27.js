@@ -210,9 +210,9 @@ E.addScripts({
   // Only the Monster Zones count (ruling).
   'Shadowslayer': { self: { directAttack: (g, c) => { const ms = monsOf(g, opp(c.ctrl)); return ms.length > 0 && ms.every(m => m.pos !== 'atk'); } } },
   // Tributing 1 monster is the cost; the opponent picks their Tribute at resolution (no Summon).
-  'Share the Pain': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).length > 0 && monsOf(g, opp(p)).length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
-    res: function* (g, c, p) { const o = opp(p); if (!monsOf(g, o).length) return; const [x] = yield* pick(g, o, 'Tribute which of your monsters?', monsOf(g, o), 1, 1, 'cost');
+  'Share the Pain': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.tribPool(g, p).length > 0 && monsOf(g, opp(p)).length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    res: function* (g, c, p) { const o = opp(p); if (!monsOf(g, o).length) return; const [x] = yield* pick(g, o, 'Tribute which of your monsters?', E.lib.tribPool(g, o), 1, 1, 'cost');
       if (x) { move(g, x, 'gy', { reason: 'tribute', by: o }); log(g, `${PN(g, o)} Tributed ${D(x).n}.`); } } }] },
   // ENGINE: attack redirects (port of classic-5.js). PARTIAL: "an appropriate target" isn't checked beyond being another
   // monster you control; a switched attack is worked out by the card.
@@ -298,8 +298,8 @@ E.addScripts({
   // ENGINE: "Cannot be Special Summoned by other ways" is not enforced (no generic flag); "Cannot be Normal Summoned/Set"
   // is read from the text. Negating a Trap Card activation is not once per turn (the text has no limit).
   'Sorcerer of Dark Magic': {
-    proc: { label: 'Special Summon (Tribute 2 Level 6+ Spellcasters)', cond: (g, c, p) => monsOf(g, p).filter(m => lv(m) >= 6 && race(m) === 'Spellcaster').length >= 2,
-      cost: function* (g, c, p, grp) { const ts = yield* pick(g, p, 'Tribute 2 Level 6 or higher Spellcasters', monsOf(g, p).filter(m => lv(m) >= 6 && race(m) === 'Spellcaster'), 2, 2, 'cost');
+    proc: { label: 'Special Summon (Tribute 2 Level 6+ Spellcasters)', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).filter(m => lv(m) >= 6 && race(m) === 'Spellcaster').length >= 2,
+      cost: function* (g, c, p, grp) { const ts = yield* pick(g, p, 'Tribute 2 Level 6 or higher Spellcasters', E.lib.tribPool(g, p, { known: true }).filter(m => lv(m) >= 6 && race(m) === 'Spellcaster'), 2, 2, 'cost');
         for (const t of ts) move(g, t, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${ts.map(t => D(t).n).join(' and ')}.`); } },
     effs: [{ type: 'quick', ds: true, tags: { destroy: 1 }, label: 'Negate the Trap Card',
       cond: (g, c, p, x) => spellTrapAct(x.top) && isTrap(x.top.c) && !x.top.negated,

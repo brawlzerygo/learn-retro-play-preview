@@ -83,8 +83,8 @@ E.addScripts({
         target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon Stardust Dragon from your GY', g.p[p].gy.filter(x => D(x).n === 'Stardust Dragon'), 1, 1, 'good'); },
         res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   'Assault Mode Activate': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(s => D(s).k === 'synchro' && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => / Assault Mode$/.test(D(x).n) && D(x).n.includes(D(s).n))),
-    cost: function* (g, c, p, L) { const [s] = yield* pick(g, p, 'Tribute which Synchro Monster?', monsOf(g, p).filter(s => D(s).k === 'synchro' && g.p[p].deck.some(x => / Assault Mode$/.test(D(x).n) && D(x).n.includes(D(s).n))), 1, 1, 'cost'); L.data.n = D(s).n; move(g, s, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(s).n}.`); },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(s => D(s).k === 'synchro' && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => / Assault Mode$/.test(D(x).n) && D(x).n.includes(D(s).n))),
+    cost: function* (g, c, p, L) { const [s] = yield* pick(g, p, 'Tribute which Synchro Monster?', E.lib.tribPool(g, p, { known: true }).filter(s => D(s).k === 'synchro' && g.p[p].deck.some(x => / Assault Mode$/.test(D(x).n) && D(x).n.includes(D(s).n))), 1, 1, 'cost'); L.data.n = D(s).n; move(g, s, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(s).n}.`); },
     res: function* (g, c, p, L) { const cands = g.p[p].deck.filter(x => / Assault Mode$/.test(D(x).n) && D(x).n.includes(L.data.n)); if (!cands.length || freeM(g, p) < 0) { shuffleDeck(g, p); return; } const [x] = yield* pick(g, p, 'Special Summon which Assault Mode monster?', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
 
   /* ----- Batteryman ----- */
@@ -148,8 +148,8 @@ E.addScripts({
 
   /* ----- Bushi ----- */
   'Destiny HERO - Dasher': { effs: [
-    { type: 'ign', opt: true, label: 'Tribute a monster: +1000 ATK', cond: (g, c, p) => monsOf(g, p).some(x => x !== c),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p).filter(x => x !== c), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+    { type: 'ign', opt: true, label: 'Tribute a monster: +1000 ATK', cond: (g, c, p) => E.lib.tribPool(g, p).some(x => x !== c),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', E.lib.tribPool(g, p).filter(x => x !== c), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, end: true, own: true }); log(g, `${name(c)} gained 1000 ATK.`); } } },
     // "If this card attacks, change it to Defense Position at the end of the Battle Phase" (bpEnd, 2026-11-28 audit)
     { type: 'trig', on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'bpEnd' && c.declared && c.attacks > 0 && onField(c) && faceUp(c) && c.pos === 'atk') { c.pos = 'def'; g.seq++; log(g, `${name(c)} changed to Defense Position.`); } return false; }, res: function* () {} },
@@ -264,8 +264,8 @@ E.addScripts({
     { type: 'trig', loc: 'st', mand: true, tags: { ss: 1 }, label: 'Return the banished monsters',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl && faceUp(c) && (c.flags.temple || []).length > 0,
       res: function* (g, c, p) { const us = c.flags.temple || []; c.flags.temple = []; for (const u of us) { const x = allCards(g, 'ban').find(y => y.u === u); if (!x) continue; if (freeM(g, p) >= 0) ss(g, p, x); else move(g, x, 'gy', { reason: 'rule' }); } } }] },
-  'Spiritual Water Art - Aoi': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => E.lib.isAttr(x, 'WATER')) && g.p[opp(p)].hand.length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WATER monster?', monsOf(g, p).filter(x => E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+  'Spiritual Water Art - Aoi': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => E.lib.isAttr(x, 'WATER')) && g.p[opp(p)].hand.length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WATER monster?', E.lib.tribPool(g, p, { known: true }).filter(x => E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     res: function* (g, c, p) { const h = g.p[opp(p)].hand; log(g, `${PN(g, p)} looked at ${PN(g, opp(p))}'s hand.`); if (!h.length) return; const [x] = yield* pick(g, p, 'Send which card from their hand to the GY?', h, 1, 1, 'bad'); if (x) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${D(x).n} was sent to the GY.`); } } }] },
 
   /* ----- Crystal Beast ----- */

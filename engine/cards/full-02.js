@@ -137,8 +137,8 @@ E.addScripts({
   // "Cannot be Normal Summoned or Set. Cannot be Special Summoned except by Tributing 1 Armed Dragon LV7. You can send 1 card
   // from your hand to the GY to destroy all face-up monsters your opponent controls."
   'Armed Dragon LV10': {
-    proc: { label: 'Special Summon (Tribute Armed Dragon LV7)', cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && named(x, 'Armed Dragon LV7')),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute Armed Dragon LV7', monsOf(g, p).filter(x => faceUp(x) && named(x, 'Armed Dragon LV7')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Armed Dragon LV7.`); } } },
+    proc: { label: 'Special Summon (Tribute Armed Dragon LV7)', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => faceUp(x) && named(x, 'Armed Dragon LV7')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute Armed Dragon LV7', E.lib.tribPool(g, p, { known: true }).filter(x => faceUp(x) && named(x, 'Armed Dragon LV7')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Armed Dragon LV7.`); } } },
     effs: [nomiRule, { type: 'ign', tags: { destroy: 1 }, label: 'Discard: destroy their face-up monsters',
       cond: (g, c, p) => g.p[p].hand.length > 0 && oppFaceUp(g, p).length > 0,
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send 1 card from your hand to the GY', g.p[p].hand, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${name(x)} to the GY.`); } },
@@ -253,8 +253,8 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which of your monsters?', monsOf(g, p), 1, 1, 'cost'); },
     res: function* (g, c, p, L2) { if (destroy(g, live(L2), { by: p, src: c }).length) mill(g, opp(p), 2); } }] },
   'Assault Overload': { effs: [{ type: 'act', label: 'Tribute an Assault Mode monster: damage both players',
-    cond: (g, c, p) => monsOf(g, p).some(isAssault),
-    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute 1 Assault Mode monster', monsOf(g, p).filter(isAssault), 1, 1, 'cost'); L2.data.n = lv(x) * 200; move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(isAssault),
+    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute 1 Assault Mode monster', E.lib.tribPool(g, p, { known: true }).filter(isAssault), 1, 1, 'cost'); L2.data.n = lv(x) * 200; move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     res: function* (g, c, p, L2) { dmgBoth(g, p, L2.data.n, c); } }] },
   // PARTIAL: any Assault Mode monster in the GY can be summoned (the engine doesn't track "properly summoned first").
   'Assault Revival': { effs: [{ type: 'act', tags: { destroy: 1, ss: 1 },
@@ -290,8 +290,8 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'dsEnd' && ev.a && ev.a.ctrl === c.ctrl && !!ev.t && race(ev.a) === 'Reptile' && onField(ev.t) && ev.t.pos !== 'atk',
       res: function* (g, c, p, L2) { const t = L2.ev.t; if (t && onField(t) && t.pos !== 'atk') { if (t.pos === 'set') log(g, `It was ${name(t)}.`); t.pos = 'atk'; g.seq++; log(g, `${name(t)} changed to Attack Position.`); emit(g, { type: 'pos', c: t, p }); } } }] },
   'Attack Reflector Unit': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => D(x).n === 'Cyber Dragon') && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Cyber Barrier Dragon')),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Cyber Dragon', monsOf(g, p).filter(x => D(x).n === 'Cyber Dragon'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Cyber Dragon.`); } },
+    cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => D(x).n === 'Cyber Dragon') && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Cyber Barrier Dragon')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Cyber Dragon', E.lib.tribPool(g, p, { known: true }).filter(x => D(x).n === 'Cyber Dragon'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Cyber Dragon.`); } },
     res: function* (g, c, p) { yield* ssFrom(g, p, x => named(x, 'Cyber Barrier Dragon'), 'Special Summon Cyber Barrier Dragon', ['hand', 'deck']); } }] },
 
   /* ----- B.E.S. ----- */
@@ -405,8 +405,8 @@ E.addScripts({
   // Dinosaurs without Tributing. Destroy it during your opponent's 3rd End Phase."
   'Big Evolution Pill': {
     cont: { tributes: (g, src, c, p) => src.flags.pill && src.ctrl === p && race(c) === 'Dinosaur' && lv(c) >= 5 ? 0 : null },
-    effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Dinosaur'),
-      cost: function* (g, c, p, L2) { L2.keep = true; const [x] = yield* pick(g, p, 'Tribute 1 Dinosaur', monsOf(g, p).filter(x => race(x) === 'Dinosaur'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    effs: [{ type: 'act', cond: (g, c, p) => E.lib.tribPool(g, p, { known: true }).some(x => race(x) === 'Dinosaur'),
+      cost: function* (g, c, p, L2) { L2.keep = true; const [x] = yield* pick(g, p, 'Tribute 1 Dinosaur', E.lib.tribPool(g, p, { known: true }).filter(x => race(x) === 'Dinosaur'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
       res: function* (g, c, p) { if (onField(c)) { c.flags.pill = true; log(g, 'Level 5 or higher Dinosaurs can be Normal Summoned without Tributing.'); } } },
     { type: 'trig', loc: 'st', mand: true, tags: { destroy: 1 }, label: 'Third End Phase',
       on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'end' && ev.tp !== c.ctrl && c.flags.pill) { c.flags.pillN = (c.flags.pillN || 0) + 1; return c.flags.pillN >= 3; } return false; },
@@ -417,9 +417,14 @@ E.addScripts({
       while (top.length) { const [x] = top.length === 1 ? [top[0]] : yield* pick(g, p, `Which card goes ${order.length ? 'next' : 'on top'}?`, top, 1, 1, 'good'); order.push(x); top.splice(top.indexOf(x), 1); }
       for (const x of order.slice().reverse()) dk.push(x); log(g, `${PN(g, p)} looked at the top ${order.length} cards of the Deck and put them back in any order.`); } }] },
   // ported from goat-2.js. "If this card is attacked, change it to Attack Position at the end of the Damage Step."
-  // ENGINE: a face-down monster can't respond to a chain, so "When a Spell Card that targets this face-down card is
-  // activated: change it to face-up Defense Position and negate the activation" isn't scripted.
-  'Big Shield Gardna': { effs: [{ type: 'trig', mand: true, faceDownOk: true, label: 'Change to Attack Position',
+  // "When a Spell Card is activated that targets this face-down card (and no other cards)": a Quick Effect of the face-down card (engine
+  // eff.faceDownOnly; rulings 1 to 3: only a Spell that targets just this card, Book of Moon chained sets it up, and Skill Drain doesn't stop it)
+  'Big Shield Gardna': { effs: [{ type: 'quick', faceDownOnly: true, label: 'Flip face-up and negate the Spell',
+    cond: (g, c, p, x) => { const t = x.top; return !!(t && t.cardAct && isSpell(t.c) && !t.negated && t.p !== undefined && (t.t || []).length === 1 && t.t[0] === c && c.pos === 'set'); },
+    target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
+    res: function* (g, c, p, L2) { if (!onField(c) || c.pos !== 'set') return; c.pos = 'def'; g.seq++; log(g, 'Big Shield Gardna changed to face-up Defense Position.'); emit(g, { type: 'flip', c, p, byEffect: true });
+      const T = L2.data.L; if (T && !T.negated) { T.negBy = p; negate(g, T, false, { activation: true }); } } },
+    { type: 'trig', mand: true, faceDownOk: true, label: 'Change to Attack Position',
     on: (g, ev, c) => ev.type === 'dsEnd' && ev.t === c && onField(c) && c.pos !== 'atk',
     res: function* (g, c, p) { if (onField(c) && c.pos !== 'atk') { c.pos = 'atk'; g.seq++; log(g, 'Big Shield Gardna changed to Attack Position.'); emit(g, { type: 'pos', c, p }); } } }] },
   'Big Wave Small Wave': { effs: [{ type: 'act', tags: { destroy: 1, ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && E.lib.isAttr(x, 'WATER')),

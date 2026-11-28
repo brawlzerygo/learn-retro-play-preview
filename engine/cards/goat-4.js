@@ -29,14 +29,16 @@ const barrelOk = (t, p) => { const tx = String(D(t.c).ps || D(t.c).tx || ''); if
 E.addScripts({
   // No shared script. "Negate the effects of Flip Effect Monsters. Negate any Trap effects that target this card on the field,
   // and if you do, destroy that Trap Card."
-  'Fiend Skull Dragon': { cont: { negates: (g, src, c) => isFlipMon(c) },
+  // Flip effects activate and are negated as they resolve if it is still face-up (archive: Offerings to the Doomed chained to the Flip
+  // Summon; cont.negLink; 2026-11-28 audit, pass2 goat-05)
+  'Fiend Skull Dragon': { cont: { negLink: (g, src, L) => faceUp(src) && !E.lib.negd(g, src) && isFlipMon(L.c) && L.eff.type === 'trig' && !!L.ev && L.ev.type === 'flip' && L.ev.c === L.c },
     self: { negTarget: (g, c, L) => (L.t || []).includes(c) && isTrap(L.c) && 'destroy' }, effs: [] },
 
   // No shared script. "When this card is sent from the field to the Graveyard: You can Tribute 1 monster; place this card on the top of your Deck."
   'Axe of Despair': { cont: eqBonus(1000, 0), effs: [equipAct(),
     { type: 'trig', loc: 'gy', when: true, label: 'Tribute 1 monster: put it on top of the Deck',
-      on: (g, ev, c) => fromFieldToGY(ev, c), cond: (g, c, p) => c.zone === 'gy' && monsOf(g, p).length > 0,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
+      on: (g, ev, c) => fromFieldToGY(ev, c), cond: (g, c, p) => c.zone === 'gy' && E.lib.tribPool(g, p).length > 0,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', E.lib.tribPool(g, p), 1, 1, 'cost'); if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
       res: function* (g, c, p) { if (c.zone === 'gy') { move(g, c, 'deckTop', { reason: 'effect' }); log(g, 'Axe of Despair was put on top of the Deck.'); } } }] },
 
   // Kept over full-19.js, which only answers the opponent's links: Netrep "Barrel Behind the Door may be chained to your own effect
