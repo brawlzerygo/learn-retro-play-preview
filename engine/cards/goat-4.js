@@ -17,21 +17,20 @@ const equipAct = (filter = () => true, text = 'Equip to which face-up monster?')
   target: function* (g, c, p, L2) { yield* tgt(g, p, L2, text, fieldMons(g).filter(m => faceUp(m) && filter(m)), 1, 1, 'good'); },
   res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && filter(t) && onField(c)) { equip(g, c, t); c.flags.eqU = t.u; } } });
 const eqBonus = (a, d) => ({ atk: (g, src, m) => src.equipTo === m.u ? a : 0, def: (g, src, m) => src.equipTo === m.u ? d : 0 });
-// "Negate any Trap/Spell effects that target this card": offered as a response to the link that targets it.
-// ENGINE: continuous negation of a targeting card isn't automatic (no hook when a link picks its targets), so the
-// controller uses it as an optional response at Spell Speed 3. PARTIAL: optional, and it is a chain link here.
-const negTargeting = (isKind, label) => ({ type: 'quick', speed: 3, ds: true, label,
-  cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && isKind(t.c) && t.c !== c && (t.t || []).includes(c) && faceUp(c)); },
-  target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
-  res: function* (g, c, p, L2) { negLink(g, L2.data.L, p, true); } });
+// "Negate any Trap effects that target this card, and destroy that Trap Card": continuous, applied by the engine as the link resolves
+// (self.negTarget, 2026-11-28 audit, E4b; Fiend Skull Dragon ruling 3: the Trap may be activated, its effect is negated and it is destroyed).
 // Barrel Behind the Door: does this link's card text inflict effect damage? (battle-damage sentences are left out)
 const burnText = c => { const t = (D(c).tx || '').replace(/[^.]*battle damage[^.]*\.?/gi, ''); return /inflict[^.]*damage|damage to (both|each|your)|takes? [^.]*damage/i.test(t); };
 
+// Barrel Behind the Door: the link's damage is certain and hits this player (rulings: not Barrel itself, not coin/dice effects like Time
+// Wizard or Dice Jar, only damage to YOUR LP; 2026-11-28 audit, E4b, goat-04)
+const barrelOk = (t, p) => { const tx = String(D(t.c).ps || D(t.c).tx || ''); if (D(t.c).n === 'Barrel Behind the Door' || /\bcoin\b|\bdie\b|\bdice\b/i.test(tx)) return false;
+  if (/damage to (?:both|each)|(?:both|each) players? (?:take|takes)/i.test(tx)) return true; return t.p !== p ? /opponent/i.test(tx) : /damage to you\b|you take|inflict[^.]*damage to (?:you|its controller)|take[^.]*damage/i.test(tx); };
 E.addScripts({
   // No shared script. "Negate the effects of Flip Effect Monsters. Negate any Trap effects that target this card on the field,
   // and if you do, destroy that Trap Card."
   'Fiend Skull Dragon': { cont: { negates: (g, src, c) => isFlipMon(c) },
-    effs: [negTargeting(isTrap, 'Negate the Trap targeting it')] },
+    self: { negTarget: (g, c, L) => (L.t || []).includes(c) && isTrap(L.c) && 'destroy' }, effs: [] },
 
   // No shared script. "When this card is sent from the field to the Graveyard: You can Tribute 1 monster; place this card on the top of your Deck."
   'Axe of Despair': { cont: eqBonus(1000, 0), effs: [equipAct(),
@@ -50,7 +49,7 @@ E.addScripts({
     cont: { loc: 'gy', dmg: (g, src, p, n, o) => { if (o.barrel || !o.src || !g.barrel) return; const b = g.barrel.find(x => x.by === src.u && x.p === p && x.u === o.src.u); if (!b) return;
       log(g, `Barrel Behind the Door turned the damage around.`); damage(g, opp(p), n, { ...o, barrel: true }); return 0; } },
     effs: [{ type: 'act',
-      cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && t.c !== c && D(t.c).n !== 'Barrel Behind the Door' && burnText(t.c) && !['Continuous', 'Equip', 'Field'].includes(D(t.c).sub || '')); },
+      cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && t.c !== c && burnText(t.c) && barrelOk(t, p) && !['Continuous', 'Equip', 'Field'].includes(D(t.c).sub || '')); },
       target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
       res: function* (g, c, p, L2) { const T = L2.data.L; if (!T || T.negated) return; const res0 = T.eff.res, entry = { by: c.u, p, u: T.c.u };
         T.eff = { ...T.eff, res: function* (g2, c2, p2, L3) { (g2.barrel || (g2.barrel = [])).push(entry); try { yield* res0(g2, c2, p2, L3); } finally { g2.barrel = g2.barrel.filter(x => x !== entry); } } };

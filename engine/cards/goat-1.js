@@ -17,10 +17,10 @@ const named = (c, n) => D(c).n === n;
 const killedByBattle = (ev, c) => ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c && ev.prevCtrl !== c.ctrl;
 // Chaos Sorcerer style summon: banish 1 LIGHT and 1 DARK monster from your GY.
 const chaosProc = { label: 'Special Summon (banish a LIGHT and a DARK)',
-  cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'LIGHT') && g.p[p].gy.some(x => isMon(x) && attr(x) === 'DARK'),
+  cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')) && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'DARK')),
   cost: function* (g, c, p, grp) {
-    const [l] = yield* pick(g, p, 'Banish a LIGHT monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT'), 1, 1, 'cost');
-    const [d] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'), 1, 1, 'cost');
+    const [l] = yield* pick(g, p, 'Banish a LIGHT monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')), 1, 1, 'cost');
+    const [d] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')), 1, 1, 'cost');
     for (const x of [l, d]) if (x) move(g, x, 'ban', { reason: 'cost', group: grp });
     log(g, `${PN(g, p)} banished ${[l, d].filter(Boolean).map(name).join(' and ')}.`);
   } };
@@ -39,6 +39,9 @@ const absorb = { type: 'ign', opt: true, label: 'Equip an opponent’s monster',
     log(g, `${nm} was equipped to ${name(c)}.`);
   } };
 const absorbSelf = (refl) => ({
+  // negated (Skill Drain, Gorgon's Eye), the equipped monster is destroyed (archive: "Monsters equipped to Relinquished while Skill Drain is
+  // active are negated and destroyed"; 2026-11-28 audit, E4b, goat-01): run by the engine's dropOwnWhenNegated sweep
+  onNegated: (g, c) => { const e = eyeEquip(g, c); if (e && !g.relBusy) { g.relBusy = true; try { destroy(g, [e], { rule: true }); log(g, `${D(e).n} equipped to ${name(c)} was destroyed.`); } finally { g.relBusy = false; } } },
   atk: (g, c) => { const e = eyeEquip(g, c); return e ? eqStat(g, e, 'atk') : 0; },
   def: (g, c) => { const e = eyeEquip(g, c); return e ? eqStat(g, e, 'def') : 0; },
   // "If this card would be destroyed by battle, destroy the equipped monster instead."

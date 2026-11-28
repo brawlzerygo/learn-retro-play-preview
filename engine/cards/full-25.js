@@ -114,7 +114,7 @@ E.addScripts({
     { type: 'trig', loc: 'st', res: noop, on: (g, ev, c) => {
       if (ev.type === 'summon' && g.f25smack && g.f25smack[c.ctrl] === g.turnNo) for (const m of ev.cs) if (m.ctrl === c.ctrl && faceUp(m) && named(m, 'Mokey Mokey') && !m.mods.some(x => x.set === 3000)) { addMod(g, m, { set: 3000, which: 'atk', end: true }); log(g, `${name(m)} has 3000 ATK this turn.`); }
       return false; } }] },
-  'Molten Destruction': { cont: { atk: (g, src, m) => attr(m) === 'FIRE' ? 500 : 0, def: (g, src, m) => attr(m) === 'FIRE' ? -400 : 0 }, effs: [actNoop] },
+  'Molten Destruction': { cont: { atk: (g, src, m) => E.lib.isAttr(m, 'FIRE') ? 500 : 0, def: (g, src, m) => E.lib.isAttr(m, 'FIRE') ? -400 : 0 }, effs: [actNoop] },
   // Face-up Special Summons from the GY only (ruling: Set by The Shallow Grave, no draw).
   'Molten Zombie': { effs: [{ type: 'trig', mand: true, label: 'Draw 1 card',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.from === 'gy' && ev.to === 'm' && ev.reason === 'summon' && c.pos !== 'set',
@@ -423,7 +423,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return up to 2 monsters to the hand', fieldMons(g), 1, 2, 'bad'); },
     res: function* (g, c, p, L2) { for (const t of live(L2)) { const n = faceUp(t) ? name(t) : 'A face-down monster'; move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${n} returned to the hand.`); } } }] },
   // +1000 during the Damage Step only, attacking or attacked, against a face-up LIGHT monster.
-  'Penumbral Soldier Lady': { self: { atk: (g, c) => { const b = g.battle; if (!g.inDS || !b || !b.t || (b.a !== c && b.t !== c)) return 0; const o = b.a === c ? b.t : b.a; return o && onField(o) && faceUp(o) && attr(o) === 'LIGHT' ? 1000 : 0; } } },
+  'Penumbral Soldier Lady': { self: { atk: (g, c) => { const b = g.battle; if (!g.inDS || !b || !b.t || (b.a !== c && b.t !== c)) return 0; const o = b.a === c ? b.t : b.a; return o && onField(o) && faceUp(o) && E.lib.isAttr(o, 'LIGHT') ? 1000 : 0; } } },
   'Perfect Machine King': { self: { atk: (g, c) => 500 * fieldMons(g).filter(x => x !== c && faceUp(x) && race(x) === 'Machine').length } },
   'Performance of Sword': { effs: [] },
   // "When ... you can": misses the timing (rulings). Kycoo the Ghost Destroyer stops the banish (goat-3.js).

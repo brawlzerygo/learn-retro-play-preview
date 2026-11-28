@@ -17,7 +17,8 @@ const lwState = (g, c) => g.lw7 && g.lw7[c.u];
 E.addScripts({
   // PARTIAL: the coin is tossed at the start of the Damage Step (the engine has no trigger point right before damage calculation);
   // the result is the same: the other monster is destroyed before damage is calculated.
-  'Sasuke Samurai #4': { effs: [{ type: 'trig', mand: true, faceDownOk: true, tags: { destroy: 1 }, label: 'Toss a coin',
+  // a face-down Sasuke tosses no coin (RULING? decided by EDOPro's mechanics: a single trigger at the start of the Damage Step; 2026-11-28 audit, E4b)
+  'Sasuke Samurai #4': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Toss a coin',
     on: (g, ev, c) => ev.type === 'dsStart' && ev.t && (ev.a === c || ev.t === c),
     res: function* (g, c, p, L2) { const o = L2.ev.a === c ? L2.ev.t : L2.ev.a; if (!onField(c) || !o || !onField(o)) return;
       const right = coin(g); log(g, `${PN(g, p)} called the coin ${right ? 'right' : 'wrong'}.`); if (right) destroy(g, [o], { by: p }); } }] },

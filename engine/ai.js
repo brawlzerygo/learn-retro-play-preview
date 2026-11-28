@@ -277,6 +277,8 @@ function defaultAnswer(g, pr) {
 }
 function findCard(g, u) { for (const P of g.p) for (const z of ['hand', 'm', 'st', 'gy', 'ban', 'deck', 'extra']) for (const c of P[z]) if (c && c.u === u) return c; return null; }
 function candidates(g, pr) {
+  // a declared card name (engine declareName: every name in the pool, the public ones first): only those few are worth scoring (2026-11-28 audit)
+  if (pr.declare) return pr.opts.slice(0, Math.max(1, Math.min(pr.suggested || 1, 6))).map(o => [o.key]);
   if (pr.type === 'pick') {
     if (pr.max === 1) return pr.opts.map(o => [o.key]);
     const out = []; const keys = pr.opts.map(o => o.key);

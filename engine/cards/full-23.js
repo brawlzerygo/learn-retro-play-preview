@@ -140,13 +140,13 @@ E.addScripts({
   // Control lasts while Hiita is face-up on the field and the monster is still FIRE (a watcher gives it back).
   'Hiita the Fire Charmer': { effs: [
     flip('Take control of a FIRE monster', {
-      target: function* (g, c, p, L2) { const cs = oppFaceUp(g, p).filter(x => attr(x) === 'FIRE'); if (cs.length) yield* tgt(g, p, L2, 'Take control of which face-up FIRE monster?', cs, 1, 1, 'bad'); },
-      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || attr(t) !== 'FIRE' || t.ctrl === p || !onField(c) || !faceUp(c) || c.ctrl !== p) return;
+      target: function* (g, c, p, L2) { const cs = oppFaceUp(g, p).filter(x => E.lib.isAttr(x, 'FIRE')); if (cs.length) yield* tgt(g, p, L2, 'Take control of which face-up FIRE monster?', cs, 1, 1, 'bad'); },
+      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || E.lib.notAttr(t, 'FIRE') || t.ctrl === p || !onField(c) || !faceUp(c) || c.ctrl !== p) return;
         const from = t.ctrl; if (takeControl(g, p, t, false)) (g.f23charm || (g.f23charm = [])).push({ c: c.u, t: t.u, from }); } }),
     { type: 'trig', loc: 'any', on: (g, ev, c) => {
       if (!g.f23charm || !g.f23charm.some(e => e.c === c.u)) return false;
       g.f23charm = g.f23charm.filter(e => { if (e.c !== c.u) return true; const t = fieldMons(g).find(x => x.u === e.t); if (!t) return false;
-        if (onField(c) && faceUp(c) && attr(t) === 'FIRE') return true;
+        if (onField(c) && faceUp(c) && E.lib.isAttr(t, 'FIRE')) return true;
         if (t.ctrl !== e.from && t.flags.ctrlUntil == null) { if (freeM(g, e.from) >= 0) { takeControl(g, e.from, t, false); g.seq++; } else { move(g, t, 'gy', { reason: 'rule' }); log(g, `${D(t).n} was sent to the GY.`); } }
         return false; });
       return false; }, res: function* () {} }] },
@@ -169,7 +169,7 @@ E.addScripts({
       const i = yield* choose(g, p, 'Change its Attribute to', as); c.flags.f23attr = as[i]; log(g, `${name(c)}'s Attribute became ${as[i]}.`); } }] },
   // PARTIAL: neither player can target them (cantBeTargeted can't tell who is targeting; goat-5.js King Dragun has the same gap).
   "Horus' Servant": { cont: { grant: (g, src, c, flag) => flag === 'cantBeTargeted' && c.zone === 'm' && faceUp(c) && /^Horus the Black Flame Dragon/.test(D(c).n) } },
-  'Hoshiningen': { cont: { atk: (g, src, c) => !faceUp(c) ? 0 : attr(c) === 'LIGHT' ? 500 : attr(c) === 'DARK' ? -400 : 0 } },
+  'Hoshiningen': { cont: { atk: (g, src, c) => !faceUp(c) ? 0 : E.lib.isAttr(c, 'LIGHT') ? 500 : E.lib.isAttr(c, 'DARK') ? -400 : 0 } },
   'House of Adhesive Tape': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && ['normal', 'tribute', 'flip'].includes(g.sw.how) && g.sw.cs.some(x => onField(x) && faceUp(x) && stat(g, x, 'def') <= 500),
     target: function* (g, c, p, L2) { L2.data.cs = g.sw.cs.slice(); },
@@ -236,9 +236,9 @@ E.addScripts({
     { type: 'trig', loc: 'st', mand: true, tags: { destroy: 1 }, label: 'Destroy Level 3 or lower monsters',
       on: (g, ev) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => faceUp(x) && x.flags.f23ns === g.turnNo && lv(x) <= 3),
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => faceUp(x) && x.flags.f23ns === g.turnNo && lv(x) <= 3), { by: p, src: c }); } }] },
-  // PARTIAL (as goat-3.js): no window during damage calculation, so it is used in the Damage Step windows.
+  // Used in the window before damage calculation (the engine's damage-calculation window); the 3000 applies during damage calculation only (E.lib.dcalc, 2026-11-28 audit).
   'Injection Fairy Lily': {
-    self: { atk: (g, c) => g.battle && c.flags.lilyB === g.battle ? 3000 : 0 },
+    self: { atk: (g, c) => E.lib.dcalc(g) && g.battle && c.flags.lilyB === g.battle ? 3000 : 0 },   // during that damage calculation only
     effs: [{ type: 'quick', ds: true, label: 'Pay 2000: +3000 ATK',
       cond: (g, c, p) => g.inDS && inBattle(g, c) && c.flags.lilyB !== g.battle && c.flags.lilyPaid !== g.battle && E.lib.canPay(g, p, 2000),
       cost: function* (g, c, p) { c.flags.lilyPaid = g.battle; pay(g, p, 2000); },
@@ -272,7 +272,7 @@ E.addScripts({
       for (const x of [c, t]) { x.flags.ctrlUntil = null; x.flags.ctrlFrom = null; } g.seq++;
       log(g, `${name(c)} and ${t.pos === 'set' ? 'a face-down monster' : name(t)} switched control.`); } })] },
   'Invasion of Flames': { cont: { forbid: (g, src, a) => a.type === 'activate' && a.c && isTrap(a.c) && a.eff && a.eff.type === 'act' && !!g.sw && g.sw.cs.includes(src) && ['normal', 'tribute'].includes(g.sw.how) } },
-  'Invigoration': { cont: eqBonus(400, -200), effs: [equipAct(m => attr(m) === 'EARTH', 'Equip to which face-up EARTH monster?')] },
+  'Invigoration': { cont: eqBonus(400, -200), effs: [equipAct(m => E.lib.isAttr(m, 'EARTH'), 'Equip to which face-up EARTH monster?')] },
   'Invitation to a Dark Sleep': {
     cont: { forbid: (g, src, a) => a.type === 'attack' && a.c && !!src.flags.f23sleep && a.c.u === src.flags.f23sleep },
     effs: [{ type: 'trig', mand: true, label: 'Select a monster that can’t attack', on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute', 'flip']),
@@ -303,8 +303,9 @@ E.addScripts({
       cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Jigen Bakudan.`); },
       res: function* (g, c, p) { const ms = monsOf(g, p); const at = new Map(ms.map(m => [m, faceUp(m) ? ATK(g, m) : 0]));
         const gone = destroy(g, ms, { by: p }); const n = Math.floor(gone.reduce((s, m) => s + (at.get(m) || 0), 0) / 2); if (n > 0) damage(g, opp(p), n, { src: c, srcP: p }); } }] },
-  'Jirai Gumo': { effs: [{ type: 'trig', mand: true, label: 'Toss a coin', on: (g, ev, c) => ev.type === 'attack' && ev.a === c,
-    res: function* (g, c, p) { if (callCoin(g, p)) return; const n = Math.floor(g.p[p].lp / 2); g.p[p].lp -= n; log(g, `${PN(g, p)} lost ${n} LP.`); } }] },
+  // the coin toss is the attack's cost (Netrep), not a chain link (self.attackCostFn; 2026-11-28 audit, E4b, goat-10); "lose half" rounds as
+  // EDOPro's Goat script (7999 leaves 3999)
+  'Jirai Gumo': { self: { attackCostFn: function* (g, c, p) { if (callCoin(g, p)) return; const n = Math.ceil(g.p[p].lp / 2); g.p[p].lp -= n; g.seq++; log(g, `${PN(g, p)} lost ${n} LP.`); } }, effs: [] },
   'Jowgen the Spiritualist': { cont: { forbid: (g, src, a) => a.type === 'ss' },
     effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Random discard: destroy Special Summoned monsters',
       cond: (g, c, p) => g.p[p].hand.length > 0 && fieldMons(g).some(isSpecial),

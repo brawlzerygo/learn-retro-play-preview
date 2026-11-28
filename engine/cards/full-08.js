@@ -40,9 +40,9 @@ const goblinLock = (more = {}) => ({ ...more,
 // Flint
 const flintOf = (g, m) => stOnField(g).find(x => faceUp(x) && named(x, 'Flint') && x.equipTo === m.u) || null;
 const flintImmune = (g, m) => named(m, 'Flint Lock') && faceUp(m) && !negd(g, m);
-// Gaia Plate: halve during the Damage Step (the inner stat() call skips this cont, so it halves the rest)
+// Gaia Plate: halve during damage calculation (E.lib.dcalc) (the inner stat() call skips this cont, so it halves the rest)
 let HALVING = 0;
-const battling = (g, src, c) => g.inDS && g.battle && c !== src && ((g.battle.a === src && g.battle.t === c) || (g.battle.t === src && g.battle.a === c));
+const battling = (g, src, c) => E.lib.dcalc(g) && g.battle && c !== src && ((g.battle.a === src && g.battle.t === c) || (g.battle.t === src && g.battle.a === c));
 const gaiaHalf = which => (g, src, c) => { if (HALVING || !battling(g, src, c)) return 0; HALVING++; try { const v = stat(g, c, which); return -(v - Math.floor(v / 2)); } finally { HALVING--; } };
 // Spell Cards your opponent's card effect sent to your GY this turn (cards the engine marks with who did it)
 const sentByOpp = (g, x, p) => g.events.some(e => e.type === 'move' && e.c === x && e.turn === g.turnNo && e.to === 'gy' && e.by === opp(p));
@@ -146,11 +146,11 @@ E.addScripts({
   'Flame Ogre': { cont: { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src },
     effs: [{ type: 'trig', mand: true, label: 'Draw 1 card', on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute']), res: function* (g, c, p) { draw(g, p, 1); } }] },
   // PARTIAL: offers a 1-Tribute Summon of a Level 7+ FIRE monster while this card is face-up, but the engine lets any one monster be the Tribute.
-  'Flame Ruler': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && attr(c) === 'FIRE' ? 1 : null } },
+  'Flame Ruler': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && E.lib.isAttr(c, 'FIRE') ? 1 : null } },
   'Flame Spirit Ignis': { effs: [{ type: 'ign', label: 'Tribute a FIRE: burn',
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && attr(x) === 'FIRE'),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 face-up FIRE monster', monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'FIRE'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
-    res: function* (g, c, p) { const n = g.p[p].gy.filter(x => isMon(x) && attr(x) === 'FIRE').length; damage(g, opp(p), 100 * n, { src: c, srcP: p }); } }] },
+    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 face-up FIRE monster', monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    res: function* (g, c, p) { const n = g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'FIRE')).length; damage(g, opp(p), 100 * n, { src: c, srcP: p }); } }] },
   'Flint': {
     cont: { atk: (g, src, m) => src.equipTo === m.u && !flintImmune(g, m) ? -300 : 0,
       forbid: (g, src, a) => (a.type === 'pos' || a.type === 'attack') && a.c && src.equipTo === a.c.u && !flintImmune(g, a.c) },
@@ -219,7 +219,7 @@ E.addScripts({
         if (rs.length && (yield* yn(g, p, 'Banish 1 Rock monster from your GY to keep Gaia Plate?'))) { const [x] = yield* pick(g, p, 'Banish which Rock monster?', rs, 1, 1, 'cost'); move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${name(x)}.`); }
         else { move(g, c, 'gy', { reason: 'rule' }); log(g, 'Gaia Plate the Earth Giant was sent to the GY.'); } } }] },
   'Gaia Power': { effs: [{ type: 'act', res: function* () {} }],
-    cont: { atk: (g, src, c) => faceUp(c) && attr(c) === 'EARTH' ? 500 : 0, def: (g, src, c) => faceUp(c) && attr(c) === 'EARTH' ? -400 : 0 } },
+    cont: { atk: (g, src, c) => faceUp(c) && E.lib.isAttr(c, 'EARTH') ? 500 : 0, def: (g, src, c) => faceUp(c) && E.lib.isAttr(c, 'EARTH') ? -400 : 0 } },
   'Gaia Soul the Combustible Collective': { self: { piercing: true },
     effs: [{ type: 'ign', opt: true, label: 'Tribute Pyros for ATK',
       cond: (g, c, p) => monsOf(g, p).some(x => x !== c && race(x) === 'Pyro'),

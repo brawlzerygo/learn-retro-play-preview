@@ -127,7 +127,7 @@ E.addScripts({
     cont: { atk: (g, src, m) => src.equipTo === m.u && race(m) !== 'Machine' ? -300 * (src.flags.germ || 0) : 0 },
     effs: [equipAct(),
       { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'standby' && c.equipTo) { const m = fieldMons(g).find(x => x.u === c.equipTo); if (m && m.ctrl === ev.tp && race(m) !== 'Machine') { c.flags.germ = (c.flags.germ || 0) + 1; g.seq++; log(g, `${name(m)} lost 300 ATK to Germ Infection.`); } } return false; }, res: noop }] },
-  'Gust Fan': { cont: eqBonus(400, -200), effs: [equipAct(m => attr(m) === 'WIND', 'Equip to which WIND monster?')] },
+  'Gust Fan': { cont: eqBonus(400, -200), effs: [equipAct(m => E.lib.isAttr(m, 'WIND'), 'Equip to which WIND monster?')] },
   // Not destroyed by battle or by a card effect that targets it; destroyed itself once the monster's ATK is 1300 or more.
   'Heart of Clear Water': {
     cont: { grant: (g, src, m, flag) => flag === 'noBattleDestroy' && src.equipTo === m.u,
@@ -165,8 +165,8 @@ E.addScripts({
       if (c.flags.fusHalf && !c.flags.ownBaseAtk && c.zone === 'm' && faceUp(c) && !negd(g, c)) { c.flags.baseAtk = 1400; c.flags.ownBaseAtk = true; }
       return false; } }] },
   'Garuda the Wind Spirit': {
-    proc: { label: 'Special Summon (banish a WIND monster)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'WIND'),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish a WIND monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WIND'), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${name(x)}.`); } } },
+    proc: { label: 'Special Summon (banish a WIND monster)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'WIND')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish a WIND monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND')), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${name(x)}.`); } } },
     effs: [lockInstall, nomiMark,
       { type: 'trig', label: 'Change a monster’s battle position', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp !== c.ctrl,
         cond: (g, c, p) => monsOf(g, opp(p)).some(faceUp),
@@ -189,8 +189,8 @@ E.addScripts({
       target: function* (g, c, p, L2) { c.flags.f22due = false; c.flags.f22eq = equipsOn(g, c).map(x => x.u); yield* tgt(g, p, L2, 'Destroy which of their monsters?', monsOf(g, opp(p)), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
   'Gigantes': {
-    proc: { label: 'Special Summon (banish an EARTH monster)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'EARTH'),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish an EARTH monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'EARTH'), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${name(x)}.`); } } },
+    proc: { label: 'Special Summon (banish an EARTH monster)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'EARTH')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish an EARTH monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'EARTH')), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${name(x)}.`); } } },
     effs: [lockInstall, nomiMark,
       { type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy all Spells and Traps', on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
         res: function* (g, c, p) { destroy(g, stOnField(g), { by: p }); } }] },
@@ -258,7 +258,8 @@ E.addScripts({
   // ENGINE: no substitute Fusion Material hook; it can't stand in for a Fusion Material yet.
   'Goddess with the Third Eye': { effs: [] },
   // PARTIAL: it can't turn itself face-down the turn it was summoned or changed position (the usual position-change limit).
-  'Golem Sentry': { effs: [selfFaceDown,
+  // its face-down effect is once per turn only, the summon turn included (RULING? decided by EDOPro's mechanics: 2026-11-28 audit, E4b, goat-05)
+  'Golem Sentry': { effs: [{ ...selfFaceDown, cond: (g, c) => faceUp(c) && D(c).k !== 'token' },
     { type: 'trig', mand: true, label: 'Return a monster to the hand', on: (g, ev, c) => evSummoned(ev, c, ['flip']),
       cond: (g, c, p) => monsOf(g, opp(p)).length > 0,
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which of their monsters to the hand?', monsOf(g, opp(p)), 1, 1, 'bad'); },

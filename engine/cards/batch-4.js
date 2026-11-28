@@ -146,14 +146,16 @@ E.addScripts({
         const [h] = yield* pick(g, p, 'Banish which card from your hand?', g.p[p].hand, 1, 1, 'cost');
         move(g, c, 'ban', { reason: 'effect' }); move(g, h, 'ban', { reason: 'effect' }); log(g, `${PN(g, p)} banished Cyber Valley and ${name(h)}.`);
         if (t && t.zone === 'gy') { move(g, t, 'deckTop', { reason: 'effect' }); log(g, `${D(t).n} was put on top of the Deck.`); } } }] },
-  // PARTIAL: the negation is optional here (the card says it is mandatory); the engine has no mandatory Quick Effects.
+  // ① is a mandatory Quick Effect (eff.mandQuick, 2026-11-28 audit: rulings 3 and E3, "can (and must) activate"); every face-up copy is
+  // Tributed, and only the one chained directly to the monster effect negates it (ruling 8, E12). Under Skill Drain it still activates
+  // and resolves (ruling 6: its cost takes it off the field); not under Mask of Restrict (ruling 4: the Tribute is a cost).
   // "Cannot be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere (hand and Deck too).
   'Doomcaliber Knight': {
     cont: { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src },
-    effs: [{ type: 'quick', ds: true, label: 'Tribute: negate a monster effect', tags: { destroy: 1 },
-      cond: (g, c, p, x) => x.top && x.top.c !== c && isMon(x.top.c) && x.top.eff.type !== 'act' && !x.top.negated,
-      cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; move(g, c, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed Doomcaliber Knight.`); },
-      res: function* (g, c, p, L) { const T = L.data.L; T.negBy = p; negate(g, T, false); if (onField(T.c) && isMon(T.c) && T.c.zone === 'm') destroy(g, [T.c], { by: p, src: c }); } }] },
+    effs: [{ type: 'quick', ds: true, mandQuick: true, label: 'Tribute: negate a monster effect', tags: { destroy: 1 },
+      cond: (g, c, p, x) => x.top && x.top.c !== c && isMon(x.top.c) && x.top.eff.type !== 'act' && !x.top.negated && !g.chain.some(l => D(l.c).n === 'Doomcaliber Knight' && l.eff.mandQuick),
+      cost: function* (g, c, p, L) { L.data.L = g.mqTop || g.chain[g.chain.length - 1]; move(g, c, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Doomcaliber Knight.`); },
+      res: function* (g, c, p, L) { const T = L.data.L; if (T.link !== L.link - 1) return; T.negBy = p; negate(g, T, false); if (onField(T.c) && isMon(T.c) && T.c.zone === 'm') destroy(g, [T.c], { by: p, src: c }); } }] },
 
   /* ----- Gemini ----- */
   'Gigaplant': { effs: [{ type: 'ign', gemini: true, opt: true, tags: { ss: 1 }, label: 'Summon an Insect or Plant',
@@ -266,8 +268,8 @@ E.addScripts({
   // (activated Continuous Spells don't trigger it).
   'Dark Horus': { effs: [{ type: 'trig', when: true, opt: true, tags: { ss: 1 }, label: 'Revive a Level 4 DARK',
     on: (g, ev, c) => ev.type === 'move' && ev.reason === 'rule' && ev.from === 'st' && ev.to === 'gy' && isSpell(ev.c) && ['main1', 'main2'].includes(ev.phase) && g.tp !== c.ctrl,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && lv(x) === 4 && attr(x) === 'DARK'),
-    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which Level 4 DARK from your GY?', g.p[p].gy.filter(x => isMon(x) && lv(x) === 4 && attr(x) === 'DARK'), 1, 1, 'good'); },
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && lv(x) === 4 && E.lib.isAttr(x, 'DARK')),
+    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which Level 4 DARK from your GY?', g.p[p].gy.filter(x => isMon(x) && lv(x) === 4 && E.lib.isAttr(x, 'DARK')), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (!onField(c) || !faceUp(c) || nvNeg(g, c)) return; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   'Electric Virus': { effs: [{ type: 'ign', loc: 'hand', label: 'Discard: take a Machine or Dragon',
     cond: (g, c, p) => freeM(g, p) >= 0 && oppFaceUp(g, p).some(x => ['Machine', 'Dragon'].includes(race(x))),
@@ -276,8 +278,8 @@ E.addScripts({
     res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t) && t.ctrl !== p && ['Machine', 'Dragon'].includes(race(t))) takeControl(g, p, t, true); } }] },
   'Eradicator Epidemic Virus': { effs: [
     { type: 'act', tags: { destroy: 1 },
-      cond: (g, c, p) => monsOf(g, p).some(x => attr(x) === 'DARK' && atk(g, x) >= 2500),
-      cost: function* (g, c, p, L) { const [x] = yield* pick(g, p, 'Tribute a DARK monster with 2500 or more ATK', monsOf(g, p).filter(x => attr(x) === 'DARK' && atk(g, x) >= 2500), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`);
+      cond: (g, c, p) => monsOf(g, p).some(x => E.lib.isAttr(x, 'DARK') && atk(g, x) >= 2500),
+      cost: function* (g, c, p, L) { const [x] = yield* pick(g, p, 'Tribute a DARK monster with 2500 or more ATK', monsOf(g, p).filter(x => E.lib.isAttr(x, 'DARK') && atk(g, x) >= 2500), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`);
         L.data.kind = (yield* choose(g, p, 'Declare a card type', ['Spell Cards', 'Trap Cards'])) ? 'trap' : 'spell'; log(g, `${PN(g, p)} declared ${L.data.kind === 'spell' ? 'Spell' : 'Trap'} Cards.`); },
       res: function* (g, c, p, L) { const o = opp(p), kind = L.data.kind, is = x => D(x).k === kind;
         log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand: ${g.p[o].hand.map(x => D(x).n).join(', ') || 'no cards'}.`);
@@ -339,9 +341,9 @@ E.addScripts({
     on: (g, ev, c) => evSummoned(ev, c), cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && isRoid(x) && nm(x) !== 'Expressroid').length >= 2,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Add which 2 "roid" monsters to your hand?', g.p[p].gy.filter(x => isMon(x) && isRoid(x) && nm(x) !== 'Expressroid'), 2, 2, 'good'); },
     res: function* (g, c, p, L) { if (nvNeg(g, c)) return; const ts = L.t.filter(x => x.zone === 'gy'); for (const t of ts) move(g, t, 'hand', { reason: 'effect' }); if (ts.length) log(g, `${PN(g, p)} added ${ts.map(x => D(x).n).join(', ')} to the hand.`); } }] },
-  // PARTIAL: it destroys at the start of the Damage Step, before a face-down monster is flipped, so Flip effects don't activate.
+  // On the engine's battleConfirm event, after a face-down monster is flipped (2026-11-28 audit, E4b: ruling 2, its Flip effect still activates).
   'Drillroid': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 },
-    on: (g, ev, c) => ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos !== 'atk',
+    on: (g, ev, c) => ev.type === 'battleConfirm' && ev.a === c && ev.t && ev.t.pos !== 'atk',
     res: function* (g, c, p, L) { const t = L.ev.t; if (t && onField(t) && t.pos !== 'atk') destroy(g, [t], { by: p, src: c }); } }] },
   'Armoroid': { effs: [{ type: 'trig', mand: true,
     on: (g, ev, c) => evSummoned(ev, c, ['tribute']) && (ev.tribs || []).some(isRoid),
@@ -405,10 +407,9 @@ E.addScripts({
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Psychic' && lv(x) <= 2),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which Level 2 or lower Psychics?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Psychic' && lv(x) <= 2), 1, nFreeM(g, p), 'good'); },
     res: function* (g, c, p, L) { if (nvNeg(g, c)) return; let s = 0; for (const t of L.t) if (t.zone === 'gy' && ss(g, p, t)) s += lv(t); if (s) damage(g, p, s * 300, { src: c, srcP: p }); } }] },
-  // PARTIAL: the name is picked from the cards in this duel; using a declared card as Synchro or Fusion Material isn't blocked.
+  // The name is any card name in the pool (E.lib.declareName, 2026-11-28 audit). PARTIAL: using a declared card as Synchro or Fusion Material isn't blocked.
   'Prohibition': { effs: [{ type: 'act',
-    target: function* (g, c, p, L) { const seen = new Set(), names = []; for (const q of [opp(p), p]) for (const z of ['hand', 'deck', 'extra', 'gy', 'ban']) for (const x of g.p[q][z]) { const n = D(x).n; if (!seen.has(n)) { seen.add(n); names.push(n); } } for (const x of allField(g)) if (!seen.has(D(x).n)) { seen.add(D(x).n); names.push(D(x).n); }
-      if (!names.length) return; L.data.n = names[yield* choose(g, p, 'Declare a card name', names)]; log(g, `${PN(g, p)} declared ${L.data.n}.`); },
+    target: function* (g, c, p, L) { const n = yield* E.lib.declareName(g, p, 'Declare a card name'); if (!n) return; L.data.n = n; log(g, `${PN(g, p)} declared ${L.data.n}.`); },
     // site rulings: copies already on the field when it resolves aren't affected (1); Special Summons from the Deck, GY or banished are
     // fine, only the hand and Extra Deck are blocked (4); no Flip Summon (11) (E4)
     res: function* (g, c, p, L) { if (onField(c) && L.data.n) { c.flags.prohibit = L.data.n; for (const x of allField(g)) if (D(x).n === L.data.n) x.flags.prohibitOk = c.u; touch(g); } } }],
@@ -500,7 +501,7 @@ function* warlords(g) {
 }
 /* Alien Telepath / Alien Warrior: -300 ATK/DEF per A-Counter on a monster battling an "Alien" monster. */
 function aBattle(g, c) {
-  const n = ctr(c, 'A'); if (!n || !g.inDS || !g.battle) return 0;
+  const n = ctr(c, 'A'); if (!n || !L.dcalc(g) || !g.battle) return 0;
   const { a, t } = g.battle; const o = a === c ? t : t === c ? a : null;
   return o && isAlien(o) ? -300 * n : 0;
 }

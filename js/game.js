@@ -1,12 +1,12 @@
 /* Learn Retro Play: the game. Screens, the deck picker, and the duel: engine events (from js/worker.js) become animations on
  the 3D table (js/table.js) and the HUD; your choices go back to the engine. The engine decides every rule; this file only
  shows the duel and passes on what you pick. */
-import { Table } from './table.js?v=190';
-import * as S from './sfx.js?v=190';
-import * as FX from './fx.js?v=190';
-import { Board, layoutOf, matChoice } from './boards.js?v=190';
-import { NOTES, verLabel } from './notes.js?v=190';
-import { paintMenuBg } from './menubg.js?v=190';
+import { Table } from './table.js?v=191';
+import * as S from './sfx.js?v=191';
+import * as FX from './fx.js?v=191';
+import { Board, layoutOf, matChoice } from './boards.js?v=191';
+import { NOTES, verLabel } from './notes.js?v=191';
+import { paintMenuBg } from './menubg.js?v=191';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -192,7 +192,7 @@ const tileBg = id => TILE_ART.has(+id) ? `<div class="art" style="background-ima
 const artUrl = id => id == null ? 'img/back.webp' : typeof id === 'string' && TOKEN_ART[id] ? `img/${TOKEN_ART[id][0]}.webp` : `img/${id}.webp`;
 
 /* ---------- the duel host ---------- */
-const W = new Worker('js/worker.js?v=190');
+const W = new Worker('js/worker.js?v=191');
 let READY = null; const readyP = new Promise(r => { W.addEventListener('message', function h(e) { if (e.data.type === 'ready') { READY = e.data.formats; W.removeEventListener('message', h); r(); } }); });
 W.postMessage({ type: 'init' });
 W.onmessage = e => { const m = e.data; if (m.type === 'update') duelUpdate(m); else if (m.type === 'hint') showHint(m); else if (m.type === 'summary') { if (D) { D.summary = m.summary; if (D.over) { recordMatch(D.over, m.summary); renderReview(m.summary); } } } else if (m.type === 'reviewing') { const el = $('#resReview p.mute'); if (el) el.textContent = `Reviewing your duel… ${m.left} decisions left`; } else if (m.type === 'error') { console.error(m.message, m.stack); toast('Something went wrong in the engine: ' + m.message, 6000); } };
@@ -1277,12 +1277,30 @@ function pickU(u) {
   return true;
 }
 function promptChoose(pr) {
+  if (pr.declare) return promptDeclare(pr);
   $('#prompt').innerHTML = esc(pr.text);
   const v = document.createElement('div'); v.className = 'veil'; $('#layer').appendChild(v);
   const dl = document.createElement('div'); dl.className = 'pn dlg';
-  dl.innerHTML = `<h3 class="disp">${esc(pr.text)}</h3><div class="opts">${pr.opts.map((o, i) => `<button class="gb ${i === 0 && pr.type === 'yesno' ? 'pri' : ''} wide" data-k="${esc(o.key)}"><span class="lbl">${esc(o.label)}</span><span class="key">${pr.type === 'yesno' ? (o.key === 'y' ? 'Y' : 'N') : i + 1}</span><span class="shine"></span></button>`).join('')}</div>`;
+  dl.innerHTML = `<h3 class="disp">${esc(pr.text)}</h3>${pr.reveal && pr.reveal.length ? `<div class="reveal">${pr.reveal.map(id => `<img src="${artUrl(id)}" alt="">`).join('')}</div>` : ''}<div class="opts">${pr.opts.map((o, i) => `<button class="gb ${i === 0 && pr.type === 'yesno' ? 'pri' : ''} wide" data-k="${esc(o.key)}"><span class="lbl">${esc(o.label)}</span><span class="key">${pr.type === 'yesno' ? (o.key === 'y' ? 'Y' : 'N') : i + 1}</span><span class="shine"></span></button>`).join('')}</div>`;
   dl.onclick = e => { const b = e.target.closest('[data-k]'); if (b) send([b.dataset.k]); };
   $('#layer').appendChild(dl);
+}
+
+// declaring a card name (Mind Crush, Prohibition, Cloak and Dagger): a search box over every name in the format, the likely names first
+function promptDeclare(pr) {
+  $('#prompt').innerHTML = esc(pr.text);
+  const v = document.createElement('div'); v.className = 'veil'; $('#layer').appendChild(v);
+  const dl = document.createElement('div'); dl.className = 'pn dlg declare';
+  dl.innerHTML = `<h3 class="disp">${esc(pr.text)}</h3><input class="dsearch" type="search" placeholder="Search card names" autocomplete="off"><div class="opts"></div>`;
+  const list = dl.querySelector('.opts'), inp = dl.querySelector('input');
+  const draw = () => {
+    const q = inp.value.trim().toLowerCase();
+    const hits = q ? pr.opts.filter(o => o.label.toLowerCase().includes(q)) : pr.opts.slice(0, Math.max(pr.suggested, 12));
+    list.innerHTML = hits.slice(0, 30).map(o => `<button class="gb wide" data-k="${esc(o.key)}"><span class="lbl">${esc(o.label)}</span><span class="shine"></span></button>`).join('') || '<p class="none">No card by that name.</p>';
+  };
+  inp.oninput = draw; draw();
+  dl.onclick = e => { const b = e.target.closest('[data-k]'); if (b) send([b.dataset.k]); };
+  $('#layer').appendChild(dl); setTimeout(() => inp.focus(), 50);
 }
 
 /* clicking things */
@@ -2318,7 +2336,7 @@ if (UPD_ON) { setTimeout(() => checkUpdate(true), 1500); setInterval(checkUpdate
 // version and release notes in the home screen's corner (Zack, 2026-11-26: "change our version logic to a decimal - so this one being 1.67";
 // "a 'latest release notes' page thats clickable in the bottom right next to the version"). ?v= stays a whole number (the cache key
 // and the update check). Players see the newest entry in js/notes.js (Zack, 2026-11-26: small changes can "land in the whats new popup"
-// of the current version, so the cache number can move on while the version stays, e.g. ?v=190 still shows v1.68).
+// of the current version, so the cache number can move on while the version stays, e.g. ?v=191 still shows v1.68).
 function releaseNotes() {
   S.play('click'); const v = document.createElement('div'); v.className = 'veil'; v.style.zIndex = 69; const p = document.createElement('div'); p.className = 'pn dlg relnotes'; p.style.zIndex = 70;
   p.innerHTML = `<h3 class="disp">What's new</h3><div class="rnlist">${NOTES.map(n => `<section><div class="rnhead"><b>${verLabel(n.v)}</b><span>${esc(n.date)}</span>${n === NOTES[0] ? '<i>You have this</i>' : ''}</div><ul>${n.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')}</div><div class="btns"><button class="gb pri" data-y>Close<span class="shine"></span></button></div>`;

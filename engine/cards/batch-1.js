@@ -30,7 +30,7 @@ const atkLE = (x, n) => /^\d+$/.test(String(D(x).atk)) && baseAtk(x) <= n;
 /* Deck Devastation Virus (2026-11-27 audit): the cost may Tribute a face-down DARK whose ATK is 2000 or more (archive: a Set Fusilier
  Dragon), never a face-down Soul Exchange target; drawn monsters with 1500 or less ATK are destroyed at once, without a chain (engine onDraw;
  "?" ATK counts as 0 in the hand: ruling 2). */
-const ddvCost = (g, p) => L.tributeCands(g, p).filter(x => attr(x) === 'DARK' && (faceUp(x) ? atk(g, x) : x.ctrl === p ? baseAtk(x) : -1) >= 2000);
+const ddvCost = (g, p) => L.tributeCands(g, p).filter(x => E.lib.isAttr(x, 'DARK') && (faceUp(x) ? atk(g, x) : x.ctrl === p ? baseAtk(x) : -1) >= 2000);
 function ddvDrawn(g, cs) { if (!g.b1ddv || !g.b1ddv.length) return; for (const r of g.b1ddv) { if (g.turnNo > r.until) continue;
   const xs = cs.filter(x => x.owner === r.victim && x.zone === 'hand' && isMon(x) && baseAtk(x) <= 1500); if (!xs.length) continue;
   for (const x of xs) move(g, x, 'gy', { reason: 'effect', destroyed: true, by: r.p }); log(g, `Deck Devastation Virus destroyed ${xs.map(name).join(', ')}.`); } }
@@ -58,7 +58,6 @@ const wouldDestroyMine = (g, Lk, p) => destroyList(g, Lk).filter(x => x.ctrl ===
 function blockedTrig(g, t) {
   const c = t.c; if (!c || !c.flags) return false;
   if (c.flags.b1hades && (c.zone === 'gy' || onField(c))) return true; // Revived King Ha Des
-  if (isMon(c) && attr(c) === 'LIGHT' && (c.zone === 'gy' || c.zone === 'm') && mirrorOn(g)) return true; // Light-Imprisoning Mirror
   return false;
 }
 function hubInit(g) {
@@ -144,8 +143,7 @@ const S = {
   /* ----- Vayu Turbo ----- */
   "Vanity's Fiend": { hook: true, cont: { forbid: (g, src, a) => a.type === 'ss' }, effs: [] },
   'Mind Crush': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.length > 0 && g.p[opp(p)].hand.length > 0,   // both players need a card in hand (site ruling 1, archive)
-    target: function* (g, c, p, L2) { const o = opp(p); const names = [...new Set([...g.p[o].hand, ...g.p[o].deck, ...g.p[o].gy, ...g.p[o].ban, ...fieldOf(g, o)].filter(x => !isExtraD(D(x)) && D(x).k !== 'token').map(x => D(x).n))].sort();
-      if (!names.length) return; const i = yield* choose(g, p, 'Declare a card name', names); L2.data.n = names[i]; log(g, `${PN(g, p)} declared ${names[i]}.`); },
+    target: function* (g, c, p, L2) { const n = yield* L.declareName(g, p, 'Declare a card name', d => !['fusion', 'synchro'].includes(d.k)); if (!n) return; L2.data.n = n; log(g, `${PN(g, p)} declared ${n}.`); },   // any name in the pool (2026-11-28 audit)
     res: function* (g, c, p, L2) { const o = opp(p), n = L2.data.n; const xs = g.p[o].hand.filter(x => D(x).n === n);
       if (xs.length) { for (const x of xs) move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, o)} discarded ${xs.length} ${n}.`); }
       else { log(g, `${PN(g, o)} revealed the hand.`); const h = g.p[p].hand; if (h.length) { const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)} at random.`); } } } }] },
@@ -198,8 +196,8 @@ const S = {
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && isZombie(t)) ss(g, p, t); } }] },
   'Mystic Tomato': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'DARK' && atkLE(x, 1500)),
-    res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'DARK' && atkLE(x, 1500)); const [x] = yield* pick(g, p, 'Special Summon a DARK with 1500 or less ATK', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && E.lib.isAttr(x, 'DARK') && atkLE(x, 1500)),
+    res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK') && atkLE(x, 1500)); const [x] = yield* pick(g, p, 'Special Summon a DARK with 1500 or less ATK', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   'Pyramid Turtle': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isZombie(x) && L.num(D(x).def) <= 2000),
@@ -234,7 +232,9 @@ const S = {
   // PARTIAL: effects activated by a negated monster are stopped before they reach the chain instead of being negated on it.
   'Revived King Ha Des': { hook: true, effs: [] },
   // PARTIAL: LIGHT monster effects on the field or in the GY are stopped from activating (Ignition/Quick) or reaching the chain (Triggers) instead of being negated after activating.
-  'Light-Imprisoning Mirror': { hook: true, cont: { forbid: (g, src, a) => a.type === 'activate' && !decreeOn(g, src) && isMon(a.c) && attr(a.c) === 'LIGHT' && ['m', 'gy'].includes(a.c.zone) },
+  // "If the effect of a LIGHT monster is activated on the field/GY, negate that effect": it activates and is negated as it resolves, the
+  // Attribute read then (cont.negLink; 2026-11-28 audit, E4b: rulings 1 and 2, costs are paid; not Continuous Effects, ruling 3)
+  'Light-Imprisoning Mirror': { hook: true, cont: { negLink: (g, src, L2) => isMon(L2.c) && L2.eff.type !== 'act' && ['m', 'gy'].includes(L2.actZone) && E.lib.isAttr(L2.c, 'LIGHT') },
     effs: [{ type: 'act', res: function* () {} }] },
   'Return from the Different Dimension': { effs: [
     { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].ban.filter(x => E.lib.ssable(g, p, x)).some(isMon),
@@ -266,9 +266,9 @@ const S = {
       on: (g, ev, c) => { if (ev.type !== 'phase' || ev.ph !== 'standby' || ev.tp !== c.ctrl || !c.flags.b1ff || c.flags.b1ff.done || !faceUp(c)) return false; c.flags.b1ff.n++; return c.flags.b1ff.n === 2; },
       res: function* (g, c, p) { const f = c.flags.b1ff; if (!f || !onField(c)) return; f.done = true; const fx = g.p[p].extra.find(x => D(x).n === f.name);
         if (fx && freeM(g, p) >= 0 && ss(g, p, fx, 'atk', { how: 'fusion' })) link(g, c, fx); } }] },
-  'Consecrated Light': { cont: { forbid: (g, src, a) => (['ns', 'ss'].includes(a.type) && attr(a.c) === 'DARK') || (a.type === 'attack' && attr(a.c) === 'DARK') },
-    self: { noBattleDestroy: (g, c) => !!(g.battle && [g.battle.a, g.battle.t].some(x => x && x !== c && attr(x) === 'DARK')),
-      noBattleDamage: (g, c) => !!(g.battle && [g.battle.a, g.battle.t].includes(c) && [g.battle.a, g.battle.t].some(x => x && x !== c && attr(x) === 'DARK')) }, effs: [] },
+  'Consecrated Light': { cont: { forbid: (g, src, a) => (['ns', 'ss'].includes(a.type) && E.lib.isAttr(a.c, 'DARK')) || (a.type === 'attack' && E.lib.isAttr(a.c, 'DARK')) },
+    self: { noBattleDestroy: (g, c) => !!(g.battle && [g.battle.a, g.battle.t].some(x => x && x !== c && E.lib.isAttr(x, 'DARK'))),
+      noBattleDamage: (g, c) => !!(g.battle && [g.battle.a, g.battle.t].includes(c) && [g.battle.a, g.battle.t].some(x => x && x !== c && E.lib.isAttr(x, 'DARK'))) }, effs: [] },
   'Smashing Ground': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => oppFaceUp(g, p).length > 0,
     res: function* (g, c, p) { const f = oppFaceUp(g, p); if (!f.length) return; const m = Math.max(...f.map(x => def(g, x))); const [t] = yield* pick(g, p, 'Destroy which monster with the highest DEF?', f.filter(x => def(g, x) === m), 1, 1, 'bad'); if (t) destroy(g, [t], { by: p, src: c }); } }] },
   'Soul Release': { effs: [{ type: 'act', cond: g => allCards(g, 'gy').length > 0,
@@ -288,8 +288,9 @@ const S = {
   'Royal Decree': { hook: true, cont: { negates: (g, src, c) => c !== src && isTrap(c) && onField(c) },
     effs: [{ type: 'act', res: function* () {} }] },
   /* ----- Diva Hero Beat ----- */
+  // not when it is being destroyed by battle with a Fiend whose controller has a face-up Dark Ruler Ha Des (Netrep; 2026-11-28 audit, E4b, pass2 goat-02)
   'D.D. Warrior Lady': { effs: [{ type: 'trig', label: 'Banish both monsters',
-    on: (g, ev, c) => ev.type === 'afterCalc' && ev.t && (ev.a === c || ev.t === c),
+    on: (g, ev, c) => ev.type === 'afterCalc' && ev.t && (ev.a === c || ev.t === c) && !(c.flags.battleDoomed && (o => o && onField(o) && race(o) === 'Fiend' && fieldMons(g).some(h => D(h).n === 'Dark Ruler Ha Des' && faceUp(h) && !L.negd(g, h) && h.ctrl === o.ctrl))(ev.a === c ? ev.t : ev.a)),
     res: function* (g, c, p, L2) { const o = L2.ev.a === c ? L2.ev.t : L2.ev.a;
       if (o && onField(o)) { move(g, o, 'ban', { reason: 'effect', by: p }); log(g, `${D(o).n} was banished.`); }
       if (onField(c)) { move(g, c, 'ban', { reason: 'effect', by: p }); log(g, 'D.D. Warrior Lady was banished.'); } } }] },
@@ -297,8 +298,8 @@ const S = {
     { type: 'ign', label: 'Return Honest to the hand', res: function* (g, c, p) { if (onField(c) && faceUp(c)) {   // archive: flipped face-down, it stays
       move(g, c, 'hand', { reason: 'effect' }); log(g, 'Honest returned to the hand.'); } } },
     { type: 'quick', loc: 'hand', ds: true, label: 'Gain the opponent’s ATK',
-      cond: (g, c, p) => !!(g.inDS && !g.dsCalcDone && g.battle && g.battle.t && [g.battle.a, g.battle.t].some(x => x.ctrl === p && faceUp(x) && attr(x) === 'LIGHT') && [g.battle.a, g.battle.t].some(x => x.ctrl !== p)),
-      cost: function* (g, c, p, L2) { const b = g.battle; L2.data.m = [b.a, b.t].find(x => x.ctrl === p && attr(x) === 'LIGHT'); L2.data.o = [b.a, b.t].find(x => x.ctrl !== p); move(g, c, 'gy', { reason: 'cost' }); },
+      cond: (g, c, p) => !!(g.inDS && !g.dsCalcDone && g.battle && g.battle.t && [g.battle.a, g.battle.t].some(x => x.ctrl === p && faceUp(x) && E.lib.isAttr(x, 'LIGHT')) && [g.battle.a, g.battle.t].some(x => x.ctrl !== p)),
+      cost: function* (g, c, p, L2) { const b = g.battle; L2.data.m = [b.a, b.t].find(x => x.ctrl === p && E.lib.isAttr(x, 'LIGHT')); L2.data.o = [b.a, b.t].find(x => x.ctrl !== p); move(g, c, 'gy', { reason: 'cost' }); },
       res: function* (g, c, p, L2) { const { m, o } = L2.data; if (m && onField(m) && faceUp(m) && o && onField(o)) { const n = atk(g, o); addMod(g, m, { atk: n, end: true }); log(g, `${name(m)} gained ${n} ATK.`); } } }] },
   'Gemini Spark': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => !maskOn(g) && g.p[p].deck.length > 0 && L.tributeCands(g, p).some(x => faceUp(x) && isGemini(x) && lv(x) === 4) && allField(g).some(x => x !== c),
@@ -329,13 +330,13 @@ const S = {
   /* ----- Dragon Turbo ----- */
   // "If this card would be destroyed by an opponent's card effect, you can discard 1 card instead" (replaceOther, 2026-11-28 audit)
   // PARTIAL: the doubled ATK applies through the whole Damage Step, not only during damage calculation.
-  'Clear Vice Dragon': { self: { replaceAsk: L.replaceOther((g, c) => g.p[c.ctrl].hand, 'Discard 1 card instead of %s being destroyed?', 'Discard which card?', 'discard', (g, c, o) => !o.battle && !o.rule && o.by != null && o.by !== c.ctrl), atk: (g, c) => { const b = g.battle; if (!g.inDS || !b || b.a !== c || !b.t || D(b.t).n === 'Clear Vice Dragon') return 0; return 2 * atk(g, b.t) - baseAtk(c); } }, effs: [] },
+  'Clear Vice Dragon': { self: { replaceAsk: L.replaceOther((g, c) => g.p[c.ctrl].hand, 'Discard 1 card instead of %s being destroyed?', 'Discard which card?', 'discard', (g, c, o) => !o.battle && !o.rule && o.by != null && o.by !== c.ctrl), atk: (g, c) => { const b = g.battle; if (!L.dcalc(g) || !b || b.a !== c || !b.t || D(b.t).n === 'Clear Vice Dragon') return 0; return 2 * atk(g, b.t) - baseAtk(c); } }, effs: [] },
   'Debris Dragon': { hook: true, effs: [{ type: 'trig', when: true, tags: { ss: 1 }, on: (g, ev, c) => evSummoned(ev, c, ['normal']),
     cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && baseAtk(x) <= 500 && L.canSS(g, p, x)),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon a monster with 500 or less ATK from your GY', g.p[p].gy.filter(x => isMon(x) && baseAtk(x) <= 500 && L.canSS(g, p, x)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk', { negate: true }); } }] },
   // PARTIAL: the End Phase upkeep is a trigger on the chain (it should not start a chain).
-  "Koa'ki Meiru Drago": { cont: { forbid: (g, src, a) => a.type === 'ss' && ['LIGHT', 'DARK'].includes(attr(a.c)) },
+  "Koa'ki Meiru Drago": { cont: { forbid: (g, src, a) => a.type === 'ss' && E.lib.attrs(a.c).some(a_ => ['LIGHT', 'DARK'].includes(a_)) },
     // the maintenance cost is no effect: no chain link, paid under Skill Drain, no "send" option while cards would be banished (E3b's
     // Koa'ki Meiru call, applied to Drago too: E4)
     effs: [{ type: 'trig', mand: true, noChain: true, rule: true, label: 'Upkeep', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
@@ -401,7 +402,7 @@ const S = {
   'Elemental HERO Mariner': { hook: true, mats: [c => D(c).n === 'Elemental HERO Bubbleman', c => D(c).n === 'Elemental HERO Avian'],
     self: { directAttack: (g, c) => g.p[c.ctrl].st.some(x => x && x.pos === 'set') }, effs: [] },
   'Five-Headed Dragon': { hook: true, mats: Array(5).fill(isDragon),
-    self: { noBattleDestroy: (g, c) => !!(g.battle && [g.battle.a, g.battle.t].some(x => x && x !== c && ['DARK', 'EARTH', 'WATER', 'FIRE', 'WIND'].includes(attr(x)))) }, effs: [] },
+    self: { noBattleDestroy: (g, c) => !!(g.battle && [g.battle.a, g.battle.t].some(x => x && x !== c && E.lib.attrs(x).some(a_ => ['DARK', 'EARTH', 'WATER', 'FIRE', 'WIND'].includes(a_)))) }, effs: [] },
   'Musician King': { mats: [c => D(c).n === 'Witch of the Black Forest', c => D(c).n === 'Lady of Faith'], effs: [] },
   'Ancient Fairy Dragon': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Special Summon a Level 4 or lower monster',

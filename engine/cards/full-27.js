@@ -134,7 +134,7 @@ E.addScripts({
   'Sakuretsu Armor': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && L.canTarget(g, g.aw.a, { c, p }),
     target: function* (g, c, p, L2) { yield* L.tgt(g, p, L2, 'Target the attacking monster', [g.aw.a], 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2).filter(t => L.attackingNow(g, t)), { by: p, src: c }); } }] },
-  'Salamandra': { cont: eqBonus(700, 0), effs: [equipAct(m => attr(m) === 'FIRE', 'Equip to which face-up FIRE monster?')] },
+  'Salamandra': { cont: eqBonus(700, 0), effs: [equipAct(m => E.lib.isAttr(m, 'FIRE'), 'Equip to which face-up FIRE monster?')] },
   // Ignition, once per turn: 3 coins. All Heads: destroy all the opponent's monsters; all Tails: destroy all of yours.
   'Sand Gambler': { effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Toss 3 coins',
     res: function* (g, c, p) { const r = yield* tossCoins(g, p, 3);
@@ -246,8 +246,8 @@ E.addScripts({
     res: function* (g, c, p) { yield* ritualSummon(g, p, { monster: x => named(x, 'Shinato, King of a Higher Plane') }); } }] },
   // "Cannot be Normal Summoned/Set" is read from the text. First Special Summoned from the hand by banishing 1 WIND from your GY.
   'Silpheed': {
-    proc: { label: 'Special Summon (banish a WIND from your GY)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'WIND'),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish which WIND monster from your GY?', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WIND'), 1, 1, 'cost');
+    proc: { label: 'Special Summon (banish a WIND from your GY)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'WIND')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish which WIND monster from your GY?', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND')), 1, 1, 'cost');
         if (x) { move(g, x, 'ban', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} banished ${D(x).n}.`); } } },
     effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Opponent discards a random card',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
@@ -269,22 +269,22 @@ E.addScripts({
       res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand; if (!h.length) return; log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand: ${h.map(x => D(x).n).join(', ')}.`);
         const [x] = yield* pick(g, p, 'Discard which card from their hand?', h, 1, 1, 'bad'); if (x) { move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, o)} discarded ${name(x)}.`); } } }] },
   // Control lasts while it stays equipped; the opponent gains 1000 LP in each of their Standby Phases.
-  'Snatch Steal': { effs: [
+  // Control is the Equip's continuous effect (the engine's cont.setCtrl, as Mark of the Rose; 2026-11-28 audit, E4b): it follows Tailor of
+  // the Fickle to another monster and ends when Snatch Steal leaves; turned face-down, the monster stays (its Equip is sent, control kept)
+  'Snatch Steal': { cont: { setCtrl: (g, src) => { const t = L.equippedTo(g, src); return t ? { t, p: src.ctrl } : null; } }, effs: [
     { type: 'act', cond: (g, c, p) => oppFaceUp(g, p).length > 0 && freeM(g, p) >= 0,
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Take control of which monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
-      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || t.ctrl === p || !onField(c)) return; const from = t.ctrl; if (!takeControl(g, p, t, false)) { if (freeM(g, p) < 0) destroy(g, [t], { by: p, src: c }); return; } c.equipTo = t.u; c.flags.snatch = { u: t.u, from }; log(g, `Snatch Steal was equipped to ${name(t)}.`); } },
+      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || t.ctrl === p || !onField(c)) return; const from = t.ctrl; t.flags.ctrlBase = from; if (!takeControl(g, p, t, false)) { delete t.flags.ctrlBase; if (freeM(g, p) < 0) destroy(g, [t], { by: p, src: c }); return; } c.equipTo = t.u; c.flags.snatch = { u: t.u, from }; g.seq++; log(g, `Snatch Steal was equipped to ${name(t)}.`); } },
     { type: 'trig', loc: 'st', mand: true, label: 'Opponent gains 1000 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp !== c.ctrl && !!c.equipTo,
       res: function* (g, c, p) { gain(g, opp(p), 1000); } },
-    { type: 'trig', loc: 'any', mand: true, label: 'Control returns', on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && !ev.lostTarget && ev.snap && ev.snap.flags && ev.snap.flags.snatch,   // turned face-down: control stays (ruling)
-      res: function* (g, c, p, L2) { const s = L2.ev.snap.flags.snatch; const t = fieldMons(g).find(x => x.u === s.u); if (!t || t.ctrl === s.from) return;
-        if (freeM(g, s.from) >= 0) takeControl(g, s.from, t, false); else move(g, t, 'gy', { reason: 'rule', destroyed: true }); } }] },   // no room: destroyed (as goat-1.js)
+    ] },   // control returns through the engine's ctrlSweep (no room: destroyed, as goat-1.js)
   /* ----- So ----- */
   'Sogen': { cont: { atk: (g, src, m) => ['Warrior', 'Beast-Warrior'].includes(race(m)) ? 200 : 0, def: (g, src, m) => ['Warrior', 'Beast-Warrior'].includes(race(m)) ? 200 : 0 }, effs: [actNoop] },
   'Solar Flare Dragon': { self: { noAttackTarget: (g, c) => monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && race(x) === 'Pyro') },
     effs: [{ type: 'trig', mand: true, label: '500 damage', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
       res: function* (g, c, p) { if (onField(c) && faceUp(c)) damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
-  'Solar Ray': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && attr(m) === 'LIGHT'),
-    res: function* (g, c, p) { const n = 600 * monsOf(g, p).filter(m => faceUp(m) && attr(m) === 'LIGHT').length; if (n) damage(g, opp(p), n, { src: c, srcP: p }); } }] },
+  'Solar Ray': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && E.lib.isAttr(m, 'LIGHT')),
+    res: function* (g, c, p) { const n = 600 * monsOf(g, p).filter(m => faceUp(m) && E.lib.isAttr(m, 'LIGHT')).length; if (n) damage(g, opp(p), n, { src: c, srcP: p }); } }] },
   // 500 LP each time you draw (one gain for cards drawn together).
   'Solemn Wishes': { effs: [actNoop,
     { type: 'trig', loc: 'st', mand: true, label: 'Gain 500 LP', on: (g, ev, c) => ev.type === 'move' && ev.reason === 'draw' && ev.to === 'hand' && ev.c.owner === c.ctrl,
@@ -375,8 +375,8 @@ E.addScripts({
         if (x && onField(x)) { move(g, x, 'hand', { reason: 'effect', by: p }); log(g, `${D(x).n} returned to the ${isExtraD(D(x)) ? 'Extra Deck' : 'hand'}.`); } } },
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 500 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500) && (yield* yn(g, p, "Pay 500 LP to keep Spirit's Invitation?"))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
-  // ENGINE: "This card's activation and effect can't be negated" isn't enforced (no hook in negate()).
-  'Spiritualism': { effs: [{ type: 'act', cond: (g, c, p) => stOf(g, opp(p)).length > 0,
+  // "This card's activation and effect cannot be negated" (eff.noNeg, 2026-11-28 audit, E4b): under Spell Canceller too (archive ruling 5)
+  'Spiritualism': { effs: [{ type: 'act', noNeg: true, cond: (g, c, p) => stOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Spell/Trap to the hand?', stOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && t.zone !== 'm') { move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${D(t).n} returned to ${PN(g, t.owner)}'s hand.`); } } }] },
   // 500 LP each time monsters return from the field to the hand (once for monsters returned together; cumulative copies).
@@ -388,7 +388,7 @@ E.addScripts({
     cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && race(m) === 'Dragon') && stOnField(g).some(x => x !== c),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Spell/Trap?', stOnField(g).filter(x => x !== c), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; const q = t.ctrl; if (destroy(g, [t], { by: p, src: c }).length) damage(g, q, 500, { src: c, srcP: p }); } }] },
-  'Star Boy': { cont: { atk: (g, src, m) => attr(m) === 'WATER' ? 500 : attr(m) === 'FIRE' ? -400 : 0 } },
+  'Star Boy': { cont: { atk: (g, src, m) => E.lib.isAttr(m, 'WATER') ? 500 : E.lib.isAttr(m, 'FIRE') ? -400 : 0 } },
   // Only from the field: when this Set card is destroyed and sent to the GY, a Wicked Token. It can't be activated while Set.
   'Statue of the Wicked': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon a Wicked Token',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && ev.to === 'gy' && !!ev.snap && !ev.snap.faceUp,
@@ -419,7 +419,7 @@ E.addScripts({
       let hit = false; for (const m of fieldMons(g)) { const s = m.flags.f27sc; if (s && s.u === c.u && ev.tp === s.p && g.turnNo > s.t && s.last !== g.turnNo) { s.last = g.turnNo; s.n++; if (s.n >= 2) hit = true; } }
       return hit; },
     res: function* (g, c, p) { destroy(g, fieldMons(g).filter(m => m.flags.f27sc && m.flags.f27sc.u === c.u && m.flags.f27sc.n >= 2 && faceUp(m)), { by: c.ctrl }); } }] },
-  'Steel Shell': { cont: eqBonus(400, -200), effs: [equipAct(m => attr(m) === 'WATER', 'Equip to which face-up WATER monster?')] },
+  'Steel Shell': { cont: eqBonus(400, -200), effs: [equipAct(m => E.lib.isAttr(m, 'WATER'), 'Equip to which face-up WATER monster?')] },
   // -200 ATK in each of your Standby Phases (counted on the card, no chain link).
   'Stim-Pack': { cont: { atk: (g, src, m) => src.equipTo === m.u ? 700 - 200 * (src.flags.stim || 0) : 0 },
     effs: [equipAct(), { type: 'trig', loc: 'st', res: noop, on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && c.equipTo) { c.flags.stim = (c.flags.stim || 0) + 1; g.seq++; log(g, 'The monster equipped with Stim-Pack lost 200 ATK.'); } return false; } }] },

@@ -443,7 +443,7 @@ E.addScripts({
       c.flags.f45ufo = n; g.seq++; log(g, `UFOroid Fighter's ATK and DEF became ${n}.`); })] },
   'Umbral Soul': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy face-down and non-DARK monsters',
     on: (g, ev, c) => battleToGY(ev, c),
-    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.pos === 'set' || attr(x) !== 'DARK'), { by: p }); } }] },
+    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.pos === 'set' || E.lib.notAttr(x, 'DARK')), { by: p }); } }] },
   // The ATK counts only during this Battle Phase; the opponent takes no battle damage this turn (no other monster can attack).
   'Union Attack': { effs: [{ type: 'act',
     cond: (g, c, p) => monsOf(g, p).some(faceUp),

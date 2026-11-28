@@ -89,6 +89,7 @@ const flLevelUp = (opt) => ({ type: 'trig', mand: true, opt, label: 'Level up', 
 const ssed = x => ['special', 'synchro', 'fusion', 'ritual'].includes(x.summonType) || D(x).k === 'token';
 const flStats = n => ({ atk: (g, c) => lv(c) * n, def: (g, c) => lv(c) * n });
 
+const fvMine = (g, c, m, tp) => !!(m.flags.fvReturn && m.flags.fvReturn.by === c.u + ':' + c.moved && m.flags.fvReturn.p === tp && m.flags.fvReturn.from < g.turnNo);   // Future Visions' own banished monsters
 E.addScripts({
   /* ===== Dark Gaia ===== */
   // PARTIAL: the engine's Tribute rules are fixed, so this is a summon rule that counts as your Normal Summon
@@ -124,7 +125,8 @@ E.addScripts({
   // targets are removed, and their monsters change to Attack Position at their first attack declaration of the turn.
   // Also not enforced: it can't be Special Summoned from the GY or banished.
   'Evil HERO Malicious Fiend': { mats: [() => false, () => false],
-    cont: { grant: (g, src, c, flag) => flag === 'noAttackTarget' && c !== src && c.ctrl === src.ctrl && g.tp !== src.ctrl && g.phase === 'battle' },
+    // "each monster they control must attack this card, if able": noAttackTarget for its controller's other monsters, mustAttack for theirs
+    cont: { grant: (g, src, c, flag) => g.tp !== src.ctrl && g.phase === 'battle' && ((flag === 'noAttackTarget' && c !== src && c.ctrl === src.ctrl) || (flag === 'mustAttack' && c.ctrl !== src.ctrl)) },
     effs: [{ type: 'trig', mand: true, label: 'Their monsters change to Attack Position',
       on: (g, ev, c) => ev.type === 'attack' && ev.p !== c.ctrl && c.flags.mfTurn !== g.turnNo,
       res: function* (g, c, p) { c.flags.mfTurn = g.turnNo; for (const x of monsOf(g, opp(p))) if (x.pos !== 'atk') { x.pos = 'atk'; log(g, `${name(x)} was changed to Attack Position.`); } } }] },
@@ -151,15 +153,9 @@ E.addScripts({
     { type: 'trig', loc: 'any', mand: true, ds: true, tags: { destroy: 1 }, label: 'Destroy all cards on the field',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && !ev.battle && !(ev.snap && ev.snap.flags && ev.snap.flags.selfDestroy),
       res: function* (g, c, p) { destroy(g, allField(g), { by: p, src: c }); } }] },
-  // ENGINE: Tribute counts are fixed in the engine. Closest: Tribute this card alone to Tribute Summon a Level 7+ DARK
-  // from your hand (your Normal Summon). This summon has no Solemn Judgment window.
-  'Double Coston': { effs: [{ type: 'ign', label: 'Tribute as 2: summon a DARK',
-    cond: (g, c, p) => g.ns[p] < 1 && !g.noSummon[p] && g.p[p].hand.some(x => isMon(x) && attr(x) === 'DARK' && lv(x) >= 7 && !/Cannot be Normal Summoned/i.test(D(x).tx || '') && !L.forbid(g, { type: 'ns', c: x, p })),
-    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute Summon which DARK monster?', g.p[p].hand.filter(x => isMon(x) && attr(x) === 'DARK' && lv(x) >= 7 && !/Cannot be Normal Summoned/i.test(D(x).tx || '')), 1, 1, 'good'); L2.data.x = x; g.ns[p]++; move(g, c, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Double Coston as 2 Tributes.`); },
-    res: function* (g, c, p, L2) { const x = L2.data.x; if (!x || x.zone !== 'hand' || freeM(g, p) < 0) return; const grp = g.group;
-      move(g, x, 'm', { ctrl: p, pos: 'atk', reason: 'summon', group: grp }); x.summonType = 'tribute'; x.tributes = [c.u];
-      log(g, `${PN(g, p)} Tribute Summoned ${name(x)}.`);
-      const ev = L.emit(g, { type: 'summon', cs: [x], how: 'tribute', p, tribs: [c] }, grp); g.sw = { cs: [x], p, how: 'tribute', group: ev.group }; } }] },
+  // "Can be treated as 2 Tributes for the Tribute Summon of a DARK monster": the engine's self.tribWorth, read by the Tribute Summon itself
+  // (2026-11-28 audit, E4b: it was an ignition effect standing in for the summon, with no Solemn Judgment window)
+  'Double Coston': { self: { tribWorth: (g, t, c) => E.lib.isAttr(c, 'DARK') ? 2 : 1 }, effs: [] },
   'Marionette Mite': { effs: [{ type: 'ign', loc: 'hand', label: 'Discard: take a Fiend or Zombie',
     cond: (g, c, p) => freeM(g, p) >= 0 && oppFaceUp(g, p).some(x => ['Fiend', 'Zombie'].includes(race(x))),
     cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded Marionette Mite.`); },
@@ -208,26 +204,31 @@ E.addScripts({
       res: function* (g, c, p) { draw(g, p, 2); } }] },
   'Rai-Mei': { effs: [{ type: 'trig', loc: 'gy', when: true, label: 'Add a Level 2 or lower LIGHT',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-    cond: (g, c, p) => g.p[p].deck.some(x => isMon(x) && attr(x) === 'LIGHT' && lv(x) <= 2),
-    res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && attr(x) === 'LIGHT' && lv(x) <= 2, 'Add a Level 2 or lower LIGHT monster'); } }] },
+    cond: (g, c, p) => g.p[p].deck.some(x => isMon(x) && E.lib.isAttr(x, 'LIGHT') && lv(x) <= 2),
+    res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && E.lib.isAttr(x, 'LIGHT') && lv(x) <= 2, 'Add a Level 2 or lower LIGHT monster'); } }] },
   "Fortune's Future": { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].ban.some(isFL) && g.p[p].deck.length >= 2,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which banished Fortune Lady to the GY?', g.p[p].ban.filter(isFL), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'ban') { move(g, t, 'gy', { reason: 'effect' }); log(g, `${name(t)} returned to the GY.`); draw(g, p, 2); } } }] },
   // ENGINE: the engine collects Trigger Effects from the m, st, hand, gy, ban, deck and extra zones, not the Field Zone (fz),
   // so these triggers only work once fz is scanned too. The return in the Standby Phase is also on this card (loc any).
+  // 2026-11-28 audit, E4b (edison-16): ① targets the Normal Summoned monster and banishes it whatever its position (ruling 8: Book of Moon
+  // chained, it is still banished); ② only from this face-up Future Visions (archive; ruling 7), the link tied to this card's visit; with no
+  // free zone the monster goes to the GY (ruling 6)
   'Future Visions': { effs: [{ type: 'act', res: function* () {} },
     { type: 'trig', loc: 'fz', mand: true, label: 'Banish the Normal Summoned monster',
       on: (g, ev, c) => faceUp(c) && ev.type === 'summon' && ['normal', 'tribute'].includes(ev.how),
-      res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; for (const m of L2.ev.cs) if (onField(m) && faceUp(m)) { const q = m.ctrl; move(g, m, 'ban', { reason: 'effect', by: p }); m.flags.fvReturn = { p: q, from: g.turnNo }; g.fv = g.fv || []; g.fv.push(m.u); log(g, `${D(m).n} was banished until ${PN(g, q)}'s next Standby Phase.`); } } },
-    { type: 'trig', loc: 'any', mand: true, label: 'Return the banished monster',
-      on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && (g.fv || []).length > 0 && allCards(g, 'ban').some(m => g.fv.includes(m.u) && m.flags.fvReturn && m.flags.fvReturn.p === ev.tp && m.flags.fvReturn.from < g.turnNo),
-      res: function* (g, c, p, L2) { for (const m of allCards(g, 'ban').filter(m => g.fv.includes(m.u) && m.flags.fvReturn && m.flags.fvReturn.p === L2.ev.tp && m.flags.fvReturn.from < g.turnNo)) { const q = m.flags.fvReturn.p; g.fv = g.fv.filter(u => u !== m.u); m.flags.fvReturn = null; if (freeM(g, q) >= 0) { move(g, m, 'm', { ctrl: q, pos: 'atk', reason: 'summon' }); log(g, `${name(m)} returned to the field.`); } } } }] },
+      target: function* (g, c, p, L2) { L2.t = L2.ev.cs.filter(m => onField(m) && L.canTarget(g, m, L2)); },
+      res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; for (const m of live(L2)) { const q = m.ctrl; if (!move(g, m, 'ban', { reason: 'effect', by: p })) continue; m.flags.fvReturn = { p: q, from: g.turnNo, by: c.u + ':' + c.moved }; log(g, `${D(m).n} was banished until ${PN(g, q)}'s next Standby Phase.`); } } },
+    { type: 'trig', loc: 'fz', mand: true, label: 'Return the banished monster',
+      on: (g, ev, c) => faceUp(c) && ev.type === 'phase' && ev.ph === 'standby' && allCards(g, 'ban').some(m => fvMine(g, c, m, ev.tp)),
+      res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; for (const m of allCards(g, 'ban').filter(m => fvMine(g, c, m, L2.ev.tp))) { const q = m.flags.fvReturn.p; m.flags.fvReturn = null;
+        if (freeM(g, q) >= 0) { move(g, m, 'm', { ctrl: q, pos: 'atk', reason: 'summon' }); log(g, `${name(m)} returned to the field.`); } else { move(g, m, 'gy', { reason: 'rule' }); log(g, `${name(m)} was sent to the GY (no free zone).`); } } } }] },
 
   /* ===== Insect ===== */
   'Koa\'ki Meiru Beetle': { effs: [maint('Reveal an Insect monster', isInsect, ICsend),
     { type: 'trig', mand: true, label: 'Change it to Defense Position',
-      on: (g, ev, c) => ev.type === 'summon' && !['normal', 'tribute', 'flip', 'gemini'].includes(ev.how) && ev.cs.some(x => onField(x) && x.pos === 'atk' && ['LIGHT', 'DARK'].includes(attr(x))),
-      res: function* (g, c, p, L2) { for (const x of L2.ev.cs) if (onField(x) && x.pos === 'atk' && ['LIGHT', 'DARK'].includes(attr(x))) { x.pos = 'def'; log(g, `${name(x)} was changed to Defense Position.`); } } }] },
+      on: (g, ev, c) => ev.type === 'summon' && !['normal', 'tribute', 'flip', 'gemini'].includes(ev.how) && ev.cs.some(x => onField(x) && x.pos === 'atk' && E.lib.attrs(x).some(a_ => ['LIGHT', 'DARK'].includes(a_))),
+      res: function* (g, c, p, L2) { for (const x of L2.ev.cs) if (onField(x) && x.pos === 'atk' && E.lib.attrs(x).some(a_ => ['LIGHT', 'DARK'].includes(a_))) { x.pos = 'def'; log(g, `${name(x)} was changed to Defense Position.`); } } }] },
   // PARTIAL: "can't be Special Summoned by other ways" is not enforced.
   'Aztekipede, the Worm Warrior': { cont: noNormal,
     proc: { label: 'Special Summon (banish an Insect from your GY)', cond: (g, c, p) => g.p[p].gy.some(isInsect),
@@ -242,8 +243,8 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   'Flying Kamakiri 1': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon a WIND',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'WIND' && rawAtk(x) <= 1500),
-    res: function* (g, c, p) { const [x] = yield* pick(g, p, 'Special Summon a WIND monster with 1500 or less ATK', g.p[p].deck.filter(x => isMon(x) && attr(x) === 'WIND' && rawAtk(x) <= 1500), 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && E.lib.isAttr(x, 'WIND') && rawAtk(x) <= 1500),
+    res: function* (g, c, p) { const [x] = yield* pick(g, p, 'Special Summon a WIND monster with 1500 or less ATK', g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND') && rawAtk(x) <= 1500), 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   'Bee List Soldier': { effs: [{ type: 'ign', label: 'Tribute 2 Insects: draw 2',
     cond: (g, c, p) => g.p[p].deck.length >= 2 && monsOf(g, p).some(x => x !== c && faceUp(x) && race(x) === 'Insect' && D(x).n !== 'Bee List Soldier'),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which other Insect?', monsOf(g, p).filter(x => x !== c && faceUp(x) && race(x) === 'Insect' && D(x).n !== 'Bee List Soldier'), 1, 1, 'cost'); move(g, c, 'gy', { reason: 'cost' }); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed Bee List Soldier and ${D(x).n}.`); },
@@ -291,8 +292,8 @@ E.addScripts({
   /* ===== Koa'ki Meiru ===== */
   'Giant Rat': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Special Summon an EARTH',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'EARTH' && rawAtk(x) <= 1500),
-    res: function* (g, c, p) { const [x] = yield* pick(g, p, 'Special Summon an EARTH monster with 1500 or less ATK', g.p[p].deck.filter(x => isMon(x) && attr(x) === 'EARTH' && rawAtk(x) <= 1500), 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && E.lib.isAttr(x, 'EARTH') && rawAtk(x) <= 1500),
+    res: function* (g, c, p) { const [x] = yield* pick(g, p, 'Special Summon an EARTH monster with 1500 or less ATK', g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'EARTH') && rawAtk(x) <= 1500), 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   "Koa'ki Meiru Boulder": { effs: [{ type: 'trig', loc: 'gy', when: true, label: "Add an Iron Core or a Koa'ki Meiru",
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
     cond: (g, c, p) => g.p[p].deck.some(x => isIC(x) || (isKMMon(x) && lv(x) <= 4)),
@@ -364,20 +365,21 @@ E.addScripts({
       res: function* (g, c, p) { if (!onField(c)) return; const ic = g.p[p].hand.filter(isIC);
         if (ic.length && (yield* yn(g, p, 'Reveal an Iron Core to keep Iron Core Specimen Lab?'))) { log(g, `${PN(g, p)} revealed Iron Core of Koa'ki Meiru.`); return; }
         destroy(g, [c], { by: p, rule: true }); } },
-    { type: 'trig', loc: 'fz', label: "Add a Koa'ki Meiru monster",
-      on: (g, ev, c) => faceUp(c) && ev.type === 'move' && ev.wasField && ev.destroyed && ev.phase === 'end' && ev.c.owner === c.ctrl && ev.snap && isKM(ev.c) && ev.snap.mon,
+    // either player whose Koa'ki Meiru was destroyed, once per destruction (rulings 2 to 5; 2026-11-28 audit, E4b: eff.player, eff.perGroup)
+    { type: 'trig', loc: 'fz', perGroup: true, player: (g, ev) => ev.prevCtrl != null ? ev.prevCtrl : ev.c.owner, label: "Add a Koa'ki Meiru monster",
+      on: (g, ev, c) => faceUp(c) && ev.type === 'move' && ev.wasField && ev.destroyed && ev.phase === 'end' && ev.snap && isKM(ev.c) && ev.snap.mon,
       cond: (g, c, p) => g.p[p].deck.some(isKMMon),
       res: function* (g, c, p) { yield* search(g, p, isKMMon, "Add a Koa'ki Meiru monster"); } }] },
-  // PARTIAL: it is linked like Call of the Haunted (the monster leaving the field in any way destroys this card).
+  // It is linked like Call of the Haunted (the monster leaving the field in any way destroys this card).
   'Core Reinforcement': { effs: [{ type: 'act', tags: { ss: 1 },
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isKMMon),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, "Special Summon which Koa'ki Meiru monster?", g.p[p].gy.filter(isKMMon), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'atk')) { link(g, c, t); g.coreRein = g.coreRein || {}; g.coreRein[c.u] = t.u; } else if (onField(c)) move(g, c, 'gy', { reason: 'rule' }); } },
     { type: 'trig', loc: 'any', mand: true, label: 'Take damage',
-      on: (g, ev, c) => ev.type === 'move' && ev.destroyed && ev.wasField && g.coreRein && g.coreRein[c.u] === ev.c.u && ev.phase === 'end' && g.tp === c.ctrl && onField(c),
+      on: (g, ev, c) => ev.type === 'move' && ev.destroyed && ev.wasField && g.coreRein && g.coreRein[c.u] === ev.c.u && ev.phase === 'end' && g.tp === c.ctrl && (onField(c) || g.events.some(e => e.type === 'move' && e.c === c && e.wasField && e.group === ev.group)),   // destroyed together (Icarus Attack): still applies (site ruling 5)
       res: function* (g, c, p, L2) { const n = L2.ev.snap ? L2.ev.snap.atk : 0; if (n) damage(g, p, n, { src: c, srcP: p }); } }] },
   'Iron Core Luster': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p, x) => spellTrapAct(x.top) && x.top.p !== p && !x.top.negated && g.p[p].hand.some(isIC),
+    cond: (g, c, p, x) => spellTrapAct(x.top) && x.top.p !== p && !x.top.negated && g.p[p].hand.some(isIC) && !allField(g).some(y => faceUp(y) && (D(y).n === 'Ceremonial Bell' || (D(y).n === 'Respect Play' && g.tp === p))),   // not while your hand is revealed (site ruling 2)
     cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Reveal an Iron Core from your hand', g.p[p].hand.filter(isIC), 1, 1, 'cost'); log(g, `${PN(g, p)} revealed ${name(x)}.`); L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
   'B. Skull Dragon (Archfiend)': { mats: [x => /Summoned Skull/.test(D(x).n), x => /^Red-Eyes B(lack|\.) Dragon$/.test(D(x).n)], effs: [] },
@@ -387,7 +389,7 @@ E.addScripts({
     cont: { negates: (g, src, x) => src.flags.pwVs === x.u && src.flags.pwTurn === g.turnNo && g.phase === 'battle' && x.zone === 'm' },
     effs: [maint('Reveal a Normal Trap', x => isTrap(x) && D(x).sub === 'Normal', ICsend),
       // marks the LIGHT or DARK monster it battles this Battle Phase (no activation)
-      { type: 'trig', mand: true, on: (g, ev, c) => { if (ev.type === 'attack' && ev.t && (ev.a === c || ev.t === c)) { const o = ev.a === c ? ev.t : ev.a; if (['LIGHT', 'DARK'].includes(attr(o))) { c.flags.pwVs = o.u; c.flags.pwTurn = g.turnNo; } } return false; }, res: function* () {} }] },
+      { type: 'trig', mand: true, on: (g, ev, c) => { if (ev.type === 'attack' && ev.t && (ev.a === c || ev.t === c)) { const o = ev.a === c ? ev.t : ev.a; if (E.lib.attrs(o).some(a_ => ['LIGHT', 'DARK'].includes(a_))) { c.flags.pwVs = o.u; c.flags.pwTurn = g.turnNo; } } return false; }, res: function* () {} }] },
 
   /* ===== Neo-Spacian ===== */
   'Cross Porter': { effs: [

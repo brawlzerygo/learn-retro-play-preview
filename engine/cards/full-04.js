@@ -90,10 +90,10 @@ E.addScripts({
   // "for each card sent to the Graveyard", so one script serves both formats). Tokens vanish and don't count.
   'Chaos Emperor Dragon - Envoy of the End': {
     proc: { label: 'Special Summon (banish a LIGHT and a DARK)',
-      cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'LIGHT') && g.p[p].gy.some(x => isMon(x) && attr(x) === 'DARK'),
+      cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')) && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'DARK')),
       cost: function* (g, c, p, grp) {
-        const [l] = yield* pick(g, p, 'Banish a LIGHT monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT'), 1, 1, 'cost');
-        const [d] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'), 1, 1, 'cost');
+        const [l] = yield* pick(g, p, 'Banish a LIGHT monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')), 1, 1, 'cost');
+        const [d] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')), 1, 1, 'cost');
         for (const x of [l, d]) if (x) move(g, x, 'ban', { reason: 'cost', group: grp });
         log(g, `${PN(g, p)} banished ${[l, d].filter(Boolean).map(name).join(' and ')}.`); c.flags.f04proc = true; } },
     effs: [lockInstall,
@@ -151,8 +151,8 @@ E.addScripts({
     cond: (g, c, p) => ['Exodia the Forbidden One', 'Right Arm of the Forbidden One', 'Left Arm of the Forbidden One', 'Right Leg of the Forbidden One', 'Left Leg of the Forbidden One'].every(n => g.p[p].gy.some(x => named(x, n))) && freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Exodia Necross')),
     res: function* (g, c, p) { const xs = g.p[p].hand.filter(x => named(x, 'Exodia Necross')); if (!xs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon Exodia Necross', xs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   'Contract with the Abyss': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => canRitual(g, p, { monster: x => attr(x) === 'DARK', exact: true }),
-    res: function* (g, c, p) { yield* ritualSummon(g, p, { monster: x => attr(x) === 'DARK', exact: true }); } }] },
+    cond: (g, c, p) => canRitual(g, p, { monster: x => E.lib.isAttr(x, 'DARK'), exact: true }),
+    res: function* (g, c, p) { yield* ritualSummon(g, p, { monster: x => E.lib.isAttr(x, 'DARK'), exact: true }); } }] },
   'Contract with the Dark Master': { effs: ritualEffs('Dark Master - Zorc') },
   'Curse of the Masked Beast': { effs: ritualEffs('The Masked Beast') },
 
@@ -267,9 +267,9 @@ E.addScripts({
       { type: 'trig', on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'end' && c.flags.f04zwei) c.flags.f04zwei = false; return false; }, res: noop }] },
   'Cyber Eltanin': {
     proc: { label: 'Special Summon (banish all LIGHT Machines)',
-      cond: (g, c, p) => [...monsOf(g, p).filter(faceUp), ...g.p[p].gy].some(x => isMon(x) && attr(x) === 'LIGHT' && race(x) === 'Machine' || (onField(x) && D(x).k === 'token' && attr(x) === 'LIGHT' && race(x) === 'Machine')),
+      cond: (g, c, p) => [...monsOf(g, p).filter(faceUp), ...g.p[p].gy].some(x => isMon(x) && E.lib.isAttr(x, 'LIGHT') && race(x) === 'Machine' || (onField(x) && D(x).k === 'token' && E.lib.isAttr(x, 'LIGHT') && race(x) === 'Machine')),
       cost: function* (g, c, p, grp) {
-        const xs = [...monsOf(g, p).filter(faceUp), ...g.p[p].gy].filter(x => (isMon(x) || D(x).k === 'token') && attr(x) === 'LIGHT' && race(x) === 'Machine');
+        const xs = [...monsOf(g, p).filter(faceUp), ...g.p[p].gy].filter(x => (isMon(x) || D(x).k === 'token') && E.lib.isAttr(x, 'LIGHT') && race(x) === 'Machine');
         for (const x of xs) move(g, x, 'ban', { reason: 'cost', group: grp });
         c.flags.f04elt = 500 * xs.length; log(g, `${PN(g, p)} banished ${xs.length} LIGHT Machine monster${xs.length === 1 ? '' : 's'}.`); } },
     self: { atk: (g, c) => c.flags.f04elt || 0, def: (g, c) => c.flags.f04elt || 0 },
@@ -295,10 +295,13 @@ E.addScripts({
       for (const q of [g.tp, opp(g.tp)]) { tops[q] = g.p[q].deck.slice(-5).reverse(); if (tops[q].length) log(g, `${PN(g, q)} revealed ${tops[q].map(name).join(', ')}.`); }
       for (const q of [g.tp, opp(g.tp)]) for (const x of tops[q]) {
         if (x.zone !== 'deck') continue;
-        if (isMon(x) && lv(x) <= 4 && !['ritual', 'token'].includes(D(x).k) && !isExtraD(D(x)) && !noSSText(x) && freeM(g, q) >= 0 && !forbid(g, { type: 'ss', c: x, p: q, how: 'special' })) {
+        const elig = isMon(x) && lv(x) <= 4 && !['ritual', 'token'].includes(D(x).k) && !isExtraD(D(x)) && !noSSText(x);
+        if (elig && freeM(g, q) >= 0 && !forbid(g, { type: 'ss', c: x, p: q, how: 'special' })) {
           const i = yield* choose(g, q, `${name(x)}: which position?`, ['Face-up Attack Position', 'Face-down Defense Position']);
           if (ss(g, q, x, i ? 'set' : 'atk')) continue;
         }
+        // a monster it would summon that a summon lock stops (the Scapegoat turn) goes to the GY (Scapegoat ruling 2; 2026-11-28 audit, E4b)
+        if (elig && forbid(g, { type: 'ss', c: x, p: q, how: 'special' })) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${name(x)} was sent to the GY.`); continue; }
         move(g, x, 'hand', { reason: 'effect' });
       } } }] },
   'Cyber Kirin': { cont: { loc: 'gy', dmg: dmgHook },
@@ -321,19 +324,14 @@ E.addScripts({
       { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'dsEnd' && (ev.a === c || ev.t === c) && c.flags.f04ogre) { c.flags.f04ogre = false; g.seq++; } return false; } }] },
   // PARTIAL: the half ATK is added for the whole Damage Step it attacks in (the engine has no damage calculation window).
   'Cyber Ogre 2': {
-    self: { atk: (g, c) => g.inDS && g.battle && g.battle.a === c && g.battle.t && onField(g.battle.t) && faceUp(g.battle.t) ? Math.floor(atk(g, g.battle.t) / 2) : 0 }, effs: [] },
+    self: { atk: (g, c) => E.lib.dcalc(g) && g.battle && g.battle.a === c && g.battle.t && onField(g.battle.t) && faceUp(g.battle.t) ? Math.floor(atk(g, g.battle.t) / 2) : 0 }, effs: [] },
   'Cyber Ouroboros': { effs: [{ type: 'trig', loc: 'ban', when: true, label: 'Send a card from your hand: draw 1',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'ban',
     cond: (g, c, p) => g.p[p].hand.length > 0 && g.p[p].deck.length > 0,
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which card from your hand to the GY?', g.p[p].hand, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${name(x)} to the GY.`); } },
     res: function* (g, c, p) { draw(g, p, 1); } }] },
-  // PARTIAL: the negation of a Spell/Trap that targets exactly 1 of your Machines is an optional Spell Speed 3 response
-  // (ENGINE: no automatic negation hook, same as Ryu Senshi in build/ENGINE_TODO.md).
-  'Cyber Phoenix': { effs: [
-    { type: 'quick', speed: 3, ds: true, label: 'Negate the Spell/Trap targeting your Machine',
-      cond: (g, c, p, x) => c.pos === 'atk' && spellTrapAct(x.top) && !x.top.negated && x.top.t.length === 1 && onField(x.top.t[0]) && x.top.t[0].zone === 'm' && x.top.t[0].ctrl === p && race(x.top.t[0]) === 'Machine',
-      target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
-      res: function* (g, c, p, L2) { if (!onField(c) || c.pos !== 'atk') return; L2.data.L.negBy = p; negate(g, L2.data.L, false); } },
+  // ① is a continuous negation applied as the link resolves (cont.negLink, 2026-11-28 audit, E4b; rulings 1 and E5: exactly 1 target)
+  'Cyber Phoenix': { cont: { negLink: (g, src, L2) => src.pos === 'atk' && isST(L2.c) && (L2.t || []).length === 1 && onField(L2.t[0]) && L2.t[0].zone === 'm' && L2.t[0].ctrl === src.ctrl && faceUp(L2.t[0]) && race(L2.t[0]) === 'Machine' }, effs: [
     { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'attack' && (ev.a === c || ev.t === c)) c.flags.f04phx = g.turnNo; return false; } },
     { type: 'trig', loc: 'gy', when: true, label: 'Draw 1 card',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy' && ev.snap && ev.snap.flags && ev.snap.flags.f04phx === g.turnNo,
@@ -362,7 +360,7 @@ E.addScripts({
     { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'attack' && ev.t === c && ev.a.ctrl !== c.ctrl && c.flags.trapMon && onField(ev.a)) { addMod(g, c, { set: atk(g, ev.a), which: 'atk', own: true }); addMod(g, c, { set: def(g, ev.a), which: 'def', own: true }); g.seq++; log(g, `Cyber Shadow Gardna became ${atk(g, c)} ATK and ${def(g, c)} DEF.`); } return false; } },
     { type: 'trig', mand: true, opt: true, label: 'Set this card again', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp !== c.ctrl && c.flags.trapMon,
       res: function* (g, c, p) { if (c.zone !== 'm' || freeST(g, p) < 0) return; move(g, c, 'st', { ctrl: p, pos: 'set', reason: 'set' }); log(g, 'Cyber Shadow Gardna was Set in the Spell & Trap Zone.'); } }] },
-  'Cyber Shark': { self: { tributes: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && attr(x) === 'WATER') ? [0] : [] }, effs: [] },
+  'Cyber Shark': { self: { tributes: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && E.lib.isAttr(x, 'WATER')) ? [0] : [] }, effs: [] },
   'Cyber Summon Blaster': { effs: [{ type: 'act', res: noop },
     { type: 'trig', loc: 'st', mand: true, label: '300 damage', on: (g, ev, c) => ev.type === 'summon' && !['normal', 'tribute', 'flip', 'gemini'].includes(ev.how) && ev.cs.some(x => race(x) === 'Machine'),
       res: function* (g, c, p) { if (onField(c) && faceUp(c)) damage(g, opp(p), 300, { src: c, srcP: p }); } }] },

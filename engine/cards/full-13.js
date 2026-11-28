@@ -156,13 +156,13 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t, 'atk')) { addCtr(g, t, 'fog', 1); log(g, `A Fog Counter was placed on ${name(t)}.`); } trapToGY(g, c); } }] },
   'Raging Earth': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy face-down and non-EARTH monsters',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(m => m.pos === 'set' || attr(m) !== 'EARTH'), { by: p }); } }] },
+    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(m => m.pos === 'set' || E.lib.notAttr(m, 'EARTH')), { by: p }); } }] },
   // The summoned monster is destroyed if this card leaves the field while face-up (not if either was turned face-down).
   'Raging Eria': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Tribute a WATER: Special Summon a WATER',
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && attr(x) === 'WATER') && g.p[p].hand.some(x => ssable(x) && attr(x) === 'WATER'),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WATER monster?', monsOf(g, p).filter(x => x !== c && attr(x) === 'WATER'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
-      res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => ssable(x) && attr(x) === 'WATER'); if (!cs.length || freeM(g, p) < 0) return;
+      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && E.lib.isAttr(x, 'WATER')) && g.p[p].hand.some(x => ssable(x) && E.lib.isAttr(x, 'WATER')),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WATER monster?', monsOf(g, p).filter(x => x !== c && E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+      res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => ssable(x) && E.lib.isAttr(x, 'WATER')); if (!cs.length || freeM(g, p) < 0) return;
         const [x] = yield* pick(g, p, 'Special Summon which WATER monster?', cs, 1, 1, 'good');
         if (x && ss(g, p, x, 'atk') && onField(c) && faceUp(c)) { x.flags.f13eria = c.u; c.flags.f13eriaKids = [...(c.flags.f13eriaKids || []), x.u]; } } },
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, label: 'Destroy the summoned monster',
@@ -182,14 +182,14 @@ E.addScripts({
   /* ----- Rainbow ----- */
   'Rainbow Dark Dragon': {
     proc: { label: 'Special Summon (banish 7 DARKs with different names)',
-      cond: (g, c, p) => new Set(g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK').map(x => D(x).n)).size >= 7,
+      cond: (g, c, p) => new Set(g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')).map(x => D(x).n)).size >= 7,
       cost: function* (g, c, p, grp) { const xs = [];
-        for (let i = 0; i < 7; i++) { const cs = g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK' && !xs.includes(x) && !xs.some(y => D(y).n === D(x).n)); if (!cs.length) break; const [x] = yield* pick(g, p, `Banish a DARK monster with a different name (${7 - i} left)`, cs, 1, 1, 'cost'); xs.push(x); }
+        for (let i = 0; i < 7; i++) { const cs = g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK') && !xs.includes(x) && !xs.some(y => D(y).n === D(x).n)); if (!cs.length) break; const [x] = yield* pick(g, p, `Banish a DARK monster with a different name (${7 - i} left)`, cs, 1, 1, 'cost'); xs.push(x); }
         for (const x of xs) move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); } },
     effs: [lockEff, markProper,
       { type: 'ign', label: 'Banish your other DARKs: +500 ATK each',
-        cond: (g, c, p) => [...monsOf(g, p), ...g.p[p].gy].some(x => x !== c && isMon(x) && attr(x) === 'DARK'),
-        cost: function* (g, c, p, L2) { const xs = [...monsOf(g, p).filter(x => x !== c && (faceUp(x) ? attr(x) === 'DARK' : attr(x) === 'DARK')), ...g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK')];
+        cond: (g, c, p) => [...monsOf(g, p), ...g.p[p].gy].some(x => x !== c && isMon(x) && E.lib.isAttr(x, 'DARK')),
+        cost: function* (g, c, p, L2) { const xs = [...monsOf(g, p).filter(x => x !== c && (faceUp(x) ? E.lib.isAttr(x, 'DARK') : E.lib.isAttr(x, 'DARK'))), ...g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK'))];
           const grp = g.group; for (const x of xs) move(g, x, 'ban', { reason: 'cost', by: p, group: grp }); L2.data.n = xs.filter(x => x.zone === 'ban').length; log(g, `${PN(g, p)} banished ${xs.length} DARK monster${xs.length === 1 ? '' : 's'}.`); },
         res: function* (g, c, p, L2) { if (onField(c) && faceUp(c) && L2.data.n) { addMod(g, c, { atk: 500 * L2.data.n, own: true }); log(g, `${name(c)} gained ${500 * L2.data.n} ATK.`); } } }] },
   'Rainbow Dragon': {
@@ -407,14 +407,10 @@ E.addScripts({
     self: { noBattleDestroy: (g, c) => g.phase === 'battle' && g.tp === c.ctrl, noBattleDamage: (g, c) => g.phase === 'battle' && g.tp === c.ctrl },
     effs: [{ type: 'trig', mand: true, label: 'Target loses 500 ATK', on: (g, ev, c) => ev.type === 'afterCalc' && ev.a === c && !!ev.t,
       res: function* (g, c, p, L2) { const t = L2.ev.t; if (t && onField(t) && faceUp(t) && t.zone === 'm') { addMod(g, t, { atk: -500, end: true }); log(g, `${name(t)} lost 500 ATK.`); } } }] },
-  // Equipping it destroys the monster's other Equip Spells (ruling). PARTIAL: the negation of a Spell that targets the equipped
-  // monster is an optional Spell Speed 3 response (ENGINE: no automatic negation hook, as Ryu Senshi in build/ENGINE_TODO.md).
-  "Rod of Silence - Kay'est": { cont: eqBonus(0, 500),
-    effs: [equipAct(() => true, 'Equip to which face-up monster?', { post: function* (g, c, p, t) { const xs = stOnField(g).filter(x => x !== c && x.equipTo === t.u && isSpell(x)); if (xs.length) destroy(g, xs, { by: p, src: c }); } }),
-      { type: 'quick', loc: 'st', speed: 3, ds: true, label: 'Negate the Spell targeting the equipped monster',
-        cond: (g, c, p, x) => !!c.equipTo && !!x.top && !x.top.negated && x.top.c !== c && isSpell(x.top.c) && x.top.t.some(t => t && t.u === c.equipTo && onField(t)),
-        target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
-        res: function* (g, c, p, L2) { const T = L2.data.L; T.negBy = p; negate(g, T, true); } }] },
+  // Equipping it destroys the monster's other Equip Spells (ruling). The negation of a Spell that targets the equipped monster is
+  // continuous, applied as the link resolves (cont.negLink, 2026-11-28 audit, E4b), and destroys that Spell.
+  "Rod of Silence - Kay'est": { cont: { ...eqBonus(0, 500), negLink: (g, src, L2) => !!src.equipTo && L2.c !== src && isSpell(L2.c) && (L2.t || []).some(t => t && t.u === src.equipTo && onField(t)) && 'destroy' },
+    effs: [equipAct(() => true, 'Equip to which face-up monster?', { post: function* (g, c, p, t) { const xs = stOnField(g).filter(x => x !== c && x.equipTo === t.u && isSpell(x)); if (xs.length) destroy(g, xs, { by: p, src: c }); } })] },
 
   /* ----- Royal ----- */
   'Royal Command': { effs: [{ type: 'act', res: noop }],

@@ -146,8 +146,8 @@ E.addScripts({
     res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => faceUp(x) && race(x) === 'Warrior'), { by: p, src: c }); } }] },
   'Warrior Lady of the Wasteland': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Summon an EARTH Warrior from the Deck',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'EARTH' && race(x) === 'Warrior' && D(x).atk !== '?' && baseAtk(x) <= 1500),
-    res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'EARTH' && race(x) === 'Warrior' && D(x).atk !== '?' && baseAtk(x) <= 1500);
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && E.lib.isAttr(x, 'EARTH') && race(x) === 'Warrior' && D(x).atk !== '?' && baseAtk(x) <= 1500),
+    res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'EARTH') && race(x) === 'Warrior' && D(x).atk !== '?' && baseAtk(x) <= 1500);
       const [x] = yield* pick(g, p, 'Special Summon an EARTH Warrior with 1500 or less ATK', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   // Port of goat-5.js (a plain Fusion; the recipe is read from the text).
   'Warrior of Tradition': { effs: [] },
@@ -279,7 +279,7 @@ E.addScripts({
     { type: 'ign', opt: true, label: 'Set this card', cond: (g, c) => faceUp(c),
       res: function* (g, c) { if (onField(c) && faceUp(c)) { setFaceDown(g, c); c.posChanged = true; } } },
     { type: 'trig', on: (g, ev, c) => {
-      if (ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos === 'set') { addMod(g, c, { set: 2400, which: 'atk', scorp: true, own: true }); log(g, '8-Claws Scorpion\'s ATK became 2400.'); }
+      if (ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos === 'set') { addMod(g, c, { set: 2400, which: 'atk', scorp: true, own: true, calc: true }); log(g, '8-Claws Scorpion\'s ATK became 2400.'); }
       if (ev.type === 'dsEnd' && ev.a === c) c.mods = c.mods.filter(m => !m.scorp);
       return false; }, res: function* () {} }] },
   'Abare Ushioni': { effs: [{ type: 'ign', opt: true, label: 'Toss a coin and call it',
@@ -302,8 +302,8 @@ E.addScripts({
     res: function* (g, c, p, L2) { gain(g, p, 300 * num(D(L2.ev.c).lv)); } }] },
   // Port of goat-3.js.
   'Abyss Soldier': { effs: [{ type: 'ign', opt: true, label: 'Discard a WATER: return a card to the hand',
-    cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && attr(x) === 'WATER') && allField(g).length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard 1 WATER monster', g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WATER'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } },
+    cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'WATER')) && allField(g).length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard 1 WATER monster', g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which card to its owner’s hand?', allField(g), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; const nm = t.pos === 'set' ? 'a face-down card' : name(t); move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${nm} returned to the hand.`); } }] },
   'Abyssal Designator': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 1000, c),

@@ -165,8 +165,8 @@ E.addScripts({
       res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand; if (!h.length) return; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'deck', { reason: 'effect', by: p }); log(g, `${PN(g, o)} returned a random card from the hand to the Deck.`); } }] },
   'Leghul': { self: { directAttack: true } },
   'Lekunga': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Banish 2 WATER: summon a Lekunga Token',
-    cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WATER').length >= 2 && freeM(g, p) >= 0,
-    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Banish 2 WATER monsters from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WATER'), 2, 2, 'cost'); for (const x of xs) move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${xs.map(name).join(' and ')}.`); },
+    cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER')).length >= 2 && freeM(g, p) >= 0,
+    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Banish 2 WATER monsters from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER')), 2, 2, 'cost'); for (const x of xs) move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${xs.map(name).join(' and ')}.`); },
     res: function* (g, c, p) { tokens(g, p, { n: 'Lekunga Token', a: 'WATER', r: 'Plant', lv: 2, atk: 700, def: 700 }, 1, 'atk'); } }] },
   'Life Absorbing Machine': { effs: [{ type: 'act', res: noop },
     { type: 'trig', loc: 'any', res: noop, on: (g) => { scanPays(g); return false; } },
@@ -187,9 +187,9 @@ E.addScripts({
         for (const e of g.lfs) if (e.by === c.u && e.o === ev.tp && e.turn !== g.turnNo) { e.turn = g.turnNo; e.n++; if (e.n >= 4) due = true; } return due; },
       res: function* (g, c) { for (const e of g.lfs.filter(e => e.by === c.u && e.n >= 4)) { const x = g.p[e.o].ban.find(y => y.u === e.u); if (x) { move(g, x, 'hand', { reason: 'effect' }); log(g, `${PN(g, x.owner)} got the banished card back.`); } }
         g.lfs = g.lfs.filter(e => !(e.by === c.u && e.n >= 4)); } }] },
-  'Lightning Blade': { cont: { atk: (g, src, m) => (src.equipTo === m.u ? 800 : 0) + (src.equipTo && attr(m) === 'WATER' ? -500 : 0) },
+  'Lightning Blade': { cont: { atk: (g, src, m) => (src.equipTo === m.u ? 800 : 0) + (src.equipTo && E.lib.isAttr(m, 'WATER') ? -500 : 0) },
     effs: [equipAct(m => race(m) === 'Warrior', 'Equip to which face-up Warrior monster?')] },
-  'Little Chimera': { cont: { atk: (g, src, m) => attr(m) === 'FIRE' ? 500 : attr(m) === 'WATER' ? -400 : 0 } },
+  'Little Chimera': { cont: { atk: (g, src, m) => E.lib.isAttr(m, 'FIRE') ? 500 : E.lib.isAttr(m, 'WATER') ? -400 : 0 } },
   'Little-Winguard': { effs: [{ type: 'trig', opt: true, label: 'Change its battle position',
     on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
     res: function* (g, c) { swapPos(g, c); } }] },
@@ -204,8 +204,8 @@ E.addScripts({
   'Lord of D.': { cont: { grant: (g, src, c, flag) => flag === 'cantBeTargeted' && c.zone === 'm' && faceUp(c) && race(c) === 'Dragon' } },
   // Face-down banished cards (Lightforce Sword) don't count.
   'Lost Guardian': { self: { def: (g, c) => 700 * g.p[c.ctrl].ban.filter(x => isMon(x) && race(x) === 'Rock' && !(g.lfs || []).some(e => e.u === x.u)).length } },
-  'Luminous Soldier': { self: { atk: (g, c) => { if (!g.inDS || !g.battle) return 0; const o = g.battle.a === c ? g.battle.t : g.battle.t === c ? g.battle.a : null; return o && onField(o) && faceUp(o) && attr(o) === 'DARK' ? 500 : 0; } } },
-  'Luminous Spark': { cont: { atk: (g, src, m) => attr(m) === 'LIGHT' ? 500 : 0, def: (g, src, m) => attr(m) === 'LIGHT' ? -400 : 0 }, effs: [{ type: 'act', res: noop }] },
+  'Luminous Soldier': { self: { atk: (g, c) => { if (!g.inDS || !g.battle) return 0; const o = g.battle.a === c ? g.battle.t : g.battle.t === c ? g.battle.a : null; return o && onField(o) && faceUp(o) && E.lib.isAttr(o, 'DARK') ? 500 : 0; } } },
+  'Luminous Spark': { cont: { atk: (g, src, m) => E.lib.isAttr(m, 'LIGHT') ? 500 : 0, def: (g, src, m) => E.lib.isAttr(m, 'LIGHT') ? -400 : 0 }, effs: [{ type: 'act', res: noop }] },
 
   /* ----- Ma ----- */
   'Magician of Faith': { effs: [{ type: 'trig', mand: true, faceDownOk: true, label: 'Add a Spell from the GY', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
@@ -394,7 +394,7 @@ E.addScripts({
   'Millennium Scorpion': { effs: [{ type: 'trig', mand: true, label: 'Gain 500 ATK',
     on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
     res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, own: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
-  'Milus Radiant': { cont: { atk: (g, src, m) => faceUp(m) ? (attr(m) === 'EARTH' ? 500 : attr(m) === 'WIND' ? -400 : 0) : 0 } },
+  'Milus Radiant': { cont: { atk: (g, src, m) => faceUp(m) ? (E.lib.isAttr(m, 'EARTH') ? 500 : E.lib.isAttr(m, 'WIND') ? -400 : 0) : 0 } },
   // PARTIAL: "by your opponent's card" is read from the move's own player when the effect gave one, else the turn player.
   'Minar': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Inflict 1000 damage',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ['discard', 'effect'].includes(ev.reason) && (ev.by != null && ev.by !== c.owner),

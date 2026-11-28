@@ -14,7 +14,7 @@ const atk = L.atk, def = L.def;
 const named = (c, n) => D(c).n === n;
 const isEffectMon = c => isMon(c) && (D(c).k === 'effect' || /Effect/.test(D(c).ab || ''));
 const isNormalSpell = c => isSpell(c) && D(c).sub === 'Normal';
-const darkMon = c => isMon(c) && attr(c) === 'DARK';
+const darkMon = c => isMon(c) && E.lib.isAttr(c, 'DARK');
 // negate an effect (not the activation) of a chain link, optionally destroying the card
 function negLink(g, T, p, destroyIt) { if (!T || T.negated) return; T.negated = true; T.negBy = p; log(g, `${name(T.c)}'s effect was negated.`); if (destroyIt && onField(T.c)) destroy(g, [T.c], { by: p }); }
 function* discardPick(g, p, n, text, not) { const h = g.p[p].hand.filter(x => x !== not); if (!h.length) return []; const xs = yield* pick(g, p, text, h, Math.min(n, h.length), Math.min(n, h.length), 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'discard', by: p }); if (xs.length) log(g, `${PN(g, p)} discarded ${xs.map(name).join(', ')}.`); return xs; }
@@ -167,7 +167,7 @@ E.addScripts({
   'Dark Driceratops': { self: { piercing: true } },
   // PARTIAL: the engine's Tribute hook only changes how many Tributes are needed, so with a face-up Dark Effigy a Level 7+
   // DARK Normal Monster can be Tribute Summoned with any 1 monster, not only Dark Effigy.
-  'Dark Effigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && D(c).k === 'normal' && attr(c) === 'DARK' && need === 2 && !negd(g, src) ? 1 : null } },
+  'Dark Effigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && D(c).k === 'normal' && E.lib.isAttr(c, 'DARK') && need === 2 && !negd(g, src) ? 1 : null } },
   'Dark Elf': { self: { attackCost: () => 1000 } },
   'Dark Eradicator Warlock': {
     proc: { label: 'Special Summon (Tribute Dark Magician)', cond: (g, c, p) => c.zone === 'hand' && monsOf(g, p).some(x => named(x, 'Dark Magician')),
@@ -194,7 +194,7 @@ E.addScripts({
           if (k === 0) yield* search(g, p, x => darkMon(x) && lv(x) === 4, 'Add which Level 4 DARK monster?'); else draw(g, p, 1); } },
       // ENGINE: no automatic negation hook, so it is an optional Spell Speed 3 response. PARTIAL: optional.
       { type: 'quick', speed: 3, ds: true, label: 'Negate the Spell targeting your DARK',
-        cond: (g, c, p, x) => { const t = x.top; return !!(t && isSpell(t.c) && !t.negated && t.t && t.t.some(m => onField(m) && faceUp(m) && m.zone === 'm' && m.ctrl === p && attr(m) === 'DARK')); },
+        cond: (g, c, p, x) => { const t = x.top; return !!(t && isSpell(t.c) && !t.negated && t.t && t.t.some(m => onField(m) && faceUp(m) && m.zone === 'm' && m.ctrl === p && E.lib.isAttr(m, 'DARK'))); },
         target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
         res: function* (g, c, p, L2) { negLink(g, L2.data.L, p, true); } }] },
   'Dark Hunter': {
@@ -323,24 +323,23 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl,
     res: function* (g, c, p) { const o = opp(p); const cs = g.p[o].deck.filter(isSpell); if (!cs.length) { shuffleDeck(g, o); return; }
       const [x] = yield* pick(g, o, 'Send a Spell from your Deck to the GY', cs, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${PN(g, o)} sent ${name(x)} from the Deck to the GY.`); } shuffleDeck(g, o); } }] },
-  'Dark Simorgh': {
-    // ENGINE: attr() can't be changed, so "also WIND-Attribute" isn't applied. Setting by a card effect isn't blocked either.
+  'Dark Simorgh': { self: { alsoAttr: 'WIND' },   // ④ "also WIND" (the engine's attrs(), 2026-11-28 audit, E4b). Setting by a card effect isn't blocked.
     cont: { forbid: (g, src, a) => (a.type === 'set' || a.type === 'setST') && a.p !== src.ctrl },
     effs: [
       { type: 'ign', loc: 'hand', tags: { ss: 1 }, label: 'Banish a DARK and a WIND from the GY: summon',
-        cond: (g, c, p) => c.zone === 'hand' && freeM(g, p) >= 0 && g.p[p].gy.some(darkMon) && g.p[p].gy.some(x => isMon(x) && attr(x) === 'WIND'),
-        cost: function* (g, c, p) { const [a] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(darkMon), 1, 1, 'cost'); const [w] = yield* pick(g, p, 'Banish a WIND monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WIND'), 1, 1, 'cost');
+        cond: (g, c, p) => c.zone === 'hand' && freeM(g, p) >= 0 && g.p[p].gy.some(darkMon) && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'WIND')),
+        cost: function* (g, c, p) { const [a] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(darkMon), 1, 1, 'cost'); const [w] = yield* pick(g, p, 'Banish a WIND monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND')), 1, 1, 'cost');
           for (const x of [a, w]) if (x) move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${[a, w].filter(Boolean).map(name).join(' and ')}.`); },
         res: function* (g, c, p) { if (c.zone === 'hand') ss(g, p, c); } },
       { type: 'ign', loc: 'gy', tags: { ss: 1 }, label: 'Banish a DARK and a WIND from the hand: summon',
-        cond: (g, c, p) => c.zone === 'gy' && freeM(g, p) >= 0 && g.p[p].hand.some(darkMon) && g.p[p].hand.some(x => isMon(x) && attr(x) === 'WIND'),
-        cost: function* (g, c, p) { const [a] = yield* pick(g, p, 'Banish a DARK monster from your hand', g.p[p].hand.filter(darkMon), 1, 1, 'cost'); const [w] = yield* pick(g, p, 'Banish a WIND monster from your hand', g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WIND'), 1, 1, 'cost');
+        cond: (g, c, p) => c.zone === 'gy' && freeM(g, p) >= 0 && g.p[p].hand.some(darkMon) && g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'WIND')),
+        cost: function* (g, c, p) { const [a] = yield* pick(g, p, 'Banish a DARK monster from your hand', g.p[p].hand.filter(darkMon), 1, 1, 'cost'); const [w] = yield* pick(g, p, 'Banish a WIND monster from your hand', g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND')), 1, 1, 'cost');
           for (const x of [a, w]) if (x) move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${[a, w].filter(Boolean).map(name).join(' and ')}.`); },
         res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c); } }] },
   'Dark Spider': { effs: [{ type: 'ign', opt: true, label: 'An Insect gains 2 Levels',
     cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Insect'),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Insect gains 2 Levels?', monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Insect'), 1, 1, 'good'); },
-    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { t.flags.lv = lv(t) + 2; t.flags.lvUntil = true; log(g, `${name(t)} is now Level ${lv(t)}.`); } } }] },
+    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { L.lvAdd(g, t, 2, true); log(g, `${name(t)} is now Level ${lv(t)}.`); } } }] },
   'Dark Strike Fighter': { effs: [{ type: 'ign', opt: true, label: 'Tribute a monster: Level x 200 damage',
     cond: (g, c, p) => g.phase === 'main1' && monsOf(g, p).length > 0,
     cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p), 1, 1, 'cost'); if (!x) return; L2.data.n = lv(x); const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); },
@@ -376,7 +375,7 @@ E.addScripts({
   // A Field Spell. PARTIAL: the 1000 ATK lasts through the whole Damage Step, not only damage calculation.
   'Dark City': { effs: [{ type: 'act', res: function* () {} }],
     cont: { atk: (g, src, c) => {
-      if (cityGuard || !g.inDS || !g.battle || g.battle.a !== c || !g.battle.t || !/^Destiny HERO/.test(name(c)) || !faceUp(g.battle.t)) return 0;
+      if (cityGuard || !E.lib.dcalc(g) || !g.battle || g.battle.a !== c || !g.battle.t || !/^Destiny HERO/.test(name(c)) || !faceUp(g.battle.t)) return 0;
       cityGuard = true; try { return stat(g, c, 'atk') < stat(g, g.battle.t, 'atk') ? 1000 : 0; } finally { cityGuard = false; } } } },
   'Dark Core': { effs: [{ type: 'act',
     cond: (g, c, p) => fieldMons(g).some(faceUp) && g.p[p].hand.filter(x => x !== c).length > 0,
@@ -469,7 +468,7 @@ E.addScripts({
       log(g, `${name(T.c)}'s effect became "Your opponent discards 1 random card".`); } }] },
   'Dark Illusion': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p, x) => { const t = x.top; if (!t || t.negated) return false; const kind = spellTrapAct(t) || (isMon(t.c) && !t.cardAct);
-      return !!kind && (t.t || []).some(m => onField(m) && m.zone === 'm' && faceUp(m) && attr(m) === 'DARK'); },
+      return !!kind && (t.t || []).some(m => onField(m) && m.zone === 'm' && faceUp(m) && E.lib.isAttr(m, 'DARK')); },
     target: function* (g, c, p, L2) { L2.data.T = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { const T = L2.data.T; T.negBy = p; negate(g, T, true); } }] },
   'Dark Mirror Force': { effs: [{ type: 'act',

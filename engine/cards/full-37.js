@@ -55,7 +55,7 @@ const lockEff = { type: 'trig', loc: 'any', res: noop, on: (g, ev) => {
   if (!g.f37lock) { g.f37lock = true; addRule(g, (g2, a) => {
     // Diabolos: no Normal Summon or Set without 2 DARK monsters to Tribute (the engine's Tribute pick can't be limited to DARK)
     if ((a.type === 'ns' || a.type === 'set') && a.c && a.c.id != null && D(a.c).n === 'Diabolos, King of the Abyss')
-      return monsOf(g2, a.p).filter(m => attr(m) === 'DARK' && !m.flags.noTribute).length < 2;
+      return monsOf(g2, a.p).filter(m => E.lib.isAttr(m, 'DARK') && !m.flags.noTribute).length < 2;
     if (a.type !== 'ss' || !a.c || a.c.id == null) return false; const d = D(a.c); const f = d && LOCKS[d.n]; return !!f && f(g2, a); }); }
   if (ev.type === 'summon') for (const x of ev.cs) if (x) x.f37proper = true;
   return false; } };
@@ -159,11 +159,11 @@ E.addScripts({
     finally { g.f37nurse = false; c.flags.f37lp = { o, lp: P.lp }; }
     return false; } }] },
   // "If" (no missed timing); it activates even if this card was also destroyed in that battle.
-  'Darknight Parshath': { self: { atk: (g, c) => 100 * g.p[c.ctrl].gy.filter(x => isMon(x) && attr(x) === 'DARK').length },
+  'Darknight Parshath': { self: { atk: (g, c) => 100 * g.p[c.ctrl].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')).length },
     effs: [{ type: 'trig', loc: 'any', label: 'Banish a DARK: draw 1 card',
       on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c && !!ev.snap && ev.snap.ctrl !== ctrlOf(c),
-      cond: (g, c, p) => g.p[p].deck.length > 0 && g.p[p].gy.some(x => isMon(x) && attr(x) === 'DARK'),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${name(x)}.`); } },
+      cond: (g, c, p) => g.p[p].deck.length > 0 && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'DARK')),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${name(x)}.`); } },
       res: function* (g, c, p) { draw(g, p, 1); } }] },
   'Darksea Float': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Owner draws 1 card',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && !ev.battle && ev.to === 'gy',
@@ -389,10 +389,10 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon Doomkaiser Dragon from your GY', g.p[p].gy.filter(x => named(x, 'Doomkaiser Dragon')), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   'Doomsday Horror': {
-    self: { atk: g => 300 * allCards(g, 'ban').filter(x => isMon(x) && attr(x) === 'DARK').length, def: g => 300 * allCards(g, 'ban').filter(x => isMon(x) && attr(x) === 'DARK').length },
+    self: { atk: g => 300 * allCards(g, 'ban').filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')).length, def: g => 300 * allCards(g, 'ban').filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')).length },
     effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Return banished DARKs to the GY',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.to === 'gy',
-      res: function* (g) { const xs = allCards(g, 'ban').filter(x => isMon(x) && attr(x) === 'DARK'); for (const x of xs) move(g, x, 'gy', { reason: 'effect' }); if (xs.length) log(g, `${xs.map(name).join(', ')} returned to the GY.`); } }] },
+      res: function* (g) { const xs = allCards(g, 'ban').filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')); for (const x of xs) move(g, x, 'gy', { reason: 'effect' }); if (xs.length) log(g, `${xs.map(name).join(', ')} returned to the GY.`); } }] },
   'Doppelganger': { effs: [actNoop,
     { type: 'trig', loc: 'st', mand: true, label: 'Inflict the same damage',
       on: (g, ev, c) => ev.type === 'damage' && !ev.battle && ev.p === c.ctrl && ev.srcP === opp(c.ctrl) && !!ev.src && isMon(ev.src),
@@ -419,7 +419,7 @@ E.addScripts({
   /* ----- E ----- */
   // PARTIAL: the engine offers a 1-Tribute Summon for a Level 7+ EARTH Normal Monster while you control it, but the one
   // Tribute can be any monster (ENGINE: no per-summon Tribute check).
-  'Earth Effigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && D(c).k === 'normal' && attr(c) === 'EARTH' ? 1 : null } },
+  'Earth Effigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && D(c).k === 'normal' && E.lib.isAttr(c, 'EARTH') ? 1 : null } },
   'Ebon Arrow': { cont: { loc: 'gy', grant: (g, src, c, flag) => flag === 'piercing' && !!c.flags.f37ebon && c.flags.f37ebon.turn === g.turnNo },
     effs: [{ type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).some(faceUp),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Choose a face-up monster you control', monsOf(g, p).filter(faceUp), 1, 1, 'good'); },
@@ -524,8 +524,8 @@ E.addScripts({
   // Linked both ways: when this card leaves the field the monster is destroyed and banished; when the monster is destroyed,
   // this card is destroyed.
   'Escape from the Dark Dimension': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].ban.some(x => isMon(x) && attr(x) === 'DARK' && canSS(g, p, x)),
-      target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which banished DARK monster?', g.p[p].ban.filter(x => isMon(x) && attr(x) === 'DARK' && canSS(g, p, x)), 1, 1, 'good'); },
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].ban.some(x => isMon(x) && E.lib.isAttr(x, 'DARK') && canSS(g, p, x)),
+      target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which banished DARK monster?', g.p[p].ban.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK') && canSS(g, p, x)), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'ban' && onField(c) && ss(g, p, t, 'atk')) c.f37esc = t.u; } },
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, label: 'Destroy and banish the monster',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && !!c.f37esc,

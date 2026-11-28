@@ -94,7 +94,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { damage(g, L2.ev.prevCtrl, 3000, { src: c, srcP: L2.ev.prevCtrl }); } }] },
   // Read from the GY, where the card is once it resolved. PARTIAL: if every copy leaves the GY that turn, the protection stops.
   'Aegis of the Ocean Dragon Lord': {
-    cont: { loc: 'gy', grant: (g, src, m, flag) => (flag === 'noBattleDestroy' || flag === 'noEffectDestroy') && !!g.f35ocean && g.f35ocean[m.ctrl] === g.turnNo && m.zone === 'm' && faceUp(m) && attr(m) === 'WATER' && lv(m) <= 3 },
+    cont: { loc: 'gy', grant: (g, src, m, flag) => (flag === 'noBattleDestroy' || flag === 'noEffectDestroy') && !!g.f35ocean && g.f35ocean[m.ctrl] === g.turnNo && m.zone === 'm' && faceUp(m) && E.lib.isAttr(m, 'WATER') && lv(m) <= 3 },
     effs: [{ type: 'act', res: function* (g, c, p) { (g.f35ocean || (g.f35ocean = {}))[p] = g.turnNo; log(g, `${PN(g, p)}'s face-up Level 3 or lower WATER monsters can't be destroyed this turn.`); } }] },
   'Against the Wind': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && /^Blackwing/.test(D(x).n)),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which Blackwing from your GY to your hand?', g.p[p].gy.filter(x => isMon(x) && /^Blackwing/.test(D(x).n)), 1, 1, 'good'); },
@@ -120,8 +120,8 @@ E.addScripts({
     { type: 'trig', loc: 'st', mand: true, label: 'Change it to Attack Position',
       on: (g, ev, c) => ev.type === 'summon' && SPECIAL.includes(ev.how),
       res: function* (g, c, p, L2) { for (const m of L2.ev.cs) if (onField(m) && m.zone === 'm') { toAtk(g, m); m.flags.f35mustAtk = g.turnNo; } } }] },
-  'Ally of Justice Garadholg': { self: { atk: (g, c) => { const o = foe(g, c); return o && attr(o) === 'LIGHT' ? 200 : 0; } } },
-  'Ally of Justice Rudra': { self: { atk: (g, c) => { const o = foe(g, c); return o && attr(o) === 'LIGHT' ? 700 : 0; } } },
+  'Ally of Justice Garadholg': { self: { atk: (g, c) => { const o = foe(g, c); return o && E.lib.isAttr(o, 'LIGHT') ? 200 : 0; } } },
+  'Ally of Justice Rudra': { self: { atk: (g, c) => { const o = foe(g, c); return o && E.lib.isAttr(o, 'LIGHT') ? 700 : 0; } } },
   // ENGINE: no general "can't be Special Summoned except by Fusion Summon" flag.
   'Ambulance Rescueroid': { effs: [{ type: 'trig', when: true, opt: true, tags: { ss: 1 }, label: 'Special Summon the destroyed monster',
     on: (g, ev, c) => ev.type === 'move' && ev.c !== c && ev.battle && ev.destroyed && ev.wasField && ev.to === 'gy' && ev.prevCtrl === c.ctrl && !!ev.snap && ev.snap.mon,
@@ -141,7 +141,7 @@ E.addScripts({
   // The listed material Defender of the Sea matches no card in the pool. The TCG printing reads Ground Attacker Bugroth + Mother Grizzly.
   'Amphibious Bugroth': { mats: [c => D(c).n === 'Ground Attacker Bugroth', c => ['Mother Grizzly', 'Defender of the Sea'].includes(D(c).n)], effs: [] },
   'Amulet of Ambition': {
-    cont: { atk: (g, src, m) => { if (src.equipTo !== m.u) return 0; const o = foe(g, m); return o && lv(o) > lv(m) ? 500 * (lv(o) - lv(m)) : 0; } },
+    cont: { atk: (g, src, m) => { if (src.equipTo !== m.u || !E.lib.dcalc(g)) return 0; const o = foe(g, m); return o && lv(o) > lv(m) ? 500 * (lv(o) - lv(m)) : 0; } },
     effs: [equipAct(normalNow, 'Equip to which Normal Monster?'),
       { type: 'trig', loc: 'gy', when: true, label: 'Place it on top of your Deck',
         on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'gy',

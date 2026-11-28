@@ -168,7 +168,7 @@ E.addScripts({
     cond: (g, c, p) => canRitual(g, p, { monster: x => named(x, 'Crab Turtle') }),
     res: function* (g, c, p) { yield* ritualSummon(g, p, { monster: x => named(x, 'Crab Turtle') }); } }] },
   'Umi': { effs: [actNoop], cont: { atk: (g, src, c) => spellOk(g, c) ? umiMod(c) : 0, def: (g, src, c) => spellOk(g, c) ? umiMod(c) : 0 } },
-  'Umiiruka': fieldMod(m => attr(m) === 'WATER', 500, -400),
+  'Umiiruka': fieldMod(m => E.lib.isAttr(m, 'WATER'), 500, -400),
   'Wasteland': fieldMod(m => ['Dinosaur', 'Zombie', 'Rock'].includes(race(m)), 200, 200),
   // "The equipped monster gains 800 ATK/DEF for each face-up monster you control" (you: this card's controller).
   'United We Stand': { cont: { atk: (g, src, m) => src.equipTo === m.u ? 800 * monsOf(g, src.ctrl).filter(faceUp).length : 0, def: (g, src, m) => src.equipTo === m.u ? 800 * monsOf(g, src.ctrl).filter(faceUp).length : 0 },
@@ -238,15 +238,17 @@ E.addScripts({
       res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
   // "You take no battle damage from your opponent's monsters this turn. Your monsters can't be destroyed by battle this turn."
   // The battle protection works from the GY (the card is there after it resolves) for the rest of the turn.
-  'Waboku': { cont: { loc: 'gy', grant: (g, src, m, flag) => flag === 'noBattleDestroy' && m.zone === 'm' && g.p[m.ctrl].wabokuTurn === g.turnNo },
-    effs: [{ type: 'act', res: function* (g, c, p) { g.p[p].noBattleDamage = g.turnNo; g.p[p].wabokuTurn = g.turnNo; g.seq++; log(g, `${PN(g, p)}'s monsters can't be destroyed by battle this turn, and ${PN(g, p)} takes no battle damage.`); } }] },
+  // the protection is the player's for the turn (g.p[p].noBattleDestroy, read by the engine), not a static of the card in the GY: it lasts if
+  // Waboku leaves the GY (2026-11-28 audit, E4b, goat-08: D.D. Crow, Kycoo's battle banish)
+  'Waboku': {
+    effs: [{ type: 'act', res: function* (g, c, p) { g.p[p].noBattleDamage = g.turnNo; g.p[p].noBattleDestroy = g.turnNo; g.seq++; log(g, `${PN(g, p)}'s monsters can't be destroyed by battle this turn, and ${PN(g, p)} takes no battle damage.`); } }] },
 
   /* ----- Monsters ----- */
   // Quick Effect, once per turn per copy: banish 2 DARKs from your GY; banish this card until the End Phase.
   'Strike Ninja': { effs: [
     { type: 'quick', opt: true, label: 'Banish 2 DARKs: banish this card until the End Phase',
-      cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK').length >= 2,
-      cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Banish 2 DARK monsters from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'), 2, 2, 'cost'); for (const x of xs) move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); },
+      cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')).length >= 2,
+      cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Banish 2 DARK monsters from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')), 2, 2, 'cost'); for (const x of xs) move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); },
       res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; const pos = c.pos; move(g, c, 'ban', { reason: 'effect', by: p }); if (c.zone === 'ban') { c.flags.f28ninja = { turn: g.turnNo, pos, p }; log(g, 'Strike Ninja was banished until the End Phase.'); } } },
     { type: 'trig', loc: 'ban', mand: true, label: 'Return to the field',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && !!c.flags.f28ninja && c.flags.f28ninja.turn === g.turnNo,
@@ -374,8 +376,8 @@ E.addScripts({
           const [x] = yield* pick(g, p, 'Tribute 1 Dragon monster', ds, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } } }] },
   'UFO Turtle': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Special Summon a FIRE monster',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && attr(x) === 'FIRE' && baseAtk(x) <= 1500 && canSS(g, p, x)),
-    res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'FIRE' && baseAtk(x) <= 1500 && canSS(g, p, x)); if (!cs.length || freeM(g, p) < 0) return;
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && E.lib.isAttr(x, 'FIRE') && baseAtk(x) <= 1500 && canSS(g, p, x)),
+    res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'FIRE') && baseAtk(x) <= 1500 && canSS(g, p, x)); if (!cs.length || freeM(g, p) < 0) return;
       const [x] = yield* pick(g, p, 'Special Summon a FIRE monster with 1500 or less ATK', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   // Takes a face-up Union Monster from the opponent's field and equips it to this card (Main Phase, needs a free S/T zone).
   // PARTIAL: the Union's own effect isn't stopped from unequipping it, and its equip bonuses aren't stripped.
@@ -387,8 +389,8 @@ E.addScripts({
   // ENGINE: Tribute counts are fixed in the engine (same as The Trojan Horse, full-16.js). Closest: Tribute this card alone to
   // Tribute Summon a Level 7 or higher WATER from your hand (your Normal Summon). This summon has no Solemn Judgment window.
   'Unshaven Angler': { effs: [{ type: 'ign', label: 'Tribute as 2: summon a WATER',
-    cond: (g, c, p) => g.ns[p] < 1 && !g.noSummon[p] && g.p[p].hand.some(x => attr(x) === 'WATER' && lv(x) >= 7 && canNS(x) && !forbid(g, { type: 'ns', c: x, p })),
-    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute Summon which WATER monster?', g.p[p].hand.filter(x => attr(x) === 'WATER' && lv(x) >= 7 && canNS(x) && !forbid(g, { type: 'ns', c: x, p })), 1, 1, 'good');
+    cond: (g, c, p) => g.ns[p] < 1 && !g.noSummon[p] && g.p[p].hand.some(x => E.lib.isAttr(x, 'WATER') && lv(x) >= 7 && canNS(x) && !forbid(g, { type: 'ns', c: x, p })),
+    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute Summon which WATER monster?', g.p[p].hand.filter(x => E.lib.isAttr(x, 'WATER') && lv(x) >= 7 && canNS(x) && !forbid(g, { type: 'ns', c: x, p })), 1, 1, 'good');
       L2.data.x = x; g.ns[p]++; move(g, c, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Unshaven Angler as 2 Tributes.`); },
     res: function* (g, c, p, L2) { const x = L2.data.x; if (!x || x.zone !== 'hand' || freeM(g, p) < 0) return; const grp = g.group;
       move(g, x, 'm', { ctrl: p, pos: 'atk', reason: 'summon', group: grp }); x.summonType = 'tribute'; x.tributes = [c.u]; x.attacks = 0;

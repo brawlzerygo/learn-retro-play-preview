@@ -64,7 +64,7 @@ const LOCKS = {
   // only by its own rule from the hand. PARTIAL: an effect that Special Summons it from the hand is not stopped.
   'Kasha': (g, a) => a.type === 'ss' && a.c.zone !== 'hand',
   // ENGINE: no per-summon Tribute filter; the Tribute Summon is only blocked while no DARK monster could be Tributed.
-  'Lich Lord, King of the Underworld': (g, a) => (a.type === 'ns' || a.type === 'set') && !tributeCands(g, a.p).some(x => faceUp(x) && attr(x) === 'DARK') && tributeCands(g, a.p).length > 0,
+  'Lich Lord, King of the Underworld': (g, a) => (a.type === 'ns' || a.type === 'set') && !tributeCands(g, a.p).some(x => faceUp(x) && E.lib.isAttr(x, 'DARK')) && tributeCands(g, a.p).length > 0,
 };
 const lockInstall = { type: 'trig', loc: 'any', res: noop,
   on: g => { if (!g.f40lock) { g.f40lock = true; addRule(g, (g2, a) => { if (!a.c || !['ns', 'set', 'ss'].includes(a.type)) return false; const f = LOCKS[D(a.c).n]; return !!f && f(g2, a); }); } return false; } };
@@ -303,10 +303,10 @@ E.addScripts({
     cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && monsOf(g, p).some(x => named(x, 'Hero Kid')),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Hero Kid?', monsOf(g, p).filter(x => named(x, 'Hero Kid')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Hero Kid.`); } },
     res: function* (g, c, p) { if (g.aw) negateAttack(g); yield* search(g, p, x => isMon(x) && /^Elemental HERO/.test(D(x).n), 'Add which Elemental HERO monster?'); } }] },
-  // PARTIAL: no window during damage calculation; the 2000 applies through the whole Damage Step of a battle with a Warrior.
+  // The 2000 applies during damage calculation only (E.lib.dcalc, 2026-11-28 audit).
   'Kinetic Soldier (Cipher Soldier)': { self: {
-    atk: (g, c) => { const b = g.battle; if (!g.inDS || !b || !b.t || (b.a !== c && b.t !== c)) return 0; const o = b.a === c ? b.t : b.a; return onField(o) && race(o) === 'Warrior' ? 2000 : 0; },
-    def: (g, c) => { const b = g.battle; if (!g.inDS || !b || !b.t || (b.a !== c && b.t !== c)) return 0; const o = b.a === c ? b.t : b.a; return onField(o) && race(o) === 'Warrior' ? 2000 : 0; } } },
+    atk: (g, c) => { const b = g.battle; if (!E.lib.dcalc(g) || !b || b.a !== c && b.t !== c || !b.t) return 0; const o = b.a === c ? b.t : b.a; return onField(o) && race(o) === 'Warrior' ? 2000 : 0; },
+    def: (g, c) => { const b = g.battle; if (!E.lib.dcalc(g) || !b || b.a !== c && b.t !== c || !b.t) return 0; const o = b.a === c ? b.t : b.a; return onField(o) && race(o) === 'Warrior' ? 2000 : 0; } } },
   "King's Knight": { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: "Special Summon Jack's Knight",
     on: (g, ev, c) => evSummoned(ev, c, ['normal']) && monsOf(g, c.ctrl).some(x => faceUp(x) && named(x, "Queen's Knight")),
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => named(x, "Jack's Knight")),
@@ -396,8 +396,8 @@ E.addScripts({
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || c.zone !== 'gy' || freeST(g, p) < 0) return;
         move(g, c, 'st', { ctrl: p, pos: 'up', reason: 'effect', by: p }); if (!equip(g, c, t)) move(g, c, 'gy', { reason: 'rule' }); } }] },
   // ENGINE: a card can't be made a Tuner (synCombos reads the printed Tuner flag), so this only logs the choice.
-  'Lightwave Tuning': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && lv(m) === 4 && attr(m) === 'LIGHT'),
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Level 4 LIGHT monster becomes a Tuner?', monsOf(g, p).filter(m => faceUp(m) && lv(m) === 4 && attr(m) === 'LIGHT'), 1, 1, 'good'); },
+  'Lightwave Tuning': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && lv(m) === 4 && E.lib.isAttr(m, 'LIGHT')),
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Level 4 LIGHT monster becomes a Tuner?', monsOf(g, p).filter(m => faceUp(m) && lv(m) === 4 && E.lib.isAttr(m, 'LIGHT')), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { t.flags.f40tuner = true; log(g, `${name(t)} is treated as a Tuner.`); } } }] },
   // PARTIAL: the Tokens can be Tributed for anything (the engine's no-Tribute flag would also stop Tribute Summons).
   'Limit Impulse': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].hand.filter(x => x !== c).length >= 2,

@@ -27,7 +27,7 @@ const guardian = [
     cond: (g, c, p) => (g.inDS && g.battle && g.battle.t === c && g.tp !== c.ctrl && !c.flags.guardUsed && g.battle.a && onField(g.battle.a) && !g.battle.a.mods.some(m => m.guardZero)) && !!g.battle && E.lib.canTarget(g, g.battle.a, { c, p }),
     target: function* (g, c, p, L2) { L2.t = [g.battle.a]; },
     after: (g, c) => { c.flags.guardUsed = true; },
-    res: function* (g, c, p, L2) { const a = live(L2)[0]; if (!a || a.zone !== 'm' || !g.battle) return; addMod(g, a, { set: 0, which: 'atk', end: true, guardZero: true }); g.seq++; log(g, `${name(a)}'s ATK became 0 for damage calculation.`); } },
+    res: function* (g, c, p, L2) { const a = live(L2)[0]; if (!a || a.zone !== 'm' || !g.battle) return; addMod(g, a, { set: 0, which: 'atk', end: true, guardZero: true, calc: true }); g.seq++; log(g, `${name(a)}'s ATK became 0 for damage calculation.`); } },
   { type: 'trig', on: (g, ev) => { if ((ev.type === 'afterCalc' || ev.type === 'dsEnd') && ev.a && ev.a.mods.some(m => m.guardZero)) { ev.a.mods = ev.a.mods.filter(m => !m.guardZero); g.seq++; } return false; }, res: function* () {} },
 ];
 // Metalzoa and Red-Eyes Black Metal Dragon: Tribute the base monster equipped with Metalmorph, Special Summon from the Deck.

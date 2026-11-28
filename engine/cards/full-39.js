@@ -78,8 +78,8 @@ E.addScripts({
       return false; } }] },
   'Gigastone Omega': {
     proc: { label: 'Special Summon (banish 2 EARTHs from your GY)',
-      cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'EARTH').length >= 2,
-      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Banish 2 EARTH monsters from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'EARTH'), 2, 2, 'cost');
+      cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'EARTH')).length >= 2,
+      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Banish 2 EARTH monsters from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'EARTH')), 2, 2, 'cost');
         for (const x of xs) move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${xs.map(name).join(' and ')}.`); c.f39proc = grp; } },
     effs: [lockInstall, nomiMark,
       { type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy their Spells/Traps',
@@ -112,7 +112,7 @@ E.addScripts({
       if (!ss(g, opp(p), x, 'def')) return;
       const mine = monsOf(g, p).filter(faceUp); if (!mine.length) return;
       const [m] = yield* pick(g, p, `Which monster gains ${lv(x)} Levels?`, mine, 1, 1, 'good'); if (!m) return;
-      m.flags.lv = lv(m) + lv(x); m.flags.lvUntil = true; log(g, `${name(m)} is Level ${m.flags.lv} until the End Phase.`); } }] },
+      L.lvAdd(g, m, lv(x), true); log(g, `${name(m)} is Level ${lv(m)} until the End Phase.`); } }] },
   'Gladiator\'s Return': { effs: [{ type: 'act',
     cond: (g, c, p) => g.p[p].gy.filter(isGB).length >= 3,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Shuffle which 3 Gladiator Beast cards into the Deck?', g.p[p].gy.filter(isGB), 3, 3, 'cost'); },
@@ -136,20 +136,20 @@ E.addScripts({
   'Goggle Golem': { self: { atk: (g, c) => c.flags.gemini ? 2100 - num(D(c).atk) : 0 } },
   'Goka, the Pyre of Malice': {
     proc: { label: 'Special Summon (you control a FIRE monster)',
-      cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && attr(x) === 'FIRE'),
+      cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')),
       cost: function* (g, c, p, grp) { c.f39goka = grp; } },
     effs: [
       { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy a FIRE monster you control',
         on: (g, ev, c) => evSummoned(ev, c, ['special']) && c.f39goka != null && c.f39goka === ev.group,
-        cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && attr(x) === 'FIRE'),
-        target: function* (g, c, p, L2) { c.f39goka = null; yield* tgt(g, p, L2, 'Destroy which FIRE monster you control?', monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'FIRE'), 1, 1, 'cost'); },
+        cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')),
+        target: function* (g, c, p, L2) { c.f39goka = null; yield* tgt(g, p, L2, 'Destroy which FIRE monster you control?', monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')), 1, 1, 'cost'); },
         res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } },
       { type: 'trig', mand: true, tags: { ss: 1 }, label: 'Special Summon a Fireball Token',
         on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
         res: function* (g, c, p) { tokens(g, p, { n: 'Fireball Token', a: 'FIRE', r: 'Pyro', lv: 1, atk: 100, def: 100 }, 1, 'def'); } },
       { type: 'ign', label: 'Tribute a FIRE: +500 ATK',
-        cond: (g, c, p) => monsOf(g, p).some(x => x !== c && attr(x) === 'FIRE'),
-        cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which FIRE monster?', monsOf(g, p).filter(x => x !== c && attr(x) === 'FIRE'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+        cond: (g, c, p) => monsOf(g, p).some(x => x !== c && E.lib.isAttr(x, 'FIRE')),
+        cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which FIRE monster?', monsOf(g, p).filter(x => x !== c && E.lib.isAttr(x, 'FIRE')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
         res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true, own: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
   // Only when an opponent's card effect discards it: Special Summon it, then destroy up to 2 targeted cards.
   'Goldd, Wu-Lord of Dark World': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1, destroy: 1 }, label: 'Special Summon it and destroy up to 2 cards',
@@ -401,8 +401,8 @@ E.addScripts({
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
   'Hidden Soldiers': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && ['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && lv(x) <= 4 && attr(x) === 'DARK' && canSS(g, p, x)),
-    res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && lv(x) <= 4 && attr(x) === 'DARK'); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which DARK monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && ['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && lv(x) <= 4 && E.lib.isAttr(x, 'DARK') && canSS(g, p, x)),
+    res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && lv(x) <= 4 && E.lib.isAttr(x, 'DARK')); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which DARK monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   // Its Token goes to the opponent's side. When that Token is destroyed by battle with a Plant, its controller sends 1 card from the
   // hand to the GY. PARTIAL: that send is a chain link (it should not start a chain).
   'Horseytail': { effs: [
@@ -416,8 +416,8 @@ E.addScripts({
         g.f39ht = g.f39ht || {}; if (g.f39ht[ev.seq]) return false; g.f39ht[ev.seq] = true; c.f39htP = ev.prevCtrl; return true; },
       res: function* (g, c) { const q = c.f39htP; c.f39htP = null; if (q == null || !g.p[q].hand.length) return; const [x] = yield* pick(g, q, 'Send 1 card from your hand to the GY', g.p[q].hand, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'effect' }); log(g, `${PN(g, q)} sent ${name(x)} from the hand to the GY.`); } } }] },
   'Hunter Owl': { self: {
-    atk: (g, c) => 500 * monsOf(g, c.ctrl).filter(x => faceUp(x) && attr(x) === 'WIND').length,
-    noAttackTarget: (g, c) => monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && attr(x) === 'WIND') } },
+    atk: (g, c) => 500 * monsOf(g, c.ctrl).filter(x => faceUp(x) && E.lib.isAttr(x, 'WIND')).length,
+    noAttackTarget: (g, c) => monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'WIND')) } },
   'Hunting Instinct': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => !!g.sw && !g.inDS && isSpecialHow(g.sw.how) && g.sw.cs.some(x => onField(x) && x.ctrl !== p) && freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && race(x) === 'Dinosaur' && canSS(g, p, x)),
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && race(x) === 'Dinosaur'); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which Dinosaur?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
@@ -433,7 +433,7 @@ E.addScripts({
         if (x) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm} to attack.`); } },
       res: noop }] },
   'Hydro Pressure Cannon': {
-    effs: [equipAct(m => lv(m) <= 3 && attr(m) === 'WATER', 'Equip to which Level 3 or lower WATER monster?'),
+    effs: [equipAct(m => lv(m) <= 3 && E.lib.isAttr(m, 'WATER'), 'Equip to which Level 3 or lower WATER monster?'),
       { type: 'trig', loc: 'st', mand: true, label: 'Send a random card from their hand to the GY',
         on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.destroyed && ev.killer && ev.killer.u === c.equipTo && ev.prevCtrl !== ev.killer.ctrl,
         cond: (g, c, p) => g.p[opp(p)].hand.length > 0,
@@ -458,8 +458,8 @@ E.addScripts({
   /* ----- I ----- */
   'Ice Master': {
     proc: { label: 'Special Summon (Tribute 2 WATER monsters)',
-      cond: (g, c, p) => monsOf(g, p).filter(x => attr(x) === 'WATER').length >= 2,
-      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Tribute which 2 WATER monsters?', monsOf(g, p).filter(x => attr(x) === 'WATER'), 2, 2, 'cost');
+      cond: (g, c, p) => monsOf(g, p).filter(x => E.lib.isAttr(x, 'WATER')).length >= 2,
+      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Tribute which 2 WATER monsters?', monsOf(g, p).filter(x => E.lib.isAttr(x, 'WATER')), 2, 2, 'cost');
         for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); } },
     effs: [
       { type: 'ign', opt: true, label: 'Place an Ice Counter',

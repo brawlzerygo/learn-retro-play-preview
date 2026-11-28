@@ -132,7 +132,7 @@ E.addScripts({
   /* ----- Six Samurai ----- */
   // During the Damage Step of an attack on a Six Samurai (the closest moment the engine has to damage calculation).
   "Shien's Castle of Mist": { effs: [actNoop],
-    cont: { atk: (g, src, m) => g.inDS && g.battle && g.battle.a === m && g.battle.t && faceUp(g.battle.t) && isSixSam(g.battle.t) ? -500 : 0 } },
+    cont: { atk: (g, src, m) => E.lib.dcalc(g) && g.battle && g.battle.a === m && g.battle.t && faceUp(g.battle.t) && isSixSam(g.battle.t) ? -500 : 0 } },
   "Shien's Footsoldier": { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon a Level 3 or lower Six Samurai',
     on: (g, ev, c) => sentByBattle(ev, c),
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isSixSam(x) && lv(x) <= 3 && canSS(g, p, x)),
@@ -161,17 +161,17 @@ E.addScripts({
 
   /* ----- Spiritual Arts ----- */
   'Spiritual Earth Art - Kurogane': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => attr(x) === 'EARTH') && g.p[p].gy.some(x => isMon(x) && attr(x) === 'EARTH' && lv(x) <= 4 && canSS(g, p, x)),
-    cost: function* (g, c, p, L2) { L2.data.tr = yield* tribute(g, p, monsOf(g, p).filter(x => attr(x) === 'EARTH'), 'Tribute which EARTH monster?'); },
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Level 4 or lower EARTH monster?', g.p[p].gy.filter(x => x !== L2.data.tr && isMon(x) && attr(x) === 'EARTH' && lv(x) <= 4 && canSS(g, p, x)), 1, 1, 'good'); },
+    cond: (g, c, p) => monsOf(g, p).some(x => E.lib.isAttr(x, 'EARTH')) && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'EARTH') && lv(x) <= 4 && canSS(g, p, x)),
+    cost: function* (g, c, p, L2) { L2.data.tr = yield* tribute(g, p, monsOf(g, p).filter(x => E.lib.isAttr(x, 'EARTH')), 'Tribute which EARTH monster?'); },
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Level 4 or lower EARTH monster?', g.p[p].gy.filter(x => x !== L2.data.tr && isMon(x) && E.lib.isAttr(x, 'EARTH') && lv(x) <= 4 && canSS(g, p, x)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   'Spiritual Fire Art - Kurenai': { effs: [{ type: 'act',
-    cond: (g, c, p) => monsOf(g, p).some(x => attr(x) === 'FIRE'),
-    cost: function* (g, c, p, L2) { const x = yield* tribute(g, p, monsOf(g, p).filter(x => attr(x) === 'FIRE'), 'Tribute which FIRE monster?'); L2.data.n = x ? baseAtk(x) : 0; },
+    cond: (g, c, p) => monsOf(g, p).some(x => E.lib.isAttr(x, 'FIRE')),
+    cost: function* (g, c, p, L2) { const x = yield* tribute(g, p, monsOf(g, p).filter(x => E.lib.isAttr(x, 'FIRE')), 'Tribute which FIRE monster?'); L2.data.n = x ? baseAtk(x) : 0; },
     res: function* (g, c, p, L2) { damage(g, opp(p), L2.data.n, { src: c, srcP: p }); } }] },
   'Spiritual Wind Art - Miyabi': { effs: [{ type: 'act',
-    cond: (g, c, p) => monsOf(g, p).some(x => attr(x) === 'WIND') && fieldOf(g, opp(p)).length > 0,
-    cost: function* (g, c, p) { yield* tribute(g, p, monsOf(g, p).filter(x => attr(x) === 'WIND'), 'Tribute which WIND monster?'); },
+    cond: (g, c, p) => monsOf(g, p).some(x => E.lib.isAttr(x, 'WIND')) && fieldOf(g, opp(p)).length > 0,
+    cost: function* (g, c, p) { yield* tribute(g, p, monsOf(g, p).filter(x => E.lib.isAttr(x, 'WIND')), 'Tribute which WIND monster?'); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Place which card on the bottom of the Deck?', fieldOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; const n = D(t).n; toBottom(g, t); log(g, `${n} was placed on the bottom of the Deck.`); } }] },
 
@@ -422,7 +422,7 @@ E.addScripts({
   'Accumulated Fortune': { effs: [{ type: 'act',
     cond: g => { if (g.chain.length < 3) return false; const ns = g.chain.map(x => D(x.c).n); return new Set(ns).size === ns.length; },
     res: function* (g, c, p) { draw(g, p, 2); } }] },
-  'Acidic Downpour': { effs: [actNoop], cont: { atk: (g, src, m) => attr(m) === 'EARTH' ? -500 : 0, def: (g, src, m) => attr(m) === 'EARTH' ? 400 : 0 } },
+  'Acidic Downpour': { effs: [actNoop], cont: { atk: (g, src, m) => E.lib.isAttr(m, 'EARTH') ? -500 : 0, def: (g, src, m) => E.lib.isAttr(m, 'EARTH') ? 400 : 0 } },
   // PARTIAL: it resolves at the start of the Damage Step (before the flip), so the battle stops there, as it would after the equip.
   'Adhesive Explosive': { effs: [
     { type: 'trig', mand: true, faceDownOk: true, label: 'Equip this card to the attacking monster',
@@ -448,7 +448,7 @@ E.addScripts({
   'Swift Gaia the Fierce Knight': { self: { tributes: (g, c, p) => c.zone === 'hand' && g.p[p].hand.length === 1 ? [0] : [] }, effs: [] },
   // Mandatory: when Tribute Summoned with a WIND Tribute, every Spell and Trap Card on the field returns to the hand.
   'Swift Birdman Joe': { effs: [{ type: 'trig', mand: true, label: 'Return all Spell and Trap Cards to the hand',
-    on: (g, ev, c) => evSummoned(ev, c, ['tribute']) && (ev.tribs || []).some(t => attr(t) === 'WIND'),
+    on: (g, ev, c) => evSummoned(ev, c, ['tribute']) && (ev.tribs || []).some(t => E.lib.isAttr(t, 'WIND')),
     cond: g => allField(g).some(isST),
     res: function* (g) { const xs = allField(g).filter(isST); for (const x of xs) move(g, x, 'hand', { reason: 'effect' }); if (xs.length) log(g, `${xs.length} Spell and Trap Card${xs.length > 1 ? 's were' : ' was'} returned to the hand.`); } }] },
 });

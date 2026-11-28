@@ -91,7 +91,10 @@ function promptFor0() {
       // an effect that lets you look at the opponent's hand names those cards (the engine's label): show their art too
       const revealed = c && pr.type === 'pick' && c.zone === 'hand' && c.owner === 1 && o.label === E.name(c);
       if (c && (seen(c) || revealed || c.zone === 'deck' && c.owner === 0)) { r.id = cid(c); r.zone = c.zone; r.owner = c.owner; } else if (c) { r.zone = c.zone; r.owner = c.owner; }
-      return r; }) };
+      return r; }),
+    // a declared name (Mind Crush, Prohibition): every name in the pool, the client shows a search box; a private reveal (Celfon): the cards' art
+    declare: !!pr.declare, suggested: pr.suggested || 0,
+    reveal: pr.reveal ? pr.reveal.map(u => byU.get(u)).filter(Boolean).map(cid) : null };
 }
 function newLog() { const out = g.log.slice(logAt); logAt = g.log.length; return out; }
 function post() {

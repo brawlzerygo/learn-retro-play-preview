@@ -291,12 +291,12 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${D(t).n} was banished.`); } } }] },
   'Disarmament': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c) => stOnField(g).some(x => x !== c && faceUp(x) && (x.equipTo || (isSpell(x) && D(x).sub === 'Equip'))),
     res: function* (g, c, p) { destroy(g, stOnField(g).filter(x => x !== c && faceUp(x) && (x.equipTo || (isSpell(x) && D(x).sub === 'Equip'))), { by: p, src: c }); } }] },
-  // PARTIAL: the check is at the start of the Damage Step (a face-down monster is flipped then), not right before damage calculation.
+  // On the engine's battleConfirm event, after a face-down monster is flipped, its DEF read then and again at resolution (2026-11-28 audit,
+  // E4b: rulings 1 and 2, Micro Ray after the flip saves it).
   'Disc Fighter': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy the Defense Position monster',
-    on: (g, ev, c) => ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos !== 'atk' && (ev.t.pos === 'set' ? num(D(ev.t).def) : def(g, ev.t)) >= 2000,
-    res: function* (g, c, p, L2) { const t = L2.ev.t; if (!t || !onField(t) || !onField(c) || t.pos === 'atk') return;
-      if (t.pos === 'set') { t.pos = 'def'; g.seq++; log(g, `The face-down monster was ${name(t)}.`); emit(g, { type: 'flip', c: t, p: t.ctrl, battle: true }); }
-      if (def(g, t) >= 2000) destroy(g, [t], { by: p }); } }] },
+    on: (g, ev, c) => ev.type === 'battleConfirm' && ev.a === c && ev.t && ev.t.pos === 'def' && def(g, ev.t) >= 2000,
+    res: function* (g, c, p, L2) { const t = L2.ev.t; if (!t || !onField(t) || !onField(c) || t.pos !== 'def') return;
+      if (def(g, t) >= 2000) destroy(g, [t], { by: p, src: c }); } }] },
   'Disturbance Strategy': { effs: [{ type: 'act', cond: (g, c, p) => g.p[opp(p)].hand.length > 0,
     res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand.slice(); if (!h.length) return; for (const x of h) move(g, x, 'deck', { reason: 'effect', by: p }); log(g, `${PN(g, o)} shuffled ${h.length} card${h.length > 1 ? 's' : ''} into the Deck.`); draw(g, o, h.length); } }] },
   'Dokurorider': { effs: [] },

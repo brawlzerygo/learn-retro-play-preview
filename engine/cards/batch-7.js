@@ -20,7 +20,7 @@ const sixSam = c => isMon(c) && /Six Samurai/.test(name(c));
 const xSaber = c => isMon(c) && /X-Saber/.test(name(c));
 const samRepl = L.replaceOther((g, c) => monsOf(g, c.ctrl).filter(x => faceUp(x) && /Six Samurai/.test(name(x))), 'Destroy another face-up Six Samurai monster instead of %s?', 'Destroy which Six Samurai instead?');
 const otherSam = (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && sixSam(x) && name(x) !== name(c));
-const lightMach = c => isMon(c) && attr(c) === 'LIGHT' && race(c) === 'Machine';
+const lightMach = c => isMon(c) && E.lib.isAttr(c, 'LIGHT') && race(c) === 'Machine';
 const isEquipSpell = c => isSpell(c) && D(c).sub === 'Equip';
 const isRitualSpell = c => isSpell(c) && D(c).sub === 'Ritual';
 // "If this card destroys an opponent's monster by battle" (no "and sends it to the GY")
@@ -83,8 +83,8 @@ E.addScripts({
         move(g, x, 'gy', { reason: 'effect' }); if (onField(c)) destroy(g, [c], { by: p }); } }] },
   'Darklord Zerato': { // ENGINE: the 1-Tribute summon (4+ DARKs with different names in the GY) needs a hook in tribNeed; it Tribute Summons with 2 here
     effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Send a DARK: destroy their monsters',
-      cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && attr(x) === 'DARK') && monsOf(g, opp(p)).length > 0,
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send a DARK monster from your hand to the GY', g.p[p].hand.filter(x => isMon(x) && attr(x) === 'DARK'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); c.flags.zerato = g.turnNo; },
+      cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'DARK')) && monsOf(g, opp(p)).length > 0,
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send a DARK monster from your hand to the GY', g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); c.flags.zerato = g.turnNo; },
       res: function* (g, c, p) { destroy(g, monsOf(g, opp(p)), { by: p }); } },
     { type: 'trig', mand: true, opt: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.zerato === g.turnNo,
       res: function* (g, c, p) { if (onField(c)) destroy(g, [c], { by: p }); } }] },
@@ -102,12 +102,15 @@ E.addScripts({
   'Morphtronic Celfon': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Roll a die: summon a Morphtronic',
       cond: (g, c, p) => c.pos === 'atk' && freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => morphMon(x) && lv(x) <= 4),
+      // (2) the revealed cards are logged; ruling 5: if it can't Special Summon then, the Morphtronic it would summon is destroyed instead
       res: function* (g, c, p) { const n = yield* L.roll(g, p);
         const top = g.p[p].deck.slice(-n), cands = top.filter(x => morphMon(x) && lv(x) <= 4);
-        if (cands.length && freeM(g, p) >= 0) { const [x] = yield* pick(g, p, 'Special Summon which Morphtronic?', cands, 1, 1, 'good'); if (x) ss(g, p, x); }
+        log(g, `${PN(g, p)} revealed ${top.slice().reverse().map(x => D(x).n).join(', ') || 'nothing'}.`);
+        if (cands.length) { const [x] = yield* pick(g, p, 'Special Summon which Morphtronic?', cands, 1, 1, 'good'); if (x && !(freeM(g, p) >= 0 && ss(g, p, x, 'atk'))) { destroy(g, [x], { by: p, src: c }); log(g, `${D(x).n} was destroyed instead.`); } }
         shuffleDeck(g, p); } },
+    // (1) the cards are shown to its controller only (E.lib.revealTo; ruling 7), then stay in the same order
     { type: 'ign', opt: true, label: 'Roll a die: look at the top cards', cond: (g, c, p) => c.pos === 'def' && g.p[p].deck.length > 0,
-      res: function* (g, c, p) { const n = yield* L.roll(g, p); log(g, `${PN(g, p)} looked at the top ${Math.min(n, g.p[p].deck.length)} card(s) of the Deck.`); } }] },
+      res: function* (g, c, p) { const n = yield* L.roll(g, p); const top = g.p[p].deck.slice(-n).reverse(); log(g, `${PN(g, p)} looked at the top ${top.length} card(s) of the Deck.`); yield* L.revealTo(g, p, top, `The top ${top.length} card(s) of your Deck (top first)`); } }] },
   'Morphtronic Radion': { effs: [], cont: {
     atk: (g, src, c) => src.pos === 'atk' && c.ctrl === src.ctrl && morphMon(c) ? 800 : 0,
     def: (g, src, c) => src.pos === 'def' && c.ctrl === src.ctrl && morphMon(c) ? 1000 : 0 } },
@@ -149,7 +152,9 @@ E.addScripts({
     self: { noBattleDestroy: true, directAttack: true },
     effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.direct && ev.src === c,
       res: function* (g, c, p) { const h = g.p[opp(p)].hand; if (!h.length) return; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, opp(p))} discarded ${name(x)} at random.`); } }] },
-  'G.B. Hunter': { effs: [] }, // ENGINE: "cards on the field can't be returned to the Deck" needs a forbid action for moves to the Deck/Extra Deck
+  // "Cards on the field can't be returned to the Deck": the engine's toDeck forbid (2026-11-28 audit, E4b): moves from the field to the Deck
+  // or Extra Deck don't happen, tag outs and De-Fusion can't be activated, nor Chain Healing as Chain Link 2 or 3 (rulings 1 to 7).
+  'G.B. Hunter': { cont: { forbid: (g, src, a) => a.type === 'toDeck' && !!a.field }, effs: [] },
   'Morphtronic Forcefield': { effs: [{ type: 'act',
     cond: (g, c, p, x) => { const top = x.top; if (!spellTrapAct(top) || top.negated || !(top.tags && top.tags.destroy)) return false;
       const mine = monsOf(g, p).filter(m => faceUp(m) && morphMon(m)); if (!mine.length) return false;
@@ -169,16 +174,15 @@ E.addScripts({
         if (found.some(x => !x)) { log(g, `${PN(g, p)} didn't have all three Ojamas in the Deck.`); shuffleDeck(g, p); return; }
         if (L.forbid(g, { type: 'search', p })) return;
         for (const x of found) move(g, x, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added Ojama Green, Ojama Yellow and Ojama Black to the hand.`); shuffleDeck(g, p); } }] },
-  'Ojama Country': { // ENGINE: activatable() never looks at the Field Zone, so the Special Summon effect below is never offered
+  'Ojama Country': {
     effs: [{ type: 'act', res: function* () {} },
       { type: 'ign', loc: 'fz', opt: true, tags: { ss: 1 }, label: 'Send an Ojama: revive an Ojama',
         cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(isOjama) && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && isOjama(x)),
         cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send an Ojama card from your hand to the GY', g.p[p].hand.filter(isOjama), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
         target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which Ojama?', g.p[p].gy.filter(x => isMon(x) && isOjama(x)), 1, 1, 'good'); },
         res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy' && onField(c)) ss(g, p, t); } }],
-    cont: { // original ATK and DEF switch while you control a face-up Ojama
-      atk: (g, src, c) => monsOf(g, src.ctrl).some(x => faceUp(x) && isMon(x) && isOjama(x)) ? num(D(c).def) - baseAtk(c) : 0,
-      def: (g, src, c) => monsOf(g, src.ctrl).some(x => faceUp(x) && isMon(x) && isOjama(x)) ? baseAtk(c) - num(D(c).def) : 0 } },
+    // original ATK and DEF switch while you control a face-up Ojama: the engine's base swap (cont.swapBase; site ruling 5, the new originals)
+    cont: { swapBase: (g, src, c) => monsOf(g, src.ctrl).some(x => faceUp(x) && isMon(x) && isOjama(x)) } },
   'Symbols of Duty': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => monsOf(g, p).some(normalNow) && allCards(g, 'gy').some(x => E.lib.ssable(g, p, x) && L.canTarget(g, x, { c, p })),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send a Normal Monster you control to the GY', monsOf(g, p).filter(normalNow), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
@@ -192,10 +196,11 @@ E.addScripts({
       res: function* (g, c, p) { const cs = g.p[p].deck.filter(isEquipSpell); if (cs.length < 3) return;
         const xs = yield* pick(g, p, 'Reveal 3 Equip Spells from your Deck', cs, 3, 3, 'good'); log(g, `${PN(g, p)} revealed ${xs.map(name).join(', ')}.`);
         const x = xs[Math.floor(g.rnd() * xs.length)]; move(g, x, 'hand', { reason: 'effect' }); log(g, `${PN(g, opp(p))} picked one at random; ${PN(g, p)} added it to the hand.`); shuffleDeck(g, p); } }] },
-  'Ojama Knight': { effs: [], mats: [c => isOjama(c), c => isOjama(c)],
-    // PARTIAL: modelled as "the opponent can use at most 3 Monster Zones"
-    cont: { forbid: (g, src, a) => a.p === opp(src.ctrl) && monsOf(g, a.p).length >= 3 &&
-      (((a.type === 'ns' || a.type === 'set') && lv(a.c) <= 4) || (a.type === 'ss' && !['synchro', 'fusion'].includes(a.how))) } },
+  // Up to 2 of the opponent's empty Monster Zones are locked when it becomes face-up (the engine's cont.lockZones, as Ojama King; 2026-11-28
+  // audit, E4b: real zones, so a Fusion that frees zones works; none after a control change, site ruling 2). PARTIAL: picked automatically.
+  'Ojama Knight': { mats: [c => isOjama(c), c => isOjama(c)],
+    cont: { lockZones: (g, src) => E.lib.kingZones(g, src, 2) },
+    effs: [{ type: 'trig', on: (g, ev, c) => { if (evSummoned(ev, c) || (ev.type === 'flip' && ev.c === c)) { c.flags.ojamaZones = null; const Z = E.lib.kingZones(g, c, 2); if (Z && Z.zs.length) log(g, `${PN(g, Z.p)}'s Monster Zones ${Z.zs.map(i => i + 1).join(', ')} can't be used.`); } return false; }, res: function* () {} }] },
   'Dragoness the Wicked Knight': { effs: [] },
 
   /* ----- Psychic ----- */
@@ -214,19 +219,23 @@ E.addScripts({
   'Mind Protector': { cont: { forbid: (g, src, a) => a.type === 'attack' && atk(g, a.c) <= 2000 && race(a.c) !== 'Psychic' },
     effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500) && (yield* yn(g, p, 'Pay 500 LP to keep Mind Protector?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
-  'Level Eater': { // PARTIAL: "can't be Tributed except for a Tribute Summon" is not enforced
+  // "Cannot be Tributed, except for a Tribute Summon": self.noTribute 'cost' (Tribute Summons only); the Level drop is a Level mod (lvAdd),
+  // so it stacks with A Legendary Ocean and Synchro Boost (2026-11-28 audit, E4b, edison-19)
+  'Level Eater': { self: { noTribute: 'cost' },
     effs: [{ type: 'ign', loc: 'gy', tags: { ss: 1 }, label: 'Lower a Level: Special Summon',
       cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, p).some(x => faceUp(x) && lv(x) >= 5),
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Lower the Level of which monster?', monsOf(g, p).filter(x => faceUp(x) && lv(x) >= 5), 1, 1, 'good'); },
-      res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t) || lv(t) <= 1) return; t.flags.lv = lv(t) - 1; log(g, `${name(t)} is now Level ${lv(t)}.`); if (c.zone === 'gy') ss(g, p, c); } }] },
-  'Brain Research Lab': { // ENGINE: activatable() never looks at the Field Zone, so the extra Normal Summon below is never offered
-    // PARTIAL: only offered after your Normal Summon; placing a counter instead of paying LP is not automated
+      res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t) || lv(t) <= 1) return; E.lib.lvAdd(g, t, -1); log(g, `${name(t)} is now Level ${lv(t)}.`); if (c.zone === 'gy') ss(g, p, c); } }] },
+  // PARTIAL: only offered after your Normal Summon; placing a counter instead of paying LP is not automated. 2026-11-28 audit, E4b: the
+  // counter is placed when the extra summon happens ("if successful"), and the extra summon is once per turn per player (site ruling 8).
+  'Brain Research Lab': {
     effs: [{ type: 'act', res: function* () {} },
       { type: 'ign', loc: 'fz', opt: true, label: 'Extra Normal Summon of a Psychic',
-        cond: (g, c, p) => g.ns[p] >= 1 && g.p[p].hand.some(x => isMon(x) && race(x) === 'Psychic'),
-        res: function* (g, c, p) { if (!onField(c)) return; g.ns[p] = 0; c.flags.psy = (c.flags.psy || 0) + 1; const t = g.turnNo;
+        cond: (g, c, p) => g.ns[p] >= 1 && !(g.brlUsed && g.brlUsed[p] === g.turnNo) && g.p[p].hand.some(x => isMon(x) && race(x) === 'Psychic'),
+        res: function* (g, c, p) { if (!onField(c)) return; g.ns[p] = 0; (g.brlUsed = g.brlUsed || {})[p] = g.turnNo; g.brlPend = { p, u: c.u, turn: g.turnNo }; const t = g.turnNo;
           addRule(g, (g2, a) => (a.type === 'ns' && a.p === p && race(a.c) !== 'Psychic') || (a.type === 'set' && a.p === p), { end: t });
-          log(g, `${PN(g, p)} can Normal Summon a Psychic monster once more this turn. Brain Research Lab has ${c.flags.psy} Psychic Counter(s).`); } },
+          log(g, `${PN(g, p)} can Normal Summon a Psychic monster once more this turn.`); } },
+      { type: 'trig', loc: 'fz', res: function* () {}, on: (g, ev, c) => { const b = g.brlPend; if (b && b.u === c.u && b.turn === g.turnNo && ev.type === 'summon' && ev.p === b.p && ['normal', 'tribute'].includes(ev.how) && faceUp(c)) { g.brlPend = null; c.flags.psy = (c.flags.psy || 0) + 1; g.seq++; log(g, `Brain Research Lab has ${c.flags.psy} Psychic Counter(s).`); } return false; } },
       { type: 'trig', loc: 'any', mand: true, noChain: true, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.snap && ev.snap.flags && ev.snap.flags.psy > 0,   // site ruling 1: none of its effects start a chain
         res: function* (g, c, p, L) { damage(g, L.ev.prevCtrl, 1000 * L.ev.snap.flags.psy, { src: c, srcP: L.ev.prevCtrl }); } }] },
   'Psychic Lifetrancer': { effs: [{ type: 'ign', opt: true, label: 'Banish a Psychic: gain 1200 LP',
@@ -421,8 +430,7 @@ E.addScripts({
     res: function* (g, c, p, L) { destroy(g, live(L).filter(faceUp), { by: p }); } }] },
   'Cloak and Dagger': { effs: [{ type: 'act', res: function* (g, c, p) {
       if (!onField(c)) return; const o = opp(p), P = g.p[o];
-      const ns = [...new Set([...P.deck, ...P.hand, ...P.gy, ...P.ban, ...P.extra, ...monsOf(g, o)].filter(isMon).map(x => D(x).n))].sort().slice(0, 40);
-      if (!ns.length) return; const i = yield* choose(g, p, 'Declare a monster card name', ns); c.flags.cad = ns[i]; log(g, `${PN(g, p)} declared ${ns[i]}.`); } },
+      const n = yield* L.declareName(g, p, 'Declare a monster card name', d => !['spell', 'trap'].includes(d.k)); void P; if (!n) return; c.flags.cad = n; log(g, `${PN(g, p)} declared ${n}.`); } },   // any monster name in the pool (2026-11-28 audit)
     { type: 'trig', loc: 'st', mand: true, on: (g, ev, c) => faceUp(c) && c.flags.cad && ((ev.type === 'summon' && ev.p !== c.ctrl && ev.cs.some(x => D(x).n === c.flags.cad)) || (ev.type === 'flip' && ev.c.ctrl !== c.ctrl && D(ev.c).n === c.flags.cad)),
       res: function* (g, c, p, L) { const cs = (L.ev.cs || [L.ev.c]).filter(x => onField(x) && D(x).n === c.flags.cad);
         for (const x of cs) move(g, x, 'ban', { reason: 'effect', by: p }); if (onField(c)) move(g, c, 'ban', { reason: 'effect' }); log(g, `${[...cs.map(x => D(x).n), 'Cloak and Dagger'].join(', ')} ${cs.length ? 'were' : 'was'} banished.`); } }] },

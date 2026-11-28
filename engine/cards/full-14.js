@@ -32,12 +32,9 @@ function flipPos(g, c, to) {
 const noSSFromGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src };
 // Negate the effect of a chain link (the card still resolves as negated; destroyIt also destroys the card).
 function negLink(g, T, p, destroyIt) { if (!T || T.negated) return; T.negated = true; T.negBy = p; log(g, `${name(T.c)}'s effect was negated.`); if (destroyIt && onField(T.c)) destroy(g, [T.c], { by: p }); }
-// "Negate X effects that target this card": a Spell Speed 3 response to the link that targets it.
-// ENGINE: no hook when a link picks its targets or before it resolves, so this is offered as an optional response.
-const negTargeting = (pred, label, destroyIt) => ({ type: 'quick', speed: 3, ds: true, label,
-  cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && t.c !== c && (t.t || []).includes(c) && faceUp(c) && pred(g, c, t)); },
-  target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
-  res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) negLink(g, L2.data.L, p, destroyIt); } });
+// "Negate X effects that target this card": a continuous effect the engine applies as the targeting link resolves (self.negTarget,
+// 2026-11-28 audit, E4b: Ryu Senshi ruling 1, the negation is not optional). Returns the self field.
+const negTargeting = (pred, destroyIt) => (g, c, L) => !!((L.t || []).includes(c) && pred(g, c, L)) && (destroyIt ? 'destroy' : true);
 // "Unaffected by your opponent's Spell effects": their Spells can't target it.
 // Spells that don't target (Dark Hole, Raigeki): the engine's unaffectedSpells destruction check, read against the chain
 // link resolving now (g.resolvingL), so only the opponent's Spells pass it by. PARTIAL: covers targeting and destruction.
@@ -129,13 +126,12 @@ E.addScripts({
   'Ryu Kokki': { effs: [{ type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, label: 'Destroy the Warrior or Spellcaster',
     on: (g, ev, c) => ev.type === 'dsEnd' && (ev.a === c || ev.t === c) && (c.zone === 'm' || c.zone === 'gy') && (() => { const o = ev.a === c ? ev.t : ev.a; return !!o && onField(o) && faceUp(o) && ['Warrior', 'Spellcaster'].includes(race(o)); })(),
     res: function* (g, c, p, L2) { const o = L2.ev.a === c ? L2.ev.t : L2.ev.a; if (o && onField(o) && o.zone === 'm') destroy(g, [o], { by: p, src: c }); } }] },
-  // Port of goat-4.js. PARTIAL: the Spell negation (not optional on the card) is a Spell Speed 3 response here.
-  'Ryu Senshi': { effs: [
+  // Port of goat-4.js. The Spell negation is continuous (self.negTarget), the Normal Trap negation an optional Quick Effect.
+  'Ryu Senshi': { self: { negTarget: negTargeting((g, c, t) => isSpell(t.c), true) }, effs: [
     { type: 'quick', ds: true, label: 'Pay 1000: negate the Normal Trap',
       cond: (g, c, p, x) => { const t = x.top; return !!(t && t.cardAct && isTrap(t.c) && D(t.c).sub === 'Normal' && !t.negated) && E.lib.canPay(g, p, 1000); },
       cost: function* (g, c, p, L2) { pay(g, p, 1000); L2.data.L = g.chain[g.chain.length - 1]; },
-      res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) negLink(g, L2.data.L, p, false); } },
-    negTargeting((g, c, t) => isSpell(t.c), 'Negate the Spell targeting it', true)] },
+      res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) negLink(g, L2.data.L, p, false); } }] },
   // Mandatory, every kind of Summon (face-up only). It can pick itself.
   'Ryu-Kishin Clown': { effs: [{ type: 'trig', mand: true, label: 'Change a monster’s position',
     on: (g, ev, c) => evSummoned(ev, c) && faceUp(c), cond: g => fieldMons(g).some(faceUp),
@@ -181,8 +177,8 @@ E.addScripts({
 
   /* ----- Shadow ----- */
   'Shadow Delver': { effs: [directClear, { type: 'ign', opt: true, gemini: true, label: 'A DARK can attack directly',
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && lv(x) <= 4 && attr(x) === 'DARK'),
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Level 4 or lower DARK can attack directly?', monsOf(g, p).filter(x => faceUp(x) && lv(x) <= 4 && attr(x) === 'DARK'), 1, 1, 'good'); },
+    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && lv(x) <= 4 && E.lib.isAttr(x, 'DARK')),
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Level 4 or lower DARK can attack directly?', monsOf(g, p).filter(x => faceUp(x) && lv(x) <= 4 && E.lib.isAttr(x, 'DARK')), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { t.flags.directAttack = true; t.flags.f14dir = g.turnNo; log(g, `${name(t)} can attack directly this turn.`); } } }] },
   'Shadow Ghoul': { self: { atk: (g, c) => 100 * g.p[c.ctrl].gy.filter(isMon).length } },
   // Port of classic-5.js. Also when monsters are Special Summoned face-down (ruling).
@@ -235,7 +231,7 @@ E.addScripts({
   /* ----- Silent ----- */
   'Silent Abyss': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy face-down and non-WATER monsters',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.pos === 'set' || attr(x) !== 'WATER'), { by: p, src: c }); } }] },
+    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.pos === 'set' || E.lib.notAttr(x, 'WATER')), { by: p, src: c }); } }] },
   'Silent Doom': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isNormalMon),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Normal Monster?', g.p[p].gy.filter(isNormalMon), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t, 'def')) { t.flags.cantAttack = true; log(g, `${name(t)} can't attack.`); } } }] },
@@ -262,10 +258,9 @@ E.addScripts({
     cond: g => fieldMons(g).some(x => faceUp(x) && lv(x) > 1),
     cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent Silent Strider to the GY.`); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Reduce the Level of which monster?', fieldMons(g).filter(x => faceUp(x) && lv(x) > 1), 1, 1, 'good'); },
-    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && lv(t) > 1) { const n = lv(t) - 1; t.flags.lv = n; t.flags.lvUntil = true; log(g, `${name(t)} is Level ${n} until the End Phase.`); } } }] },
-  // PARTIAL: the Spell negation is an optional Spell Speed 3 response (see negTargeting).
-  'Silent Swordsman LV3': { effs: [
-    negTargeting((g, c, t) => isSpell(t.c) && t.p !== c.ctrl, 'Negate the Spell targeting it', false),
+    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && lv(t) > 1) { L.lvAdd(g, t, -1, true); const n = lv(t); log(g, `${name(t)} is Level ${n} until the End Phase.`); } } }] },
+  // The Spell negation is continuous (self.negTarget, see negTargeting).
+  'Silent Swordsman LV3': { self: { negTarget: negTargeting((g, c, t) => isSpell(t.c) && t.p !== c.ctrl, false) }, effs: [
     { type: 'trig', on: (g, ev, c) => { if (ev.type === 'flip' && ev.c === c) c.flags.f14flip = g.turnNo; return false; }, res: noop },
     { type: 'trig', tags: { ss: 1 }, label: 'Send it: summon Silent Swordsman LV5',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && c.turnIn !== g.turnNo && c.flags.f14flip !== g.turnNo,
@@ -299,7 +294,7 @@ E.addScripts({
     { type: 'trig', loc: 'gy', label: 'Add it to your hand', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner,
       res: function* (g, c, p) { if (c.zone !== 'gy') return; move(g, c, 'hand', { reason: 'effect', by: p }); log(g, `${PN(g, p)} added Sinister Serpent to the hand.`); } }] },
   'Sinister Sprocket': { effs: [{ type: 'trig', loc: 'gy', tags: { destroy: 1 }, label: 'Destroy a face-up Spell or Trap',
-    on: (g, ev, c) => ev.type === 'summon' && ev.how === 'synchro' && attr(ev.cs[0]) === 'DARK' && c.zone === 'gy' && g.events.some(e => e.type === 'move' && e.c === c && e.reason === 'synchro' && e.group === ev.group),
+    on: (g, ev, c) => ev.type === 'summon' && ev.how === 'synchro' && E.lib.isAttr(ev.cs[0], 'DARK') && c.zone === 'gy' && g.events.some(e => e.type === 'move' && e.c === c && e.reason === 'synchro' && e.group === ev.group),
     cond: g => stOnField(g).some(faceUp),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which face-up Spell or Trap?', stOnField(g).filter(faceUp), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2).filter(faceUp), { by: p, src: c }); } }] },
@@ -435,8 +430,8 @@ E.addScripts({
   // Once properly Special Summoned by its own rule it can be revived (ruling). PARTIAL: an effect that Special Summons it
   // from the hand or Deck first is not stopped (ENGINE: no generic "can't be Special Summoned" flag).
   'Soul of Purity and Light': {
-    proc: { label: 'Special Summon (banish 2 LIGHTs from your GY)', cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT').length >= 2,
-      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Banish 2 LIGHT monsters from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT'), 2, 2, 'cost');
+    proc: { label: 'Special Summon (banish 2 LIGHTs from your GY)', cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')).length >= 2,
+      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Banish 2 LIGHT monsters from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')), 2, 2, 'cost');
         for (const x of xs) move(g, x, 'ban', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} banished ${xs.map(name).join(' and ')}.`); c.flags.f14proc = true; } },
     cont: { atk: (g, src, m) => m.ctrl !== src.ctrl && faceUp(m) && g.phase === 'battle' && g.tp === m.ctrl ? -300 : 0 },
     effs: [{ type: 'trig', loc: 'gy', res: noop, on: () => false },

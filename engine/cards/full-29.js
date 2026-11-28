@@ -144,9 +144,9 @@ function* removeA(g, p, n) { // remove n A-Counters from cards on the field (the
 }
 // "Monsters with A-Counters lose 300 ATK/DEF for each A-Counter on them, while battling an 'Alien' monster, during damage
 // calculation only" (as batch-4.js). Each card with this effect applies it once, so 2 copies give -600 per counter.
-// PARTIAL: it applies for the whole Damage Step, not only damage calculation.
+// During damage calculation only (E.lib.dcalc, 2026-11-28 audit).
 function aBattle(g, c) {
-  const n = ctr(c, 'A'); if (!n || !g.inDS || !g.battle) return 0;
+  const n = ctr(c, 'A'); if (!n || !E.lib.dcalc(g) || !g.battle) return 0;
   const { a, t } = g.battle; const o = a === c ? t : t === c ? a : null;
   return o && isAlien(o) ? -300 * n : 0;
 }
@@ -382,7 +382,7 @@ E.addScripts({
   // "When Tribute Summoning a WIND monster, you can treat this 1 monster as 2 Tributes."
   // PARTIAL: while it is face-up, a WIND monster that needs 2 Tributes can be Summoned with 1, but the engine lets any one monster
   // be that Tribute (not only this card).
-  'Whirlwind Prodigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && attr(c) === 'WIND' ? 1 : null } },
+  'Whirlwind Prodigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && E.lib.isAttr(c, 'WIND') ? 1 : null } },
   'Widespread Ruin': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && monsOf(g, opp(p)).some(x => x.pos === 'atk'),
     res: function* (g, c, p) { const ms = monsOf(g, opp(p)).filter(x => x.pos === 'atk'); if (!ms.length) return;
@@ -401,7 +401,7 @@ E.addScripts({
   'Windstorm of Etaqua': { effs: [{ type: 'act', cond: (g, c, p) => oppFaceUp(g, p).length > 0,
     res: function* (g, c, p) { for (const m of oppFaceUp(g, p)) swapPos(g, m); } }] },
   'Witch\'s Apprentice': { cont: {
-    atk: (g, src, m) => attr(m) === 'DARK' ? 500 : attr(m) === 'LIGHT' ? -400 : 0 } },
+    atk: (g, src, m) => E.lib.isAttr(m, 'DARK') ? 500 : E.lib.isAttr(m, 'LIGHT') ? -400 : 0 } },
   'Wodan the Resident of the Forest': { self: { atk: g => 100 * fieldMons(g).filter(x => faceUp(x) && race(x) === 'Plant').length } },
   // Send 1 Equip Card equipped to this card to the GY (cost): 500 damage. Any number of times in your Main Phase.
   'Woodland Sprite': { effs: [{ type: 'ign', label: 'Send an Equip Card: 500 damage',

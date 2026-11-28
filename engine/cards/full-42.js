@@ -133,7 +133,7 @@ const tributeToAttack = {
  ENGINE: no hook runs as a card is activated, so this is done from Obsidian Dragon's response check. */
 function obsidianScan(g, c) {
   if (c.zone !== 'm' || !faceUp(c) || negd(g, c)) return;
-  const darkMine = t => t && isMon(t) && t.zone === 'm' && faceUp(t) && attr(t) === 'DARK' && t.ctrl === c.ctrl;
+  const darkMine = t => t && isMon(t) && t.zone === 'm' && faceUp(t) && E.lib.isAttr(t, 'DARK') && t.ctrl === c.ctrl;
   for (const L2 of g.chain.slice()) {
     if (L2.negated || L2.f42obs || !isST(L2.c)) continue;
     const ts = (L2.t || []).filter(Boolean);
@@ -472,7 +472,7 @@ E.addScripts({
       return m.ctrl === p && o.ctrl !== p && faceUp(m) && faceUp(o) && atk(g, o) > atk(g, m) && g.p[p].lp > atk(g, o) - atk(g, m); },
     cost: function* (g, c, p, L2) { const b = g.battle; const m = b.a.ctrl === p ? b.a : b.t, o = m === b.a ? b.t : b.a; const n = atk(g, o) - atk(g, m); L2.data = { m, o, n }; pay(g, p, n); },
     res: function* (g, c, p, L2) { const { m, o, n } = L2.data; if (!onField(m) || !faceUp(m) || !onField(o) || atk(g, m) > atk(g, o)) return;
-      addMod(g, m, { atk: n + 300, end: true, f42roar: true }); g.seq++; log(g, `${name(m)} gained ${n + 300} ATK for damage calculation.`); } }] },
+      addMod(g, m, { atk: n + 300, end: true, f42roar: true, calc: true }); g.seq++; log(g, `${name(m)} gained ${n + 300} ATK for damage calculation.`); } }] },
   'Prime Material Falcon': { effs: [{ type: 'quick', ds: true, label: 'Discard: negate the effect',
     cond: (g, c, p, x) => { const T = x.top; if (!T || T.negated || !isMon(T.c) || T.eff.type === 'act' || !(T.tags && T.tags.destroy) || !g.p[p].hand.length) return false;
       return L.destroysSome(g, T, t => isST(t)); },
@@ -481,7 +481,7 @@ E.addScripts({
   'Prometheus, King of the Shadows': { effs: [{ type: 'trig', mand: true, label: 'Banish DARK monsters for ATK',
     on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute']),
     res: function* (g, c, p) {
-      const ds = g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'); if (!ds.length) return;
+      const ds = g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')); if (!ds.length) return;
       const xs = yield* pick(g, p, 'Banish 1 or more DARK monsters from your GY', ds, 1, ds.length, 'good');
       for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (xs.length) log(g, `${PN(g, p)} banished ${xs.map(x => D(x).n).join(', ')}.`);
       if (xs.length && onField(c) && faceUp(c)) { addMod(g, c, { atk: 400 * xs.length, end: true, own: true }); log(g, `Prometheus, King of the Shadows gained ${400 * xs.length} ATK.`); } } }] },
@@ -521,10 +521,10 @@ E.addScripts({
 
   /* ----- R ----- */
   'Rai-Jin': {
-    cont: { atk: (g, src, m) => m.ctrl === src.ctrl && attr(m) === 'LIGHT' ? 100 * g.p[src.ctrl].gy.filter(x => isMon(x) && attr(x) === 'LIGHT').length : 0 },
+    cont: { atk: (g, src, m) => m.ctrl === src.ctrl && E.lib.isAttr(m, 'LIGHT') ? 100 * g.p[src.ctrl].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')).length : 0 },
     effs: [lockEff, { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy 1 LIGHT monster you control',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { const ms = monsOf(g, p).filter(m => faceUp(m) && attr(m) === 'LIGHT'); if (!ms.length) return; const [x] = yield* pick(g, p, 'Destroy which LIGHT monster you control?', ms, 1, 1, 'cost'); if (x) destroy(g, [x], { by: p }); } }] },
+      res: function* (g, c, p) { const ms = monsOf(g, p).filter(m => faceUp(m) && E.lib.isAttr(m, 'LIGHT')); if (!ms.length) return; const [x] = yield* pick(g, p, 'Destroy which LIGHT monster you control?', ms, 1, 1, 'cost'); if (x) destroy(g, [x], { by: p }); } }] },
   'Rain Storm': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && /^Cloudian/.test(name(m)) && atk(g, m) >= 1000),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Select which Cloudian?', monsOf(g, p).filter(m => faceUp(m) && /^Cloudian/.test(name(m)) && atk(g, m) >= 1000), 1, 1, 'good'); },

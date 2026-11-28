@@ -146,8 +146,8 @@ E.addScripts({
           if (nFreeM(g, r.p) < r.n) { log(g, 'Not enough free zones for the Ghost Tokens.'); return; }
           tokens(g, r.p, { n: 'Ghost Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 0, def: 0 }, r.n, 'def'); } }] },
   // Tribute a DARK (cost, face-down too). The opponent may reveal a Spell from the hand when it resolves to negate the draw.
-  'Dark Spirit Art - Greed': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 2 && monsOf(g, p).some(x => attr(x) === 'DARK'),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which DARK monster?', monsOf(g, p).filter(x => attr(x) === 'DARK'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+  'Dark Spirit Art - Greed': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 2 && monsOf(g, p).some(x => E.lib.isAttr(x, 'DARK')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which DARK monster?', monsOf(g, p).filter(x => E.lib.isAttr(x, 'DARK')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { const o = opp(p), sp = g.p[o].hand.filter(isSpell);
       if (sp.length && (yield* yn(g, o, 'Reveal a Spell Card from your hand to negate Dark Spirit Art - Greed?'))) { const [x] = yield* pick(g, o, 'Reveal which Spell Card?', sp, 1, 1, 'cost'); log(g, `${PN(g, o)} revealed ${D(x).n}. The effect was negated.`); return; }
       draw(g, p, 2); } }] },
@@ -539,16 +539,16 @@ E.addScripts({
           if (x) { L2.data.n = baseAtk(x); move(g, x, 'ban', { reason: 'cost', by: p }); log(g, `${PN(g, p)} banished ${D(x).n}.`); } },
         res: function* (g, c, p, L2) { if (L2.data.n > 0) damage(g, opp(p), L2.data.n, { src: c, srcP: p }); } }] },
   'Flamvell Counter': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p, x) => spellTrapAct(x.top) && !x.top.negated && g.p[p].gy.some(y => isMon(y) && attr(y) === 'FIRE' && num(D(y).def) === 200 && D(y).def !== '?'),
-    cost: function* (g, c, p) { const [y] = yield* pick(g, p, 'Banish which FIRE monster with 200 DEF from your GY?', g.p[p].gy.filter(y => isMon(y) && attr(y) === 'FIRE' && num(D(y).def) === 200 && D(y).def !== '?'), 1, 1, 'cost'); if (y) { move(g, y, 'ban', { reason: 'cost', by: p }); log(g, `${PN(g, p)} banished ${D(y).n}.`); } },
+    cond: (g, c, p, x) => spellTrapAct(x.top) && !x.top.negated && g.p[p].gy.some(y => isMon(y) && E.lib.isAttr(y, 'FIRE') && num(D(y).def) === 200 && D(y).def !== '?'),
+    cost: function* (g, c, p) { const [y] = yield* pick(g, p, 'Banish which FIRE monster with 200 DEF from your GY?', g.p[p].gy.filter(y => isMon(y) && E.lib.isAttr(y, 'FIRE') && num(D(y).def) === 200 && D(y).def !== '?'), 1, 1, 'cost'); if (y) { move(g, y, 'ban', { reason: 'cost', by: p }); log(g, `${PN(g, p)} banished ${D(y).n}.`); } },
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { const T = L2.data.L; if (T && g.chain.includes(T) && !T.negated) { T.negBy = p; negate(g, T, true); } } }] },
   'Flamvell Dragnov': { effs: [
     { type: 'trig', loc: 'gy', mand: true, label: '500 damage', on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
       res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } },
     { type: 'ign', loc: 'gy', label: 'Banish with a FIRE: add Flamvell Dragnov',
-      cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && attr(x) === 'FIRE') && g.p[p].deck.some(x => named(x, 'Flamvell Dragnov')),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish which face-up FIRE monster you control?', monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'FIRE'), 1, 1, 'cost');
+      cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')) && g.p[p].deck.some(x => named(x, 'Flamvell Dragnov')),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish which face-up FIRE monster you control?', monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'FIRE')), 1, 1, 'cost');
         move(g, c, 'ban', { reason: 'cost', by: p }); if (x) move(g, x, 'ban', { reason: 'cost', by: p }); log(g, `${PN(g, p)} banished Flamvell Dragnov${x ? ' and ' + D(x).n : ''}.`); },
       res: function* (g, c, p) { yield* search(g, p, x => named(x, 'Flamvell Dragnov'), 'Add Flamvell Dragnov'); } }] },
 

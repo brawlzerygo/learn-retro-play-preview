@@ -139,7 +139,7 @@ E.addScripts({
       cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && /Sphinx/i.test(name(x))) && markProc(g, c),
       cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Tribute which Sphinx monster?', monsOf(g, p).filter(x => faceUp(x) && /Sphinx/i.test(name(x))), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } } },
     effs: [lockInstall,
-      { type: 'trig', mand: true, label: '1000 damage', on: (g, ev, c) => ev.type === 'summon' && ev.how === 'flip' && ev.cs.some(x => attr(x) === 'EARTH' && x !== c),
+      { type: 'trig', mand: true, label: '1000 damage', on: (g, ev, c) => ev.type === 'summon' && ev.how === 'flip' && ev.cs.some(x => E.lib.isAttr(x, 'EARTH') && x !== c),
         res: function* (g, c, p) { if (onField(c) && faceUp(c)) damage(g, opp(p), 1000, { src: c, srcP: p }); } }] },
   // Banishing the Morphtronics is part of the effect (ruling), so it happens even if the target is gone.
   'Factory of 100 Machines': { effs: [{ type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Machine'),
@@ -236,7 +236,7 @@ E.addScripts({
     res: function* (g, c, p) { tokens(g, p, { n: 'Doomsday Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 0, def: 0 }, 2, 'def'); } }] },
   'Firestorm Prominence': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy face-down and non-FIRE monsters',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.pos === 'set' || attr(x) !== 'FIRE'), { by: p }); } }] },
+    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.pos === 'set' || E.lib.notAttr(x, 'FIRE')), { by: p }); } }] },
   'Firewall': { effs: [actNoop,
     { type: 'quick', loc: 'st', label: 'Banish a Pyro: negate the direct attack',
       cond: (g, c, p) => !g.inDS && g.aw && !g.aw.t && g.aw.a.ctrl !== p && !has(g, g.aw.a, 'unaffectedTraps') && g.p[p].gy.some(x => isMon(x) && race(x) === 'Pyro'),
@@ -346,9 +346,9 @@ E.addScripts({
     res: function* (g, c, p) { destroy(g, monsOf(g, opp(p)).filter(x => x.pos === 'atk'), { by: p, src: c }); } }] },
   'Frost and Flame Dragon': {
     proc: { label: 'Special Summon (banish 1 FIRE and 2 WATER from your GY)',
-      cond: (g, c, p) => { const gy = g.p[p].gy.filter(isMon); const w = gy.filter(x => attr(x) === 'WATER').length; return gy.some(x => attr(x) === 'FIRE') && w >= 2 && markProc(g, c); },
-      cost: function* (g, c, p, grp) { const [f] = yield* pick(g, p, 'Banish a FIRE monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'FIRE'), 1, 1, 'cost');
-        const ws = yield* pick(g, p, 'Banish 2 WATER monsters from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WATER'), 2, 2, 'cost');
+      cond: (g, c, p) => { const gy = g.p[p].gy.filter(isMon); const w = gy.filter(x => E.lib.isAttr(x, 'WATER')).length; return gy.some(x => E.lib.isAttr(x, 'FIRE')) && w >= 2 && markProc(g, c); },
+      cost: function* (g, c, p, grp) { const [f] = yield* pick(g, p, 'Banish a FIRE monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'FIRE')), 1, 1, 'cost');
+        const ws = yield* pick(g, p, 'Banish 2 WATER monsters from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER')), 2, 2, 'cost');
         const xs = [f, ...ws].filter(Boolean); for (const x of xs) move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); } },
     effs: [lockInstall,
       { type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Discard: destroy a monster', cond: (g, c, p) => g.p[p].hand.length > 0 && fieldMons(g).length > 0,
@@ -415,7 +415,7 @@ E.addScripts({
   // Can be treated as 2 Tributes for a LIGHT Fairy. PARTIAL: offered only when it is your only monster (the engine can't
   // tell which monster was Tributed when counting).
   'Gellenduo': { self: { noBattleDestroy: true },
-    cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && attr(c) === 'LIGHT' && race(c) === 'Fairy' && monsOf(g, p).length === 1 ? 1 : null },
+    cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && E.lib.isAttr(c, 'LIGHT') && race(c) === 'Fairy' && monsOf(g, p).length === 1 ? 1 : null },
     effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy this card', on: (g, ev, c) => ev.type === 'damage' && ev.p === c.ctrl && ev.n > 0,
       res: function* (g, c, p) { if (onField(c) && faceUp(c)) destroy(g, [c], { by: p }); } }] },
   'Gem Flash Energy': { effs: [actNoop,

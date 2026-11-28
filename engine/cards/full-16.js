@@ -120,8 +120,8 @@ E.addScripts({
   'The A. Forces': { effs: [{ type: 'act', res: noop }],
     cont: { atk: (g, src, m) => m.ctrl === src.ctrl && m.zone === 'm' && faceUp(m) && race(m) === 'Warrior' ? 200 * monsOf(g, src.ctrl).filter(x => faceUp(x) && ['Warrior', 'Spellcaster'].includes(race(x))).length : 0 } },
   'The Beginning of the End': { effs: [{ type: 'act',
-    cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK').length >= 7,
-    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Banish 5 DARK monsters from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'), 5, 5, 'cost'); for (const x of xs) move(g, x, 'ban', { reason: 'cost', by: p }); log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); },
+    cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')).length >= 7,
+    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Banish 5 DARK monsters from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')), 5, 5, 'cost'); for (const x of xs) move(g, x, 'ban', { reason: 'cost', by: p }); log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); },
     res: function* (g, c, p) { draw(g, p, 3); } }] },
   // Applied once at resolution to the face-up Beasts then (rulings); not recalculated later.
   'The Big March of Animals': { effs: [{ type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Beast'),
@@ -374,8 +374,8 @@ E.addScripts({
   'The Masked Beast': { effs: [] },
   'The Rock Spirit': { self: { atk: (g, c) => g.phase === 'battle' && g.tp !== c.ctrl ? 300 : 0 },
     proc: { label: 'Special Summon (banish an EARTH from your GY)',
-      cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'EARTH'),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish 1 EARTH monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'EARTH'), 1, 1, 'cost');
+      cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'EARTH')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish 1 EARTH monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'EARTH')), 1, 1, 'cost');
         if (x) { move(g, x, 'ban', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} banished ${name(x)}.`); } c.flags.f16proc = true; } },
     effs: [lockInstall, { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c) && c.flags.f16proc) c.f16nomi = true; return false; } }] },
   'The Stern Mystic': { effs: [{ type: 'trig', mand: true, label: 'Reveal all face-down cards', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
@@ -391,8 +391,8 @@ E.addScripts({
   // ENGINE: Tribute counts are fixed in the engine (same as Double Coston, batch-6.js). Closest: Tribute this card alone to
   // Tribute Summon a Level 7 or higher EARTH from your hand (your Normal Summon). This summon has no Solemn Judgment window.
   'The Trojan Horse': { effs: [{ type: 'ign', label: 'Tribute as 2: summon an EARTH',
-    cond: (g, c, p) => g.ns[p] < 1 && !g.noSummon[p] && g.p[p].hand.some(x => isMon(x) && attr(x) === 'EARTH' && lv(x) >= 7 && !noNS(x) && !isExtraD(D(x)) && D(x).k !== 'ritual' && !forbid(g, { type: 'ns', c: x, p })),
-    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute Summon which EARTH monster?', g.p[p].hand.filter(x => isMon(x) && attr(x) === 'EARTH' && lv(x) >= 7 && !noNS(x) && !isExtraD(D(x)) && D(x).k !== 'ritual'), 1, 1, 'good');
+    cond: (g, c, p) => g.ns[p] < 1 && !g.noSummon[p] && g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'EARTH') && lv(x) >= 7 && !noNS(x) && !isExtraD(D(x)) && D(x).k !== 'ritual' && !forbid(g, { type: 'ns', c: x, p })),
+    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute Summon which EARTH monster?', g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'EARTH') && lv(x) >= 7 && !noNS(x) && !isExtraD(D(x)) && D(x).k !== 'ritual'), 1, 1, 'good');
       L2.data.x = x; g.ns[p]++; move(g, c, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed The Trojan Horse as 2 Tributes.`); },
     res: function* (g, c, p, L2) { const x = L2.data.x; if (!x || x.zone !== 'hand' || freeM(g, p) < 0) return; const grp = g.group;
       move(g, x, 'm', { ctrl: p, pos: 'atk', reason: 'summon', group: grp }); x.summonType = 'tribute'; x.tributes = [c.u]; x.attacks = 0;

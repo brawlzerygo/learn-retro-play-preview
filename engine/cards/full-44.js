@@ -62,7 +62,7 @@ const LOCKS = {
   'Supersonic Skull Flame': a => a.c.zone !== 'hand' && !(['gy', 'ban'].includes(a.c.zone) && a.c.f44nomi),
 };
 // Simorgh, Bird of Divinity: enough face-up WIND monsters to Tribute (1 while a face-up Simorgh, Bird of Ancestry lowers the cost)
-const divinityTributes = (g, p) => { const need = allField(g).some(x => x.zone === 'm' && faceUp(x) && named(x, 'Simorgh, Bird of Ancestry') && !negd(g, x)) ? 1 : 2; return monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'WIND').length >= need; };
+const divinityTributes = (g, p) => { const need = allField(g).some(x => x.zone === 'm' && faceUp(x) && named(x, 'Simorgh, Bird of Ancestry') && !negd(g, x)) ? 1 : 2; return monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'WIND')).length >= need; };
 // Sky Scourge Invicil: mark Spell/Trap chain links negated while a face-up Invicil with that effect applies (not GY effects).
 function invicilScan(g) {
   if (!g.chain || !g.chain.length) return;
@@ -117,7 +117,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'move' && ev.c !== c && ev.wasField && ev.destroyed && faceUp(c),
       res: function* (g, c) { if (onField(c) && faceUp(c)) { move(g, c, 'hand', { reason: 'effect' }); log(g, `${D(c).n} returned to the hand.`); } } }] },
   'Shine Palace': { cont: { atk: (g, src, m) => src.equipTo === m.u ? 700 : 0 },
-    effs: [equipAct(m => attr(m) === 'LIGHT', 'Equip to which LIGHT monster?')] },
+    effs: [equipAct(m => E.lib.isAttr(m, 'LIGHT'), 'Equip to which LIGHT monster?')] },
   'Shining Silver Force': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p, x) => spellTrapAct(x.top) && isTrap(x.top.c) && x.top.p !== p && !x.top.negated && trapDealsDamage(x.top.c),
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
@@ -184,9 +184,9 @@ E.addScripts({
   // Both players' WIND monsters need 1 less Tribute while it is face-up. Treated as a Normal Monster in the hand (no effect
   // in the engine needs that). Tribute Summoned with only WIND Tributes: return up to 2 of the opponent's cards (targets).
   'Simorgh, Bird of Ancestry': {
-    cont: { tributes: (g, s, c, p, need) => !negd(g, s) && attr(c) === 'WIND' && need > 0 ? need - 1 : null },
+    cont: { tributes: (g, s, c, p, need) => !negd(g, s) && E.lib.isAttr(c, 'WIND') && need > 0 ? need - 1 : null },
     effs: [{ type: 'trig', mand: true, label: 'Return up to 2 cards to the hand',
-      on: (g, ev, c) => evSummoned(ev, c, ['tribute']) && (ev.tribs || []).length > 0 && ev.tribs.every(t => attr(t) === 'WIND'),
+      on: (g, ev, c) => evSummoned(ev, c, ['tribute']) && (ev.tribs || []).length > 0 && ev.tribs.every(t => E.lib.isAttr(t, 'WIND')),
       cond: (g, c, p) => fieldOf(g, opp(p)).length > 0,
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which 1 or 2 of their cards to the hand?', fieldOf(g, opp(p)), 1, 2, 'bad'); },
       res: function* (g, c, p, L2) { const xs = live(L2); for (const x of xs) move(g, x, 'hand', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.map(x => D(x).n).join(' and ')} returned to the hand.`); } }] },
@@ -217,16 +217,16 @@ E.addScripts({
   // Activates wherever the card went (its owner's), sending as many as there are, up to 2.
   'Skreech': { effs: [{ type: 'trig', loc: 'any', mand: true, label: 'Send 2 WATER monsters from your Deck to the GY',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed,
-    res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'WATER'); if (!cs.length) return; const n = Math.min(2, cs.length);
+    res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER')); if (!cs.length) return; const n = Math.min(2, cs.length);
       const xs = yield* pick(g, p, `Send which ${n} WATER monster${n > 1 ? 's' : ''} from your Deck to the GY?`, cs, n, n, 'good');
       for (const x of xs) move(g, x, 'gy', { reason: 'effect', by: p }); shuffleDeck(g, p); log(g, `${PN(g, p)} sent ${xs.map(x => D(x).n).join(' and ')} from the Deck to the GY.`); } }] },
   'Sky Scourge Enrise': {
     self: { cantAttack: (g, c) => c.flags.f44noatk === g.turnNo },
     proc: { label: 'Special Summon (banish 3 LIGHT Fairies and 1 DARK Fiend)',
-      cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT' && race(x) === 'Fairy').length >= 3 && g.p[p].gy.some(x => isMon(x) && attr(x) === 'DARK' && race(x) === 'Fiend'),
+      cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT') && race(x) === 'Fairy').length >= 3 && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'DARK') && race(x) === 'Fiend'),
       cost: function* (g, c, p, grp) {
-        const a = yield* pick(g, p, 'Banish which 3 LIGHT Fairy monsters from your GY?', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT' && race(x) === 'Fairy'), 3, 3, 'cost');
-        const [b] = yield* pick(g, p, 'Banish which DARK Fiend monster from your GY?', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK' && race(x) === 'Fiend'), 1, 1, 'cost');
+        const a = yield* pick(g, p, 'Banish which 3 LIGHT Fairy monsters from your GY?', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT') && race(x) === 'Fairy'), 3, 3, 'cost');
+        const [b] = yield* pick(g, p, 'Banish which DARK Fiend monster from your GY?', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK') && race(x) === 'Fiend'), 1, 1, 'cost');
         for (const x of [...a, b]) move(g, x, 'ban', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} banished ${[...a, b].map(x => D(x).n).join(', ')}.`); } },
     effs: [lockInstall, { type: 'ign', opt: true, label: 'Banish a face-up monster',
       cond: (g, c) => !c.attacks && fieldMons(g).some(x => x !== c && faceUp(x)),
@@ -245,7 +245,7 @@ E.addScripts({
       { type: 'trig', loc: 'any', res: noop, on: g => { invicilScan(g); return false; } }, { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => {
       if (evSummoned(ev, c, ['tribute'])) {
         const ts = ev.tribs || [];
-        const sp = ts.some(t => attr(t) === 'LIGHT' && race(t) === 'Fairy'), tr = ts.some(t => attr(t) === 'DARK' && race(t) === 'Fiend');
+        const sp = ts.some(t => E.lib.isAttr(t, 'LIGHT') && race(t) === 'Fairy'), tr = ts.some(t => E.lib.isAttr(t, 'DARK') && race(t) === 'Fiend');
         if (sp || tr) { c.flags.f44inv = { sp, tr }; g.seq++; log(g, `Sky Scourge Invicil negates the effects of all ${sp && tr ? 'Spell and Trap' : sp ? 'Spell' : 'Trap'} Cards.`); }
       }
       return false; } }] },
@@ -425,9 +425,9 @@ E.addScripts({
   // face-down first). PARTIAL: a control change doesn't count as leaving your side.
   'Storming Wynn': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Tribute a WIND: Special Summon a WIND from your hand',
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && attr(x) === 'WIND') && g.p[p].hand.some(x => isMon(x) && attr(x) === 'WIND' && D(x).k !== 'ritual' && canSS(g, p, x)),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WIND monster?', monsOf(g, p).filter(x => x !== c && attr(x) === 'WIND'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
-      res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WIND' && D(x).k !== 'ritual' && canSS(g, p, x)); if (!cs.length) return;
+      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && E.lib.isAttr(x, 'WIND')) && g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'WIND') && D(x).k !== 'ritual' && canSS(g, p, x)),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WIND monster?', monsOf(g, p).filter(x => x !== c && E.lib.isAttr(x, 'WIND')), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+      res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND') && D(x).k !== 'ritual' && canSS(g, p, x)); if (!cs.length) return;
         const [x] = yield* pick(g, p, 'Special Summon which WIND monster from your hand?', cs, 1, 1, 'good');
         if (x && ss(g, p, x, 'atk')) { x.flags.f44wynn = c.u; if (onField(c) && faceUp(c)) (c.flags.f44wynnSet || (c.flags.f44wynnSet = [])).push(x.u); } } },
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, label: 'Destroy the summoned monster',
@@ -500,7 +500,7 @@ E.addScripts({
   'Sunny Pixie': { effs: [
     { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.reason === 'synchro' && ev.to === 'gy') c.f44pix = ev.group; return false; } },
     { type: 'trig', loc: 'gy', mand: true, label: 'Gain 1000 LP',
-      on: (g, ev, c) => ev.type === 'summon' && ev.how === 'synchro' && c.f44pix != null && ev.group === c.f44pix && ev.cs.some(x => attr(x) === 'LIGHT'),
+      on: (g, ev, c) => ev.type === 'summon' && ev.how === 'synchro' && c.f44pix != null && ev.group === c.f44pix && ev.cs.some(x => E.lib.isAttr(x, 'LIGHT')),
       res: function* (g, c, p) { c.f44pix = null; gain(g, p, 1000); } }] },
   // Sent from the field to the GY by a card effect: you can Special Summon Oracle of the Sun from the Deck with double ATK;
   // it returns to the hand in this turn's End Phase.

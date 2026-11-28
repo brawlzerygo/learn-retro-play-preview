@@ -119,8 +119,8 @@ E.addScripts({
   // ENGINE: no Standby Phase response window, so this is offered as an optional trigger at the start of the opponent's Standby Phase
   'Maniacal Servant': { effs: [{ type: 'trig', opt: true, label: 'Banish DARK monsters: gain DEF',
     on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp !== c.ctrl,
-    cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'DARK'),
-    cost: function* (g, c, p, L2) { const cs = g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK');
+    cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'DARK')),
+    cost: function* (g, c, p, L2) { const cs = g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK'));
       const xs = yield* pick(g, p, 'Banish which DARK monsters from your GY?', cs, 1, cs.length, 'cost');
       for (const x of xs) move(g, x, 'ban', { reason: 'cost', by: p }); L2.data.n = xs.length; log(g, `${PN(g, p)} banished ${xs.length} DARK monster${xs.length > 1 ? 's' : ''}.`); },
     res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { def: 500 * L2.data.n, end: true, own: true }); log(g, `Maniacal Servant gained ${500 * L2.data.n} DEF.`); } }] },
@@ -215,7 +215,7 @@ E.addScripts({
   // Tributed face-up for the Tribute Summon of a DARK monster: 3 Metabo Tokens for its owner (even from the banished pile)
   'Metabo Globster': { effs: [{ type: 'trig', loc: 'any', mand: true, tags: { ss: 1 }, label: 'Summon 3 Metabo Tokens',
     on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.reason === 'tribute') c.f41up = !!(ev.snap && ev.snap.faceUp);
-      return ev.type === 'summon' && ev.how === 'tribute' && (ev.tribs || []).includes(c) && !!c.f41up && attr(ev.cs[0]) === 'DARK'; },
+      return ev.type === 'summon' && ev.how === 'tribute' && (ev.tribs || []).includes(c) && !!c.f41up && E.lib.isAttr(ev.cs[0], 'DARK'); },
     res: function* (g, c, p) { c.f41up = false; const n = Math.min(3, nFreeM(g, p)); if (n) tokens(g, p, { n: 'Metabo Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 0, def: 0 }, n, 'def', { noTribute: 'summon' }); } }] },
 
   // PARTIAL: "instead of the normal draw" happens after the draw: the drawn card goes back on top of the Deck
@@ -307,8 +307,8 @@ E.addScripts({
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
 
   'Mormolith': { effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Tribute an EARTH monster: destroy monsters',
-    cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && attr(m) === 'EARTH'),
-    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which face-up EARTH monster?', monsOf(g, p).filter(m => faceUp(m) && attr(m) === 'EARTH'), 1, 1, 'cost');
+    cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && E.lib.isAttr(m, 'EARTH')),
+    cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which face-up EARTH monster?', monsOf(g, p).filter(m => faceUp(m) && E.lib.isAttr(m, 'EARTH')), 1, 1, 'cost');
       L2.data.n = atk(g, x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n} (${L2.data.n} ATK).`); },
     res: function* (g, c, p, L2) { const xs = fieldMons(g).filter(m => faceUp(m) && def(g, m) <= L2.data.n); if (xs.length) destroy(g, xs, { by: p }); } }] },
 
@@ -511,7 +511,7 @@ E.addScripts({
     cond: g => fieldMons(g).some(faceUp),
     cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent Noisy Gnat to the GY.`); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Increase which monster\'s Level?', fieldMons(g).filter(faceUp), 1, 1, 'good'); },
-    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { t.flags.lv = lv(t) + 1; t.flags.lvUntil = true; log(g, `${name(t)} became Level ${t.flags.lv}.`); } } }] },
+    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { L.lvAdd(g, t, 1, true); log(g, `${name(t)} became Level ${lv(t)}.`); } } }] },
 });
 
 /* ----- helpers used above (hoisted) ----- */

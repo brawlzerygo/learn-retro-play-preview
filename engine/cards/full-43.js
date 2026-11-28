@@ -148,8 +148,8 @@ E.addScripts({
     cost: function* (g, c, p) { log(g, `${PN(g, p)} revealed Iron Core of Koa'ki Meiru.`); },
     res: function* (g, c, p) { destroy(g, stOf(g, opp(p)).filter(x => x.pos === 'set'), { by: p, src: c }); } }] },
   'Recurring Nightmare': { effs: [{ type: 'act',
-    cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK' && zeroDef(x)).length >= 2,
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which 2 DARK monsters with 0 DEF to your hand?', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK' && zeroDef(x)), 2, 2, 'good'); },
+    cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK') && zeroDef(x)).length >= 2,
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which 2 DARK monsters with 0 DEF to your hand?', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK') && zeroDef(x)), 2, 2, 'good'); },
     res: function* (g, c, p, L2) { for (const x of L2.t.filter(x => x.zone === 'gy')) { move(g, x, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${D(x).n} to the hand.`); } } }] },
   'Recycling Batteries': { effs: [{ type: 'act',
     cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && race(x) === 'Thunder' && baseAtk(x) <= 1500).length >= 2,
@@ -275,7 +275,7 @@ E.addScripts({
   // as Level 4 (no per-Synchro material Level hook).
   'Road Synchron': { effs: [{ type: 'trig', mand: true, label: 'Level up by 1',
     on: (g, ev, c) => ev.type === 'dsEnd' && ev.a === c,
-    res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; c.flags.lv = lv(c) + 1; c.flags.lvUntil = true; g.seq++; log(g, `${name(c)} is now Level ${lv(c)}.`); } }] },
+    res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; L.lvAdd(g, c, 1, true); log(g, `${name(c)} is now Level ${lv(c)}.`); } }] },
   // PARTIAL: Synchro Summoned with its own rule ("Road Synchron" + 2 or more non-Tuners), always in Attack Position.
   'Road Warrior': { noSynchro: true,
     proc: { extra: true, how: 'synchro', label: 'Synchro Summon', cond: (g, c, p) => roadMats(g, p, c).length > 0,
@@ -467,14 +467,14 @@ E.addScripts({
     cont: { grant: (g, src, c, flag) => { if (flag !== 'noBattleDestroy' || c.ctrl === src.ctrl || c.zone !== 'm' || c.pos !== 'atk') return false;
       const f = foeOf(g, c); return !!f && /^Reptilianne/.test(name(f)) && atk(g, c) === 0; } } },
   'Shadowpriestess of Ohm': { effs: [{ type: 'ign', label: 'Tribute a DARK monster: 800 damage',
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && attr(x) === 'DARK'),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which face-up DARK monster?', monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'DARK'), 1, 1, 'cost');
+    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && E.lib.isAttr(x, 'DARK')),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which face-up DARK monster?', monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'DARK')), 1, 1, 'cost');
       if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { damage(g, opp(p), 800, { src: c, srcP: p }); } }] },
   'Shark Cruiser': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Special Summon up to 2 WATER monsters',
     on: (g, ev, c) => fromFieldToGY(ev, c) && ev.destroyed && !ev.battle && ev.snap && ev.snap.faceUp && ev.prevCtrl === c.owner && byOpp(g, ev, c),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && attr(x) === 'WATER' && lv(x) <= 4 && canSS(g, p, x)),
-    res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'WATER' && lv(x) <= 4 && canSS(g, p, x)); const n = Math.min(2, nFreeM(g, p));
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && E.lib.isAttr(x, 'WATER') && lv(x) <= 4 && canSS(g, p, x)),
+    res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER') && lv(x) <= 4 && canSS(g, p, x)); const n = Math.min(2, nFreeM(g, p));
       if (!cs.length || n <= 0) { shuffleDeck(g, p); return; }
       const xs = yield* pick(g, p, `Special Summon up to ${n} WATER monster${n > 1 ? 's' : ''} from your Deck`, cs, 1, n, 'good'); for (const x of xs) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
 });

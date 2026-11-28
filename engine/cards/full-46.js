@@ -196,10 +196,10 @@ E.addScripts({
     res: function* (g, c, p) { const fx = yield* fusionSummon(g, p, { filter: x => /Vehicroid/.test(D(x).n) }); if (fx && onField(fx)) { fx.flags.noEffectDestroy = true; log(g, `${name(fx)} can't be destroyed by card effects.`); } } }] },
   'Veil of Darkness': { effs: [actNoop,
     { type: 'trig', loc: 'st', label: 'Send drawn DARK monsters: draw 1',
-      on: (g, ev, c) => { if (!(ev.type === 'move' && ev.reason === 'draw' && ev.to === 'hand' && g.phase === 'draw' && g.tp === c.ctrl && ev.c.owner === c.ctrl && isMon(ev.c) && attr(ev.c) === 'DARK')) return false; ev.c.f46veil = g.turnNo; return true; },
-      cond: (g, c, p) => g.p[p].hand.some(x => x.f46veil === g.turnNo && isMon(x) && attr(x) === 'DARK'),
+      on: (g, ev, c) => { if (!(ev.type === 'move' && ev.reason === 'draw' && ev.to === 'hand' && g.phase === 'draw' && g.tp === c.ctrl && ev.c.owner === c.ctrl && isMon(ev.c) && E.lib.isAttr(ev.c, 'DARK'))) return false; ev.c.f46veil = g.turnNo; return true; },
+      cond: (g, c, p) => g.p[p].hand.some(x => x.f46veil === g.turnNo && isMon(x) && E.lib.isAttr(x, 'DARK')),
       res: function* (g, c, p) {
-        const cs = g.p[p].hand.filter(x => x.f46veil === g.turnNo && isMon(x) && attr(x) === 'DARK'); if (!cs.length) return;
+        const cs = g.p[p].hand.filter(x => x.f46veil === g.turnNo && isMon(x) && E.lib.isAttr(x, 'DARK')); if (!cs.length) return;
         const xs = yield* pick(g, p, 'Reveal and send which drawn DARK monsters to the GY?', cs, 1, cs.length, 'cost');
         for (const x of xs) x.f46veil = 0;
         const gone = xs.filter(x => x.zone === 'hand'); if (!gone.length) return;
@@ -323,7 +323,7 @@ E.addScripts({
         const xs = yield* pick(g, p, `Destroy up to ${n} card${n > 1 ? 's' : ''} your opponent controls`, cs, 1, Math.min(n, cs.length), 'bad'); destroy(g, xs, { by: p, src: c }); } }] },
   'Voltic Kong': { effs: [{ type: 'trig', mand: true, label: 'Send cards from the top of their Deck',
     on: (g, ev, c) => dealtBattleDmg(ev, c),
-    res: function* (g, c, p) { const n = monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'LIGHT').length; if (n) mill(g, opp(p), n); } }] },
+    res: function* (g, c, p) { const n = monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'LIGHT')).length; if (n) mill(g, opp(p), n); } }] },
   'Vortex Trooper': { effs: [
     { type: 'trig', when: true, label: 'Shuffle 2 cards into the Deck, draw 2',
       on: (g, ev, c) => evSummoned(ev, c, ['normal']), cond: (g, c, p) => g.p[p].hand.length >= 2,
@@ -356,7 +356,7 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField,
     res: function* (g, c, p) { mill(g, opp(p), 3); } }] },
   'Water Dragon': {
-    cont: { atk: (g, src, m) => m.zone === 'm' && faceUp(m) && (attr(m) === 'FIRE' || race(m) === 'Pyro') ? -1e6 : 0 },
+    cont: { atk: (g, src, m) => m.zone === 'm' && faceUp(m) && (E.lib.isAttr(m, 'FIRE') || race(m) === 'Pyro') ? -1e6 : 0 },
     effs: [lockInstall,
       { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon 2 Hydrogeddon and 1 Oxygeddon',
         on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.to === 'gy',
@@ -365,8 +365,8 @@ E.addScripts({
         res: function* (g, c, p, L2) { for (const t of L2.t) if (t.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, t, 'atk'); } }] },
   'Water Hazard': { effs: [actNoop,
     { type: 'ign', loc: 'st', opt: true, tags: { ss: 1 }, label: 'Special Summon a Level 4 or lower WATER',
-      cond: (g, c, p) => monsOf(g, p).length === 0 && freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'WATER' && lv(x) <= 4),
-      res: function* (g, c, p) { if (monsOf(g, p).length) return; const cs = g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WATER' && lv(x) <= 4); if (!cs.length) return;
+      cond: (g, c, p) => monsOf(g, p).length === 0 && freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && E.lib.isAttr(x, 'WATER') && lv(x) <= 4),
+      res: function* (g, c, p) { if (monsOf(g, p).length) return; const cs = g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER') && lv(x) <= 4); if (!cs.length) return;
         const [x] = yield* pick(g, p, 'Special Summon which Level 4 or lower WATER monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   'Weed Out': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => E.lib.canPay(g, p, 500, c) && fieldMons(g).some(x => x.pos === 'atk' && lv(x) === 3),
@@ -376,7 +376,7 @@ E.addScripts({
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(isTuner),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish 1 Tuner from your GY', g.p[p].gy.filter(isTuner), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost', by: p }); log(g, `${PN(g, p)} banished ${D(x).n}.`); } },
     res: function* (g, c, p) { if (c.zone === 'hand') ss(g, p, c, 'atk'); } }] },
-  'Wetlands': { cont: { atk: (g, src, m) => m.zone === 'm' && faceUp(m) && race(m) === 'Aqua' && attr(m) === 'WATER' && lv(m) <= 2 ? 1200 : 0 }, effs: [actNoop] },
+  'Wetlands': { cont: { atk: (g, src, m) => m.zone === 'm' && faceUp(m) && race(m) === 'Aqua' && E.lib.isAttr(m, 'WATER') && lv(m) <= 2 ? 1200 : 0 }, effs: [actNoop] },
   'Whirlwind Weasel': { effs: [{ type: 'trig', mand: true, faceDownOk: true, label: 'Opponent can\'t activate Spells/Traps',
     on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
     res: function* (g, c, p) { const o = opp(p); addRule(g, (g2, a) => a.type === 'activate' && a.p === o && a.c && isST(a.c) && a.eff && a.eff.type === 'act', { end: g.turnNo }); log(g, `${PN(g, o)} can't activate Spell or Trap Cards this turn.`); } }] },
@@ -407,7 +407,7 @@ E.addScripts({
       tokens(g, p, { n: 'Wild Fire Token', a: 'FIRE', r: 'Pyro', lv: 3, atk: 1000, def: 1000 }, 1, 'atk');
       addRule(g, (g2, a) => a.type === 'attack' && a.c && a.c.ctrl === p, { end: g.turnNo }); log(g, `${PN(g, p)} can't declare an attack this turn.`); } }] },
   // PARTIAL: the other Tribute isn't checked to be Wind Effigy itself (as Dark Effigy, full-05.js).
-  'Wind Effigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && D(c).k === 'normal' && attr(c) === 'WIND' && need === 2 && !negd(g, src) ? 1 : null } },
+  'Wind Effigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && D(c).k === 'normal' && E.lib.isAttr(c, 'WIND') && need === 2 && !negd(g, src) ? 1 : null } },
   'Wolf in Sheep\'s Clothing': { effs: [trapTrig({ label: 'Special Summon Level 1 monsters', tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.direct && ev.p === c.ctrl && ev.srcP !== c.ctrl && ev.n > 0,
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && lv(x) === 1 && g.p[p].deck.some(y => D(y).n === D(x).n)),

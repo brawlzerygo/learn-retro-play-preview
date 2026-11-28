@@ -69,8 +69,8 @@ E.addScripts({
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy up to 2 cards your opponent controls', fieldOf(g, opp(p)), 1, 2, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L), { by: p, src: c }); } }] },
   'Ehren, Lightsworn Monk': { effs: [
-    // PARTIAL: a Set monster shuffled this way doesn't get its Flip effect afterwards.
-    { type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos !== 'atk',
+    // ① on the engine's battleConfirm event, after a Set monster is flipped (2026-11-28 audit, E4b: rulings 3 and 4, its Flip effect still activates)
+    { type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'battleConfirm' && ev.a === c && ev.t && ev.t.pos !== 'atk',
       res: function* (g, c, p, L) { const t = L.ev.t; if (t && onField(t) && t.pos !== 'atk') { const n = D(t).n; move(g, t, 'deck', { reason: 'effect', by: p }); log(g, `${n} was shuffled into the Deck.`); } } },
     lsEnd(3)] },
   'Garoth, Lightsworn Warrior': { effs: [{ type: 'trig', mand: true,
@@ -164,15 +164,15 @@ E.addScripts({
     { type: 'trig', when: true, on: (g, ev, c) => evSummoned(ev, c, ['normal', 'special']), cond: (g, c, p) => g.p[p].deck.some(isMachine),
       res: function* (g, c, p) { yield* search(g, p, isMachine, 'Send a Machine from your Deck to the GY', 'gy'); } },
     { type: 'ign', opt: true, label: 'Return 2 EARTH Machines: draw 1',
-      cond: (g, c, p) => g.p[p].deck.length >= 0 && g.p[p].gy.filter(x => isMachine(x) && lv(x) === 4 && attr(x) === 'EARTH').length >= 2,
-      cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Shuffle 2 Level 4 EARTH Machines into the Deck', g.p[p].gy.filter(x => isMachine(x) && lv(x) === 4 && attr(x) === 'EARTH'), 2, 2, 'cost'); for (const x of xs) move(g, x, 'deck', { reason: 'cost' }); log(g, `${PN(g, p)} shuffled ${xs.map(name).join(', ')} into the Deck.`); },
+      cond: (g, c, p) => g.p[p].deck.length >= 0 && g.p[p].gy.filter(x => isMachine(x) && lv(x) === 4 && E.lib.isAttr(x, 'EARTH')).length >= 2,
+      cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Shuffle 2 Level 4 EARTH Machines into the Deck', g.p[p].gy.filter(x => isMachine(x) && lv(x) === 4 && E.lib.isAttr(x, 'EARTH')), 2, 2, 'cost'); for (const x of xs) move(g, x, 'deck', { reason: 'cost' }); log(g, `${PN(g, p)} shuffled ${xs.map(name).join(', ')} into the Deck.`); },
       res: function* (g, c, p) { draw(g, p, 1); } }] },
-  'Avenging Knight Parshath': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => attr(c) === 'LIGHT' }),
+  'Avenging Knight Parshath': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => E.lib.isAttr(c, 'LIGHT') }),
     self: { piercing: true },
     effs: [{ type: 'ign', opt: true, label: 'Change a monster’s position', cond: (g, c, p) => oppFaceUp(g, p).length > 0,
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Change the position of which monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
       res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) { t.pos = t.pos === 'atk' ? 'def' : 'atk'; log(g, `${name(t)} changed to ${t.pos === 'atk' ? 'Attack' : 'Defense'} Position.`); } } }] },
-  'XX-Saber Gottoms': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => attr(c) === 'EARTH', tunerAsNon: true }),
+  'XX-Saber Gottoms': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => E.lib.isAttr(c, 'EARTH'), tunerAsNon: true }),
     effs: [{ type: 'ign', label: 'Tribute an X-Saber: random discard',
       cond: (g, c, p) => monsOf(g, p).some(x => isXSaber(x)) && g.p[opp(p)].hand.length > 0,
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute an X-Saber monster', monsOf(g, p).filter(x => isXSaber(x)), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
@@ -228,16 +228,17 @@ E.addScripts({
       const cands = [...g.p[p].gy.filter(isEquipSpell), ...fromDeck]; if (!cands.length) return;
       const [x] = yield* pick(g, p, 'Add an Equip Spell from your Deck or GY', cands, 1, 1, 'good');
       if (x) { const wasDeck = x.zone === 'deck'; move(g, x, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(x)} to the hand.`); if (wasDeck) shuffleDeck(g, p); } } }] },
-  'Mark of the Rose': { effs: [
-    // PARTIAL: the Mark isn't destroyed if the monster is turned face-down.
+  // ① "Gain control of the equipped monster" is continuous (the engine's cont.setCtrl, 2026-11-28 audit, E4b: control returns when the Mark
+  // leaves the field or moves to another monster with Tailor of the Fickle, site ruling 2); the End Phase and Standby Phase switch who has it.
+  'Mark of the Rose': { cont: { setCtrl: (g, src) => { const t = equippedTo(g, src); return t && src.flags.markOn ? { t, p: src.ctrl } : null; } }, effs: [
     { type: 'act', cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(isPlant) && monsOf(g, opp(p)).length > 0,
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish a Plant from your GY', g.p[p].gy.filter(isPlant), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${name(x)}.`); } },
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Equip Mark of the Rose to which monster?', monsOf(g, opp(p)), 1, 1, 'bad'); },
-      res: function* (g, c, p, L) { const t = live(L)[0]; if (t && onField(c) && equip(g, c, t) && t.ctrl !== p) takeControl(g, p, t, false); } },
-    { type: 'trig', loc: 'st', mand: true, on: (g, ev, c) => endPhaseOf(ev, c) && faceUp(c) && !!equippedTo(g, c) && equippedTo(g, c).ctrl === c.ctrl,
-      res: function* (g, c, p) { const t = equippedTo(g, c); if (t && t.ctrl === p) takeControl(g, opp(p), t, false); } },
-    { type: 'trig', loc: 'st', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c) && !!equippedTo(g, c) && equippedTo(g, c).ctrl !== c.ctrl,
-      res: function* (g, c, p) { const t = equippedTo(g, c); if (t && t.ctrl !== p) takeControl(g, p, t, false); } }] },
+      res: function* (g, c, p, L) { const t = live(L)[0]; if (t && onField(c) && equip(g, c, t)) { c.flags.markOn = true; g.seq++; } } },
+    { type: 'trig', loc: 'st', mand: true, on: (g, ev, c) => endPhaseOf(ev, c) && faceUp(c) && !!equippedTo(g, c) && !!c.flags.markOn,
+      res: function* (g, c) { if (onField(c)) { c.flags.markOn = false; g.seq++; log(g, 'Control of the monster with Mark of the Rose returned.'); } } },
+    { type: 'trig', loc: 'st', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c) && !!equippedTo(g, c) && !c.flags.markOn,
+      res: function* (g, c) { if (onField(c)) { c.flags.markOn = true; g.seq++; } } }] },
   'Queen of Thorns': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => race(c) === 'Plant' }),
     // PARTIAL: the 1000 LP is paid as a non-Plant arrives from the hand (not as a cost before it); you can't summon one with 1000 LP or less.
     cont: { forbid: (g, src, a) => contOn(g, src) && ((a.type === 'ns' && a.c.zone === 'hand') || (a.type === 'ss' && a.c.zone === 'hand')) && a.c.id && race(a.c) !== 'Plant' && !E.lib.canPay(g, a.p, 1000) },
@@ -249,7 +250,7 @@ E.addScripts({
         else if (g.qTrib && g.qTrib[c.u] != null && ev.c && ev.c.u === g.qTrib[c.u]) { delete g.qTrib[c.u]; if (ev.from === 'hand' && ev.to === 'm' && ev.reason === 'summon' && isMon(ev.c) && race(ev.c) !== 'Plant') pay(g, ev.c.ctrl, 1000); }
         return false; }, res: function* () {} }] },
   'Volcanic Counter': { effs: [{ type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.p === c.owner,
-    res: function* (g, c, p, L) { if (c.zone !== 'gy') return; move(g, c, 'ban', { reason: 'effect' }); log(g, 'Volcanic Counter was banished.'); if (g.p[p].gy.some(x => isMon(x) && attr(x) === 'FIRE' && D(x).n !== 'Volcanic Counter')) damage(g, opp(p), L.ev.n, { src: c, srcP: p }); } }] },
+    res: function* (g, c, p, L) { if (c.zone !== 'gy') return; move(g, c, 'ban', { reason: 'effect' }); log(g, 'Volcanic Counter was banished.'); if (g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'FIRE') && D(x).n !== 'Volcanic Counter')) damage(g, opp(p), L.ev.n, { src: c, srcP: p }); } }] },
   'Fiend Comedian': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= g.p[opp(p)].gy.length,
     res: function* (g, c, p) { const call = yield* choose(g, p, 'Call the coin toss', ['Heads', 'Tails']); const coin = g.rnd() < 0.5 ? 0 : 1; log(g, `The coin landed on ${coin ? 'Tails' : 'Heads'}.`);
       if (call === coin) { const gy = g.p[opp(p)].gy.slice(); for (const x of gy) move(g, x, 'ban', { reason: 'effect', by: p }); log(g, `${gy.length} card(s) in ${PN(g, opp(p))}'s GY were banished.`); }
@@ -285,8 +286,8 @@ E.addScripts({
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.flags.rescueEnd === g.turnNo && x.flags.rescueBy === c.u), { by: p }); } }] },
   'X-Saber Airbellum': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.direct && ev.src === c,
     res: function* (g, c, p) { randomDiscard(g, opp(p)); } }] },
-  'Chaos Sorcerer': { proc: { label: 'Special Summon (banish a LIGHT and a DARK)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'LIGHT') && g.p[p].gy.some(x => isMon(x) && attr(x) === 'DARK'),
-      cost: function* (g, c, p, grp) { const [l] = yield* pick(g, p, 'Banish a LIGHT monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT'), 1, 1, 'cost'); const [d] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'), 1, 1, 'cost'); for (const x of [l, d]) if (x) move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${[l, d].filter(Boolean).map(name).join(' and ')}.`); } },
+  'Chaos Sorcerer': { proc: { label: 'Special Summon (banish a LIGHT and a DARK)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')) && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'DARK')),
+      cost: function* (g, c, p, grp) { const [l] = yield* pick(g, p, 'Banish a LIGHT monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')), 1, 1, 'cost'); const [d] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')), 1, 1, 'cost'); for (const x of [l, d]) if (x) move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${[l, d].filter(Boolean).map(name).join(' and ')}.`); } },
     effs: [{ type: 'ign', opt: true, label: 'Banish a face-up monster',
       cond: (g, c, p) => !c.declared && fieldMons(g).some(faceUp),   // not after it declared an attack this turn, negated or replayed (rulings 3, 5, 6)
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Banish which face-up monster?', fieldMons(g).filter(faceUp), 1, 1, 'bad'); },
@@ -331,11 +332,11 @@ E.addScripts({
 
   /* ----- Fairy ----- */
   'Freed the Brave Wanderer': { effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Banish 2 LIGHTs: destroy a stronger monster',
-    cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT').length >= 2 && fieldMons(g).some(x => faceUp(x) && atk(g, x) > atk(g, c)),
-    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Banish 2 LIGHT monsters from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT'), 2, 2, 'cost'); for (const x of xs) move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); },
+    cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')).length >= 2 && fieldMons(g).some(x => faceUp(x) && atk(g, x) > atk(g, c)),
+    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Banish 2 LIGHT monsters from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')), 2, 2, 'cost'); for (const x of xs) move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which monster?', fieldMons(g).filter(x => faceUp(x) && atk(g, x) > atk(g, c)), 1, 1, 'bad'); },
     res: function* (g, c, p, L) { const me = onField(c) && faceUp(c) ? atk(g, c) : 1700; destroy(g, live(L).filter(x => faceUp(x) && atk(g, x) > me), { by: p }); } }] },
-  'Archlord Kristya': {
+  'Archlord Kristya': { self: { gyToDeckTop: () => true },   // ④ "returned to the top of the Deck instead": the engine's replacement in move()
     proc: { label: 'Special Summon (exactly 4 Fairies in your GY)', cond: (g, c, p) => g.p[p].gy.filter(isFairy).length === 4,
       cost: function* (g, c) { c.flags.kristya = true; } },
     cont: { forbid: (g, src, a) => a.type === 'ss' && contOn(g, src) },
@@ -343,13 +344,10 @@ E.addScripts({
       { type: 'trig', mand: true, on: (g, ev, c) => evSummoned(ev, c, ['special']) && !!c.flags.kristya,
         cond: (g, c, p) => g.p[p].gy.some(isFairy),
         target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Add which Fairy from your GY to your hand?', g.p[p].gy.filter(isFairy), 1, 1, 'good'); },
-        res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } },
-      // PARTIAL: ④ isn't a true replacement: Kristya lands in the GY first, then goes to the top of the Deck right away.
-      { type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => fromFieldToGY(ev, c) && ((ev.snap && ev.snap.faceUp) || ev.battle),
-        res: function* (g, c, p) { if (c.zone === 'gy') { move(g, c, 'deckTop', { reason: 'effect' }); log(g, 'Archlord Kristya returned to the top of the Deck.'); } } }] },
+        res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } }] },
   'Shining Angel': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, on: (g, ev, c) => takenFromBattle(ev, c) && ev.destroyed,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'LIGHT' && baseAtk(x) <= 1500 && !noSS(x)),
-    res: function* (g, c, p) { yield* ssFromDeck(g, p, x => attr(x) === 'LIGHT' && baseAtk(x) <= 1500, 'Special Summon a LIGHT with 1500 or less ATK from your Deck'); } }] },
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && E.lib.isAttr(x, 'LIGHT') && baseAtk(x) <= 1500 && !noSS(x)),
+    res: function* (g, c, p) { yield* ssFromDeck(g, p, x => E.lib.isAttr(x, 'LIGHT') && baseAtk(x) <= 1500, 'Special Summon a LIGHT with 1500 or less ATK from your Deck'); } }] },
   'Nova Summoner': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, on: (g, ev, c) => takenFromBattle(ev, c) && ev.destroyed,
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => novaOk(g, x)),
     res: function* (g, c, p) { yield* ssFromDeck(g, p, x => novaOk(g, x), 'Special Summon from your Deck'); } }] },
@@ -364,17 +362,17 @@ E.addScripts({
     cond: (g, c, p, x) => x.top && !x.top.negated && x.top.p !== p && isMon(x.top.c) && x.top.eff.type !== 'act' && g.p[p].hand.some(y => y !== c && isFairy(y)),
     cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [y] = yield* pick(g, p, 'Send which other Fairy to the GY?', g.p[p].hand.filter(y => y !== c && isFairy(y)), 1, 1, 'cost'); move(g, c, 'gy', { reason: 'cost' }); if (y) move(g, y, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${name(c)}${y ? ' and ' + name(y) : ''} to the GY.`); },
     res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
-  'Ancient Sacred Wyvern': { noSynchro: true, proc: synProc({ tuner: c => attr(c) === 'LIGHT', non: () => true }),
+  'Ancient Sacred Wyvern': { noSynchro: true, proc: synProc({ tuner: c => E.lib.isAttr(c, 'LIGHT'), non: () => true }),
     self: { atk: (g, c) => g.p[c.ctrl].lp - g.p[opp(c.ctrl)].lp },
     effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Pay 1000: Special Summon this card',
       on: (g, ev, c) => takenFromBattle(ev, c) && ev.destroyed,
       cond: (g, c, p) => freeM(g, p) >= 0 && E.lib.canPay(g, p, 1000),
       cost: function* (g, c, p) { pay(g, p, 1000); },
       res: function* (g, c, p) { if (c.zone === 'gy') ssx(g, p, c); } }] },
+  // DARK monster effects activated on the field or in the GY are negated as they resolve, the Attribute read then (cont.negLink; 2026-11-28
+  // audit, E4b: costs are paid, mandatory triggers make their link; as Light-Imprisoning Mirror)
   'Shadow-Imprisoning Mirror': {
-    // PARTIAL: DARK monster effects on the field or in the GY can't be activated (instead of activating and being negated).
-    // ENGINE: Trigger effects don't check forbid(), so DARK Trigger effects still go through; needs an activation hook.
-    cont: { forbid: (g, src, a) => !trapStunned(g) && a.type === 'activate' && isMon(a.c) && attr(a.c) === 'DARK' && (onField(a.c) || a.c.zone === 'gy') && a.eff.type !== 'act' },
+    cont: { negLink: (g, src, L2) => isMon(L2.c) && L2.eff.type !== 'act' && ['m', 'gy'].includes(L2.actZone) && E.lib.isAttr(L2.c, 'DARK') },
     effs: [{ type: 'act', res: function* () {} }] },
 });
 
@@ -397,7 +395,7 @@ const FORCE3 = ['Machina Soldier', 'Machina Sniper', 'Machina Defender'];
 function novaOk(g, x) {
   if (!isMon(x) || noSS(x)) return false;
   const sanct = allField(g).some(f => faceUp(f) && D(f).n === 'The Sanctuary in the Sky');
-  return (race(x) === 'Fairy' && attr(x) === 'LIGHT' && baseAtk(x) <= 1500) || (sanct && D(x).n === 'Airknight Parshath');
+  return (race(x) === 'Fairy' && E.lib.isAttr(x, 'LIGHT') && baseAtk(x) <= 1500) || (sanct && D(x).n === 'Airknight Parshath');
 }
 
 /* Fluff Tokens can't be Tributed for a Tribute Summon the turn they arrive: lift the block on a later turn. */

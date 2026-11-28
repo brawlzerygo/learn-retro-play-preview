@@ -141,22 +141,22 @@ E.addScripts({
 
   /* ----- De- cards ----- */
   // Port of classic-4.js: the Fusion Materials are found from the summon (matHook) or Polymerization's note.
-  'De-Fusion': { effs: [{ type: 'act', cond: g => fieldMons(g).some(m => faceUp(m) && D(m).k === 'fusion'),
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Fusion Monster to the Extra Deck?', fieldMons(g).filter(m => faceUp(m) && D(m).k === 'fusion'), 1, 1, 'bad'); },
+  'De-Fusion': { effs: [{ type: 'act', cond: g => fieldMons(g).some(m => faceUp(m) && D(m).k === 'fusion' && !L.toDeckBlocked(g, m)),   // G.B. Hunter ruling 1
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Fusion Monster to the Extra Deck?', fieldMons(g).filter(m => faceUp(m) && D(m).k === 'fusion' && !L.toDeckBlocked(g, m)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) yield* returnAndRevive(g, p, t, 'Fusion'); } }, matHook] },
   // Port of classic-4.js.
   'De-Spell': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c) => stOnField(g).some(x => x !== c && (x.pos === 'set' || isSpell(x))),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target which Spell or Set card?', stOnField(g).filter(x => x !== c && (x.pos === 'set' || isSpell(x))), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; if (t.pos === 'set') log(g, `The Set card was ${D(t).n}.`); if (isSpell(t)) destroy(g, [t], { by: p, src: c }); } }] },
-  'De-Synchro': { effs: [{ type: 'act', cond: g => fieldMons(g).some(m => faceUp(m) && D(m).k === 'synchro'),
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Synchro Monster to the Extra Deck?', fieldMons(g).filter(m => faceUp(m) && D(m).k === 'synchro'), 1, 1, 'bad'); },
+  'De-Synchro': { effs: [{ type: 'act', cond: g => fieldMons(g).some(m => faceUp(m) && D(m).k === 'synchro' && !L.toDeckBlocked(g, m)),   // G.B. Hunter ruling 1
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Synchro Monster to the Extra Deck?', fieldMons(g).filter(m => faceUp(m) && D(m).k === 'synchro' && !L.toDeckBlocked(g, m)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) yield* returnAndRevive(g, p, t, 'Synchro'); } }, matHook] },
 
   /* ----- Deepsea ----- */
   'Deepsea Macrotrema': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'WATER monsters gain 500 ATK',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to === 'gy',
-    res: function* (g, c, p) { const ws = monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'WATER'); for (const x of ws) addMod(g, x, { atk: 500, end: true }); if (ws.length) log(g, `${PN(g, p)}'s WATER monsters gained 500 ATK.`); } }] },
+    res: function* (g, c, p) { const ws = monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'WATER')); for (const x of ws) addMod(g, x, { atk: 500, end: true }); if (ws.length) log(g, `${PN(g, p)}'s WATER monsters gained 500 ATK.`); } }] },
   // The card data's tx spells the second material "TonGYo", so the recipe can't be read and is given here.
   'Deepsea Shark': { mats: [x => D(x).n === 'Bottom Dweller', x => D(x).n === 'Tongyo'], effs: [] },
   // PARTIAL: "unaffected by Spells" covers destruction by Spells only (the engine's unaffectedSpells flag).
@@ -229,10 +229,10 @@ E.addScripts({
   'Desert Sunlight': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => x.pos !== 'def'),
     res: function* (g, c, p) { for (const x of monsOf(g, p)) { if (x.pos === 'set') flipUp(g, x, 'def'); else if (x.pos === 'atk') { x.pos = 'def'; g.seq++; emit(g, { type: 'pos', c: x, p }); } } log(g, `${PN(g, p)}'s monsters were changed to face-up Defense Position.`); } }] },
   'Desert Twister': { cont: nomiGY,
-    proc: { label: 'Special Summon (banish 2 WIND and 1 EARTH)', cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WIND').length >= 2 && g.p[p].gy.some(x => isMon(x) && attr(x) === 'EARTH'),
+    proc: { label: 'Special Summon (banish 2 WIND and 1 EARTH)', cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND')).length >= 2 && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'EARTH')),
       cost: function* (g, c, p, grp) {
-        const w = yield* pick(g, p, 'Banish 2 WIND monsters from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WIND'), 2, 2, 'cost');
-        const [e] = yield* pick(g, p, 'Banish 1 EARTH monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'EARTH'), 1, 1, 'cost');
+        const w = yield* pick(g, p, 'Banish 2 WIND monsters from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND')), 2, 2, 'cost');
+        const [e] = yield* pick(g, p, 'Banish 1 EARTH monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'EARTH')), 1, 1, 'cost');
         for (const x of [...w, e]) if (x) move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${[...w, e].filter(Boolean).map(x => D(x).n).join(', ')}.`); } },
     effs: [markProper, { type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Discard 1: destroy a Spell/Trap',
       cond: (g, c, p) => g.p[p].hand.length > 0 && stOnField(g).length > 0,
@@ -289,7 +289,7 @@ E.addScripts({
   /* ----- Destruction ----- */
   'Destruction Cyclone': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy face-down and non-WIND monsters',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => !faceUp(x) || attr(x) !== 'WIND'), { by: p }); } }] },
+    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => !faceUp(x) || E.lib.notAttr(x, 'WIND')), { by: p }); } }] },
   'Destruction Jammer': { effs: [{ type: 'act', cond: (g, c, p, x) => g.p[p].hand.length > 0 && destroysMonster(g, x.top),
     cost: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; yield* discard(g, p, 1, 'Discard 1 card'); },
     res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
@@ -384,8 +384,8 @@ E.addScripts({
 
   /* ----- Divine ----- */
   'Divine Dragon Aquabizarre': { effs: [{ type: 'ign', opt: true, label: 'Tribute a WATER: return a Spell to the Deck',
-    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && attr(x) === 'WATER') && g.p[p].gy.some(x => isSpell(x) && ['Continuous', 'Field'].includes(D(x).sub)),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 other face-up WATER monster', monsOf(g, p).filter(x => x !== c && faceUp(x) && attr(x) === 'WATER'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
+    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'WATER')) && g.p[p].gy.some(x => isSpell(x) && ['Continuous', 'Field'].includes(D(x).sub)),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 other face-up WATER monster', monsOf(g, p).filter(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Continuous or Field Spell to the top of your Deck?', g.p[p].gy.filter(x => isSpell(x) && ['Continuous', 'Field'].includes(D(x).sub)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'deckTop', { reason: 'effect' }); log(g, `${D(t).n} was put on top of the Deck.`); } } }] },
   'Divine Knight Ishzark': { effs: [{ type: 'trig', mand: true, label: 'Banish the destroyed monster',

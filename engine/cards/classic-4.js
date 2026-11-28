@@ -233,8 +233,8 @@ E.addScripts({
     cond: (g, c, p, x) => g.phase === 'battle' && !x.top && !g.aw && !g.inDS && !fieldMons(g).some(m => m.declared),
     after: (g, c, p, L2) => { addRule(g, (g2, a) => a.type === 'activate' && g2.chain.includes(L2), { end: g.turnNo }); },
     res: function* (g, c, p) { addRule(g, (g2, a) => a.type === 'activate' && a.c && isST(a.c), { end: g.turnNo }); log(g, 'Spell and Trap Cards can’t be activated for the rest of this turn.'); } }] },
-  'De-Fusion': { effs: [{ type: 'act', cond: g => fieldMons(g).some(m => faceUp(m) && D(m).k === 'fusion'),
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Fusion Monster to the Extra Deck?', fieldMons(g).filter(m => faceUp(m) && D(m).k === 'fusion'), 1, 1, 'bad'); },
+  'De-Fusion': { effs: [{ type: 'act', cond: g => fieldMons(g).some(m => faceUp(m) && D(m).k === 'fusion' && !L.toDeckBlocked(g, m)),   // G.B. Hunter ruling 1
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Fusion Monster to the Extra Deck?', fieldMons(g).filter(m => faceUp(m) && D(m).k === 'fusion' && !L.toDeckBlocked(g, m)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const us = t.flags.fusionMats || [];
       move(g, t, 'extra', { reason: 'effect', by: p }); log(g, `${D(t).n} returned to the Extra Deck.`);
       const mats = us.map(u => g.p[p].gy.find(x => x.u === u));

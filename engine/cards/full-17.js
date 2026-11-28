@@ -287,7 +287,7 @@ E.addScripts({
   // Not a chain link: she is destroyed the moment a face-up non-LIGHT monster is on her controller's side.
   'Thunder Nyan Nyan': { effs: [{ type: 'trig', res: noop, on: (g, ev, c) => {
     if (g.f17nyan || !onField(c) || !faceUp(c) || c.zone !== 'm') return false;
-    if (monsOf(g, c.ctrl).some(x => faceUp(x) && attr(x) !== 'LIGHT')) { g.f17nyan = true; try { destroy(g, [c], { by: c.ctrl }); } finally { g.f17nyan = false; } }
+    if (monsOf(g, c.ctrl).some(x => faceUp(x) && E.lib.notAttr(x, 'LIGHT'))) { g.f17nyan = true; try { destroy(g, [c], { by: c.ctrl }); } finally { g.f17nyan = false; } }
     return false; } }] },
   'Thunder of Ruler': { effs: [trapTrig({ label: 'No Battle Phase this turn',
     on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp !== c.ctrl,
@@ -508,9 +508,9 @@ E.addScripts({
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Ancient Gear Golem')),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Ancient Gear Golem?', g.p[p].gy.filter(x => named(x, 'Ancient Gear Golem')), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ssIgnoring(g, p, t, 'atk'); } }] },
-  'Ultimate Baseball Kid': { self: { atk: (g, c) => 1000 * fieldMons(g).filter(x => x !== c && faceUp(x) && attr(x) === 'FIRE').length },
-    effs: [{ type: 'ign', label: 'Send a FIRE monster: 500 damage', cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && attr(x) === 'FIRE'),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which face-up FIRE monster to the GY?', monsOf(g, p).filter(x => x !== c && faceUp(x) && attr(x) === 'FIRE'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
+  'Ultimate Baseball Kid': { self: { atk: (g, c) => 1000 * fieldMons(g).filter(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'FIRE')).length },
+    effs: [{ type: 'ign', label: 'Send a FIRE monster: 500 damage', cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'FIRE')),
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which face-up FIRE monster to the GY?', monsOf(g, p).filter(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'FIRE')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
       res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
   // ENGINE: "unaffected by Spell Cards" only covers destruction (the engine's unaffectedSpells flag).
   'Ultimate Insect LV1': { self: { unaffectedSpells: true }, effs: [insectUp('Ultimate Insect LV1', 'Ultimate Insect LV3')] },

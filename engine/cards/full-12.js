@@ -27,12 +27,14 @@ function halve(g, wall, m) {
   const a = stat(g, m, 'atk'), cut = a - Math.floor(a / 2); if (!cut) return;
   m.mods.push({ set: a - cut, which: 'atk', mw: wall.u, turn: g.turnNo }); log(g, `${name(m)}'s ATK was halved by Mirror Wall.`);
 }
-// Ojama King: up to 3 of the opponent's unused Monster Zones (Edison: unused ones only), chosen automatically, lowest first
-function kingZones(g, c) {
-  const o = opp(c.ctrl); if (c.flags.ojamaZones && c.flags.ojamaZones.p === o) return c.flags.ojamaZones;
-  const zs = [0, 1, 2, 3, 4].filter(i => !g.p[o].m[i]).slice(0, 3);
+// Ojama King / Ojama Knight: up to n of the opponent's unused Monster Zones (rulings 1 to 4: empty ones only, picked when it becomes face-up,
+// none after a control change), chosen automatically, lowest first. The engine locks them (cont.lockZones, 2026-11-28 audit, E4b).
+function kingZones(g, c, n = 3) {
+  const o = opp(c.ctrl); if (c.flags.ojamaZones) return c.flags.ojamaZones.p === o ? c.flags.ojamaZones : null;
+  const zs = [0, 1, 2, 3, 4].filter(i => !g.p[o].m[i]).slice(0, n);
   c.flags.ojamaZones = { p: o, zs }; return c.flags.ojamaZones;
 }
+E.lib.kingZones = kingZones;
 // Effect Monsters (Non-Spellcasting Area)
 function isEffMon(c) {
   const d = D(c), tx = d.tx || '';
@@ -187,7 +189,7 @@ E.addScripts({
 
   // PARTIAL: its ATK gain applies through the whole Damage Step, not only during damage calculation.
   'Mirage Knight': {
-    self: { atk: (g, c) => { if (!g.inDS || !g.battle) return 0; const { a, t } = g.battle; const o = a === c ? t : t === c ? a : null; return o && onField(o) ? baseAtk(o) : 0; } },
+    self: { atk: (g, c) => { if (!E.lib.dcalc(g) || !g.battle) return 0; const { a, t } = g.battle; const o = a === c ? t : t === c ? a : null; return o && onField(o) ? baseAtk(o) : 0; } },
     effs: [lockInstall,
       { type: 'trig', on: (g, ev, c) => { if (ev.type === 'attack' && (ev.a === c || ev.t === c)) c.flags.mkBattle = g.turnNo; return false; }, res: noop },
       { type: 'trig', mand: true, label: 'Banish Mirage Knight', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.mkBattle === g.turnNo,
@@ -246,9 +248,11 @@ E.addScripts({
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 2000 LP or destroy it', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 2000) && (yield* yn(g, p, 'Pay 2000 LP to keep Mirror Wall?'))) pay(g, p, 2000); else destroy(g, [c], { rule: true }); } }] },
 
-  'Monster Gate': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).length > 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(canNS),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${x.pos === 'set' ? 'a face-down monster' : name(x)}.`); },
+  'Monster Gate': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => L.tribPool(g, p).length > 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(canNS),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', L.tribPool(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${x.pos === 'set' ? 'a face-down monster' : name(x)}.`); },
+    // no monster found: the Deck is shuffled and nothing is sent (ruling; 2026-11-28 audit, E4b, goat-02)
     res: function* (g, c, p) { const [m, rest] = excavate(g, p); log(g, `${PN(g, p)} excavated ${rest.length + (m ? 1 : 0)} card${rest.length + (m ? 1 : 0) === 1 ? '' : 's'}.`);
+      if (!m) { shuffleDeck(g, p); log(g, 'No monster was found: the Deck was shuffled.'); return; }
       sendAll(g, rest); if (m && !ss(g, p, m, 'atk') && m.zone === 'deck') move(g, m, 'gy', { reason: 'effect' }); } }] },
 
   'Monster Reborn': { effs: [{ type: 'act', tags: { ss: 1 },
@@ -298,7 +302,7 @@ E.addScripts({
 
   'Mystic Lamp': { self: { directAttack: true } },
 
-  'Mystic Plasma Zone': { cont: { atk: (g, src, m) => attr(m) === 'DARK' ? 500 : 0, def: (g, src, m) => attr(m) === 'DARK' ? -400 : 0 }, effs: [{ type: 'act', res: noop }] },
+  'Mystic Plasma Zone': { cont: { atk: (g, src, m) => E.lib.isAttr(m, 'DARK') ? 500 : 0, def: (g, src, m) => E.lib.isAttr(m, 'DARK') ? -400 : 0 }, effs: [{ type: 'act', res: noop }] },
 
   // Negates the Continuous Spell it answers (and any other on the chain), and no Continuous Spell can be activated or use
   // an effect for the rest of the turn. Every face-up Continuous Spell's lasting effect is negated for the turn too (a GY
@@ -373,7 +377,7 @@ E.addScripts({
 
   'Nightmare Horse': { self: { directAttack: true } },
 
-  'Nightmare Penguin': { cont: { atk: (g, src, m) => m.ctrl === src.ctrl && faceUp(m) && attr(m) === 'WATER' ? 200 : 0 },
+  'Nightmare Penguin': { cont: { atk: (g, src, m) => m.ctrl === src.ctrl && faceUp(m) && E.lib.isAttr(m, 'WATER') ? 200 : 0 },
     effs: [{ type: 'trig', mand: true, label: 'Return a card to the hand', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
       cond: (g, c, p) => fieldOf(g, opp(p)).length > 0,
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which of their cards to the hand?', fieldOf(g, opp(p)), 1, 1, 'bad'); },
@@ -409,13 +413,9 @@ E.addScripts({
     res: function* (g, c, p) { destroy(g, fieldOf(g, opp(p)), { by: p, src: c }); } }] },
 
   'Ojama King': {
-    cont: { forbid: (g, src, a) => ['ns', 'set', 'ss'].includes(a.type) && a.p === opp(src.ctrl) && (() => { const Z = kingZones(g, src); return !g.p[Z.p].m.some((x, i) => !x && !Z.zs.includes(i)); })() },
+    cont: { lockZones: (g, src) => kingZones(g, src, 3) },
     effs: [{ type: 'trig', on: (g, ev, c) => {
-      if (evSummoned(ev, c) || (ev.type === 'flip' && ev.c === c)) { c.flags.ojamaZones = null; const Z = kingZones(g, c); if (Z.zs.length) log(g, `${PN(g, Z.p)}'s Monster Zones ${Z.zs.map(i => i + 1).join(', ')} can't be used.`); }
-      if (ev.type === 'move' && ev.to === 'm' && ev.c !== c && ev.c.ctrl === opp(c.ctrl) && onField(c) && faceUp(c)) {
-        const Z = kingZones(g, c), row = g.p[Z.p].m, i = row.indexOf(ev.c);
-        if (i >= 0 && Z.zs.includes(i)) { const j = row.findIndex((x, k) => !x && !Z.zs.includes(k)); if (j >= 0) { row[i] = null; row[j] = ev.c; g.seq++; } }
-      }
+      if (evSummoned(ev, c) || (ev.type === 'flip' && ev.c === c)) { c.flags.ojamaZones = null; const Z = kingZones(g, c, 3); if (Z && Z.zs.length) log(g, `${PN(g, Z.p)}'s Monster Zones ${Z.zs.map(i => i + 1).join(', ')} can't be used.`); }
       return false; }, res: noop }] },
 
   'Ojama Red': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Ojamas from your hand',
@@ -426,7 +426,9 @@ E.addScripts({
 
   'Ojama Trio': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => nFreeM(g, opp(p)) >= 3,
     res: function* (g, c, p) { const ts = tokens(g, opp(p), { n: 'Ojama Token', a: 'LIGHT', r: 'Beast', lv: 2, atk: 0, def: 1000 }, 3, 'def', { noTribute: 'summon' }); for (const t of ts) t.flags.ojama = c.u; } },
-    { type: 'trig', loc: 'gy', mand: true, label: '300 damage', on: (g, ev, c) => ev.type === 'move' && ev.destroyed && ev.wasField && ev.snap && ev.snap.flags && ev.snap.flags.ojama === c.u,
+    // the 300 is the Tokens' own continuous effect, with no chain link (EDOPro; 2026-11-28 audit, E4b: Goat Jinzo stopped it, and it was lost
+    // once Ojama Trio left the GY)
+    { type: 'trig', loc: 'any', mand: true, noChain: true, rule: true, label: '300 damage', on: (g, ev, c) => ev.type === 'move' && ev.destroyed && ev.wasField && ev.snap && ev.snap.flags && ev.snap.flags.ojama === c.u,
       res: function* (g, c, p, L2) { damage(g, L2.ev.prevCtrl, 300, { src: c, srcP: p }); } }] },
 
   // Activated with 3 Spell Counters; once per turn in your turn (Spell Speed 2) move 1 to another face-up card that uses them.

@@ -229,10 +229,10 @@ E.addScripts({
   // PARTIAL: with 2 or more WATER monsters it offers extra Tributes (up to all of your WATER monsters), but the engine doesn't check
   // that the extra Tributes are WATER, and the offer is also made when Setting. Fog Counters: 1 for each WATER monster Tributed.
   'Cloudian - Nimbusman': { self: { noBattleDestroy: true, atk: g => 500 * fogOnField(g),
-    tributes: (g, c, p) => { const n = monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'WATER').length; const out = []; for (let i = 2; i <= n; i++) out.push(i); return out; } },
+    tributes: (g, c, p) => { const n = monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'WATER')).length; const out = []; for (let i = 2; i <= n; i++) out.push(i); return out; } },
     effs: [cloudDoom,
-      { type: 'trig', mand: true, label: 'Place Fog Counters', on: (g, ev, c) => evSummoned(ev, c, ['tribute']) && (ev.tribs || []).some(x => attr(x) === 'WATER'),
-        res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; const n = (L2.ev.tribs || []).filter(x => attr(x) === 'WATER').length; addCtr(g, c, 'fog', n); g.seq++; log(g, `${n} Fog Counter${n === 1 ? ' was' : 's were'} placed on ${name(c)}.`); } }] },
+      { type: 'trig', mand: true, label: 'Place Fog Counters', on: (g, ev, c) => evSummoned(ev, c, ['tribute']) && (ev.tribs || []).some(x => E.lib.isAttr(x, 'WATER')),
+        res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; const n = (L2.ev.tribs || []).filter(x => E.lib.isAttr(x, 'WATER')).length; addCtr(g, c, 'fog', n); g.seq++; log(g, `${n} Fog Counter${n === 1 ? ' was' : 's were'} placed on ${name(c)}.`); } }] },
   'Cloudian - Poison Cloud': { effs: [
     { type: 'trig', faceDownOk: true, res: noop, on: (g, ev, c) => { if (ev.type === 'dsStart' && (ev.a === c || ev.t === c)) c.flags.f30up = faceUp(c); return false; } },
     { type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy the monster that destroyed it',
@@ -282,7 +282,7 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Equip to which Koa\'ki Meiru monster?', fieldMons(g).filter(m => faceUp(m) && isKoaki(m)), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && isKoaki(t) && onField(c) && equip(g, c, t)) c.f30eqU = t.u; } },
     { type: 'trig', loc: 'st', mand: true, tags: { destroy: 1 }, label: 'Destroy the LIGHT or DARK monster',
-      on: (g, ev, c) => { if (ev.type !== 'dsStart' || !c.equipTo || !ev.t) return false; const m = ev.a.u === c.equipTo ? ev.a : ev.t.u === c.equipTo ? ev.t : null; if (!m) return false; const o = m === ev.a ? ev.t : ev.a; return ['LIGHT', 'DARK'].includes(attr(o)); },
+      on: (g, ev, c) => { if (ev.type !== 'dsStart' || !c.equipTo || !ev.t) return false; const m = ev.a.u === c.equipTo ? ev.a : ev.t.u === c.equipTo ? ev.t : null; if (!m) return false; const o = m === ev.a ? ev.t : ev.a; return E.lib.attrs(o).some(a_ => ['LIGHT', 'DARK'].includes(a_)); },
       res: function* (g, c, p, L2) { const m = L2.ev.a.u === c.equipTo ? L2.ev.a : L2.ev.t; const o = m === L2.ev.a ? L2.ev.t : L2.ev.a; if (o && onField(o)) destroy(g, [o], { by: p, src: c }); } },
     { type: 'trig', loc: 'gy', when: true, label: 'Return Core Blaster to the hand',
       on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule' && c.f30eqU != null) { c.f30eqU = null; return true; } if (ev.type === 'move' && ev.c === c) c.f30eqU = null; return false; },
@@ -368,7 +368,7 @@ E.addScripts({
   'Cyberdark Edge': {
     self: { directAttack: true, replaceDestroy: cdReplace,
       atk: (g, c) => { const eq = cdEq(g, c); let v = eq ? baseAtk(eq) : 0;
-        if (!c._f30g && g.inDS && g.battle && g.battle.a === c && !g.battle.t && c.flags.f30edge === g.turnNo) { c._f30g = true; try { const tot = stat(g, c, 'atk'); v -= tot - Math.floor(tot / 2); } finally { c._f30g = false; } }
+        if (!c._f30g && E.lib.dcalc(g) && g.battle && g.battle.a === c && !g.battle.t && c.flags.f30edge === g.turnNo) { c._f30g = true; try { const tot = stat(g, c, 'atk'); v -= tot - Math.floor(tot / 2); } finally { c._f30g = false; } }
         return v; } },
     effs: [cdEquipTrig,
       { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'attack' && ev.a === c) c.flags.f30edge = ev.direct && monsOf(g, opp(c.ctrl)).length > 0 ? g.turnNo : null; return false; } }] },

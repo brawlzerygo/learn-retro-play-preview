@@ -74,8 +74,8 @@ E.addScripts({
         cond: (g, c, p, x) => x.top && !x.top.negated && x.top.c !== c,
         // as Stardust Dragon: the End Phase return needs this negation resolved (not negated itself) and the card still in that GY visit
         cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; move(g, c, 'gy', { reason: 'cost' }); L.data.at = c.moved; log(g, `${PN(g, p)} Tributed ${D(c).n}.`); },
-        res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); if (c.zone === 'gy' && c.moved === L.data.at) (g.stardust || (g.stardust = {}))[c.u] = { t: g.turnNo, at: c.moved }; } },
-      { type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Return to the field', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && g.stardust && g.stardust[c.u] && g.stardust[c.u].t === g.turnNo && g.stardust[c.u].at === c.moved,
+        res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); if (c.zone === 'gy' && c.moved === L.data.at) { (g.stardust || (g.stardust = {}))[c.u] = { t: g.turnNo, at: c.moved }; if (g.phase === 'end') L.emit(g, { type: 'stardustEnd', c }); } } },   // used during the End Phase: it can return again in that End Phase (ruling 11)
+      { type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Return to the field', on: (g, ev, c) => ((ev.type === 'phase' && ev.ph === 'end') || (ev.type === 'stardustEnd' && ev.c === c)) && g.stardust && g.stardust[c.u] && g.stardust[c.u].t === g.turnNo && g.stardust[c.u].at === c.moved,
         cond: (g, c, p) => freeM(g, p) >= 0, res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c); } },
       { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon Stardust Dragon',
         on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.from === 'm',
@@ -118,8 +118,8 @@ E.addScripts({
 
   /* ----- Black Salvo ----- */
   'Black Salvo': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Revive a Level 4 DARK Machine', on: (g, ev, c) => evSummoned(ev, c, ['normal']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && lv(x) === 4 && attr(x) === 'DARK' && race(x) === 'Machine'),
-    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon a Level 4 DARK Machine from your GY', g.p[p].gy.filter(x => isMon(x) && lv(x) === 4 && attr(x) === 'DARK' && race(x) === 'Machine'), 1, 1, 'good'); },
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && lv(x) === 4 && E.lib.isAttr(x, 'DARK') && race(x) === 'Machine'),
+    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon a Level 4 DARK Machine from your GY', g.p[p].gy.filter(x => isMon(x) && lv(x) === 4 && E.lib.isAttr(x, 'DARK') && race(x) === 'Machine'), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'def', { negate: true }); } }] },
   'Dekoichi the Battlechanted Locomotive': { effs: [{ type: 'trig', mand: true, label: 'Draw', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
     res: function* (g, c, p) { const n = 1 + monsOf(g, p).filter(x => faceUp(x) && D(x).n === 'Bokoichi the Freightening Car').length; draw(g, p, n); } }] },
@@ -128,7 +128,7 @@ E.addScripts({
     res: function* (g, c, p) {
       const gen = ovGeneric(g, p), dr = ovDragonOk(g, p); if (!gen && !dr) return;
       let useDragon = dr && !gen; if (dr && gen) useDragon = (yield* choose(g, p, 'Fusion Summon which monster?', ['Chimeratech Overdragon', 'Another DARK Machine Fusion'])) === 0;
-      if (!useDragon) { yield* fusionSummon(g, p, { from: ['m', 'gy'], banish: true, filter: fx => attr(fx) === 'DARK' && race(fx) === 'Machine' && D(fx).n !== 'Chimeratech Overdragon' }); return; }
+      if (!useDragon) { yield* fusionSummon(g, p, { from: ['m', 'gy'], banish: true, filter: fx => E.lib.isAttr(fx, 'DARK') && race(fx) === 'Machine' && D(fx).n !== 'Chimeratech Overdragon' }); return; }
       const pool = ovPool(g, p); const fx = g.p[p].extra.find(x => D(x).n === 'Chimeratech Overdragon');
       const [cd] = yield* pick(g, p, 'Banish which Cyber Dragon?', pool.filter(x => name(x) === 'Cyber Dragon'), 1, 1, 'cost');
       const mach = pool.filter(x => x !== cd && race(x) === 'Machine');
@@ -250,10 +250,10 @@ E.addScripts({
     res: function* (g, c, p) { yield* search(g, p, x => D(x).n === 'A Legendary Ocean', 'Add A Legendary Ocean'); } }] },
   'Mother Grizzly': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, ds: true, label: 'Special Summon a WATER',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'WATER' && baseAtk(x) <= 1500),
-    res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'WATER' && baseAtk(x) <= 1500); const [x] = yield* pick(g, p, 'Special Summon a WATER with 1500 or less ATK from your Deck', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
-  'A Legendary Ocean': { cont: { atk: (g, src, c) => attr(c) === 'WATER' ? 200 : 0, def: (g, src, c) => attr(c) === 'WATER' ? 200 : 0,
-    lv: (g, src, c) => attr(c) === 'WATER' ? -1 : 0, lvHand: true },
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && E.lib.isAttr(x, 'WATER') && baseAtk(x) <= 1500),
+    res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER') && baseAtk(x) <= 1500); const [x] = yield* pick(g, p, 'Special Summon a WATER with 1500 or less ATK from your Deck', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
+  'A Legendary Ocean': { cont: { atk: (g, src, c) => E.lib.isAttr(c, 'WATER') ? 200 : 0, def: (g, src, c) => E.lib.isAttr(c, 'WATER') ? 200 : 0,
+    lv: (g, src, c) => E.lib.isAttr(c, 'WATER') ? -1 : 0, lvHand: true },
     effs: [{ type: 'act', res: function* () {} }] },
   // Its name counts as "Umi" for Codarus (isUmi in this file); the engine's name() is not changed.
   'Forgotten Temple of the Deep': { effs: [{ type: 'act', res: function* () {} },
@@ -264,8 +264,8 @@ E.addScripts({
     { type: 'trig', loc: 'st', mand: true, tags: { ss: 1 }, label: 'Return the banished monsters',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl && faceUp(c) && (c.flags.temple || []).length > 0,
       res: function* (g, c, p) { const us = c.flags.temple || []; c.flags.temple = []; for (const u of us) { const x = allCards(g, 'ban').find(y => y.u === u); if (!x) continue; if (freeM(g, p) >= 0) ss(g, p, x); else move(g, x, 'gy', { reason: 'rule' }); } } }] },
-  'Spiritual Water Art - Aoi': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => attr(x) === 'WATER') && g.p[opp(p)].hand.length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WATER monster?', monsOf(g, p).filter(x => attr(x) === 'WATER'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+  'Spiritual Water Art - Aoi': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => E.lib.isAttr(x, 'WATER')) && g.p[opp(p)].hand.length > 0,
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which WATER monster?', monsOf(g, p).filter(x => E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     res: function* (g, c, p) { const h = g.p[opp(p)].hand; log(g, `${PN(g, p)} looked at ${PN(g, opp(p))}'s hand.`); if (!h.length) return; const [x] = yield* pick(g, p, 'Send which card from their hand to the GY?', h, 1, 1, 'bad'); if (x) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${D(x).n} was sent to the GY.`); } } }] },
 
   /* ----- Crystal Beast ----- */
@@ -275,7 +275,11 @@ E.addScripts({
       res: function* (g, c, p) { const cands = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(isCBMon); const [x] = yield* pick(g, p, 'Place which Crystal Beast as a Continuous Spell?', cands, 1, 1, 'good'); if (x && placeCB(g, p, x)) cbPlaced(g, p); } },] },
   'Crystal Beast Topaz Tiger': { self: { replaceAsk: cbStay, atk: (g, c) => g.inDS && g.battle && g.battle.a === c && g.battle.t ? 400 : 0 }, effs: [] },
   // ENGINE: attack() keeps the attack target in a local variable, so a card can't redirect an attack. Amber Mammoth's first effect is not scripted.
-  'Crystal Beast Amber Mammoth': { self: { replaceAsk: cbStay }, effs: [] },
+  // "When another face-up Crystal Beast you control is targeted for an attack: You can make this card the attack target instead" (2026-11-28
+  // audit, E4b; rulings 1 to 4: not for itself, after a replay too, once one has resolved no other copy)
+  'Crystal Beast Amber Mammoth': { self: { replaceAsk: cbStay }, effs: [{ type: 'quick', label: 'Become the attack target',
+    cond: (g, c, p) => !!(g.aw && g.aw.t && g.aw.t !== c && g.aw.t.ctrl === p && onField(g.aw.t) && faceUp(g.aw.t) && isCBMon(g.aw.t) && !g.aw.newT && g.aw.a && g.aw.a.ctrl !== p),
+    res: function* (g, c, p) { if (onField(c) && faceUp(c) && c.zone === 'm' && g.aw && onField(g.aw.a)) { L.redirectAttack(g, c); log(g, `${name(c)} became the attack target.`); } } }] },
   'Crystal Beast Ruby Carbuncle': { self: { replaceAsk: cbStay }, effs: [
     { type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Crystal Beasts', on: (g, ev, c) => evSummoned(ev, c, ['special']),
       cond: (g, c, p) => freeM(g, p) >= 0 && cbST(g, p).some(isMon),
@@ -334,7 +338,7 @@ E.addScripts({
 
 /* Overload Fusion helpers */
 function ovPool(g, p) { return [...monsOf(g, p), ...g.p[p].gy.filter(isMon)]; }
-function ovGeneric(g, p) { return canFusion(g, p, { from: ['m', 'gy'], filter: fx => attr(fx) === 'DARK' && race(fx) === 'Machine' && D(fx).n !== 'Chimeratech Overdragon' }); }
+function ovGeneric(g, p) { return canFusion(g, p, { from: ['m', 'gy'], filter: fx => E.lib.isAttr(fx, 'DARK') && race(fx) === 'Machine' && D(fx).n !== 'Chimeratech Overdragon' }); }
 function ovDragonOk(g, p) {
   if (!g.p[p].extra.some(x => D(x).n === 'Chimeratech Overdragon')) return false;
   const pool = ovPool(g, p); const cd = pool.find(x => name(x) === 'Cyber Dragon');

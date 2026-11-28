@@ -396,8 +396,8 @@ E.addScripts({
     proc: { label: "Special Summon (Tribute Ocean's Keeper)", cond: (g, c, p) => monsOf(g, p).some(x => named(x, "Ocean's Keeper")),
       cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, "Tribute Ocean's Keeper", monsOf(g, p).filter(x => named(x, "Ocean's Keeper")), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Ocean's Keeper.`); } } },
     effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Discard a WATER: destroy a face-down card',
-      cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && attr(x) === 'WATER') && allField(g).some(x => x.pos === 'set'),
-      cost: function* (g, c, p) { yield* discard1(g, p, 'Discard 1 WATER monster', g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WATER')); },
+      cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'WATER')) && allField(g).some(x => x.pos === 'set'),
+      cost: function* (g, c, p) { yield* discard1(g, p, 'Discard 1 WATER monster', g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER'))); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which face-down card?', allField(g).filter(x => x.pos === 'set'), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2).filter(x => x.pos === 'set'), { by: p }); } }] },
   // Control swaps for good. If either player has no face-up Normal Monster when it resolves, nothing switches (ruling).
@@ -432,8 +432,8 @@ E.addScripts({
   'Crush Card Virus': { effs: [{ type: 'act', tags: { destroy: 1 },
       // what it would destroy: the opponent's face-up monsters with 1500 or more ATK (Stardust ruling 7; Starlight Road ruling 9: face-down ones don't count)
       destroys: (g, c, p) => monsOf(g, opp(p)).filter(m => faceUp(m) && stat(g, m, 'atk') >= 1500),
-      cond: (g, c, p) => monsOf(g, p).some(m => attr(m) === 'DARK' && stat(g, m, 'atk') <= 1000),
-      cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute a DARK monster with 1000 or less ATK', monsOf(g, p).filter(m => attr(m) === 'DARK' && stat(g, m, 'atk') <= 1000), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
+      cond: (g, c, p) => monsOf(g, p).some(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000),
+      cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute a DARK monster with 1000 or less ATK', monsOf(g, p).filter(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
       res: function* (g, c, p) {
         const o = opp(p);
         const h = g.p[o].hand; log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand: ${h.length ? h.map(x => D(x).n).join(', ') : 'empty'}.`);

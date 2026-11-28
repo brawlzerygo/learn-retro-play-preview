@@ -276,8 +276,8 @@ E.addScripts({
     cont: { grant: (g, src, c, flag) => { if (flag !== 'noAttackTarget' || !src.equipTo || c.zone !== 'm') return false; const m = fieldMons(g).find(x => x.u === src.equipTo); return !!m && m.ctrl === src.ctrl && c.ctrl === src.ctrl && c !== m; },
       forbid: (g, src, a) => !!src.equipTo && attackLock(g, src, a) },
     effs: [equipAct()] },
-  'Ray of Hope': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT').length >= 2,
-    res: function* (g, c, p) { const cs = g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT'); if (cs.length < 2) return;
+  'Ray of Hope': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')).length >= 2,
+    res: function* (g, c, p) { const cs = g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')); if (cs.length < 2) return;
       const xs = yield* pick(g, p, 'Shuffle which 2 LIGHT monsters into your Deck?', cs, 2, 2, 'good');
       for (const x of xs) move(g, x, 'deck', { reason: 'effect', by: p }); shuffleDeck(g, p); log(g, `${PN(g, p)} shuffled ${xs.map(x => D(x).n).join(' and ')} into the Deck.`); } }] },
   // Only a Fusion Monster that was properly Fusion Summoned (ruling). When this card is destroyed, banish the monster.
@@ -306,6 +306,7 @@ E.addScripts({
   'Reasoning': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(canNS),
     res: function* (g, c, p) { const o = opp(p); const i = yield* choose(g, o, 'Reasoning: declare a Level', Array.from({ length: 12 }, (_, k) => 'Level ' + (k + 1))); const lvD = i + 1; log(g, `${PN(g, o)} declared Level ${lvD}.`);
       const [m, rest] = excavate(g, p); log(g, `${PN(g, p)} revealed ${rest.length + (m ? 1 : 0)} card${rest.length + (m ? 1 : 0) === 1 ? '' : 's'}${m ? `, down to ${D(m).n}` : ''}.`);
+      if (!m) { shuffleDeck(g, p); log(g, 'No monster was found: the Deck was shuffled.'); return; }   // ruling: the effect disappears (2026-11-28 audit, E4b)
       for (const x of rest) if (x.zone === 'deck') move(g, x, 'gy', { reason: 'effect' });
       if (!m) return; if (lv(m) === lvD) { move(g, m, 'gy', { reason: 'effect' }); log(g, `${name(m)} was Level ${lvD}, so it went to the GY.`); return; }
       if (!ss(g, p, m, 'atk') && m.zone === 'deck') move(g, m, 'gy', { reason: 'effect' }); } }] },
@@ -375,7 +376,7 @@ E.addScripts({
     cond: (g, c, p, x) => spellTrapAct(x.top) && isSpell(x.top.c) && !x.top.negated && (x.top.t || []).length === 1 && x.top.t[0].zone === 'm',
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { const T = L2.data.L; if (T && g.chain.includes(T)) { T.negBy = p; negate(g, T, true); } } }] },
-  'Rising Air Current': { cont: { atk: (g, src, m) => attr(m) === 'WIND' ? 500 : 0, def: (g, src, m) => attr(m) === 'WIND' ? -400 : 0 }, effs: [actNoop] },
+  'Rising Air Current': { cont: { atk: (g, src, m) => E.lib.isAttr(m, 'WIND') ? 500 : 0, def: (g, src, m) => E.lib.isAttr(m, 'WIND') ? -400 : 0 }, effs: [actNoop] },
   'Roaring Ocean Snake': { effs: [] },
   // Mandatory, even with no cards in the opponent's hand (ruling).
   "Robbin' Goblin": { effs: [actNoop,

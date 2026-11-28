@@ -90,7 +90,7 @@ E.addScripts({
       if (x) { log(g, `${PN(g, p)} showed ${name(x)} and Set it.`); move(g, x, 'st', { ctrl: p, pos: 'set', reason: 'set' }); } shuffleDeck(g, p); } }] },
   // Spell Cards can't be activated, nor their effects on the field; Spell effects on the field are negated. GY effects work.
   'Spell Canceller': { cont: {
-    forbid: (g, src, a) => a.type === 'activate' && a.c && isSpell(a.c) && a.c.zone !== 'gy',
+    forbid: (g, src, a) => a.type === 'activate' && a.c && isSpell(a.c) && a.c.zone !== 'gy' && !(a.eff && a.eff.noNeg),   // Spiritualism can be activated (archive ruling 5)
     negates: (g, src, c) => isSpell(c) && onField(c) } },
   'Spell Chronicle': { effs: [
     { type: 'act', cond: (g, c, p) => g.p[p].deck.filter(isST).length >= 5,
@@ -244,8 +244,8 @@ E.addScripts({
   // The engine reads "Cannot be Normal Summoned/Set" from the text. ENGINE: "must first be Special Summoned" has no flag,
   // so other effects can still Special Summon it.
   'Spirit of Flames': { self: { atk: (g, c) => g.phase === 'battle' && g.tp === c.ctrl ? 300 : 0 },
-    proc: { label: 'Special Summon (banish a FIRE from your GY)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'FIRE'),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish 1 FIRE monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'FIRE'), 1, 1, 'cost'); move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${name(x)}.`); } } },
+    proc: { label: 'Special Summon (banish a FIRE from your GY)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'FIRE')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish 1 FIRE monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'FIRE')), 1, 1, 'cost'); move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${name(x)}.`); } } },
   'Spirit of the Breeze': { effs: [{ type: 'trig', mand: true, label: 'Gain 1000 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && c.pos === 'atk',
     res: function* (g, c, p) { if (onField(c) && faceUp(c) && c.pos === 'atk') gain(g, p, 1000); } }] },
   'Spirit of the Pharaoh': { effs: [pharaohLock,
@@ -347,18 +347,15 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'summon' && !g.inDS && ev.cs.some(x => x !== c && race(x) === 'Dinosaur' && x.ctrl === c.ctrl &&
         g.events.some(e => e.type === 'move' && e.c === x && e.from === 'gy' && e.to === 'm' && e.group === ev.group)),
       res: function* (g, c, p) { draw(g, p, 1); } }] },
-  // PARTIAL: the Batteryman D negation is an optional Spell Speed 3 response, as Ryu Senshi in goat-*.js.
+  // The Batteryman D negation is continuous, applied as the link resolves (self.negTarget, 2026-11-28 audit, E4b).
   'Super-Electromagnetic Voltech Dragon': {
-    self: { piercing: (g, c) => !!c.flags.voltC, atk: (g, c) => c.flags.voltAA ? 1000 : 0 },
+    self: { negTarget: (g, c, L2) => !!c.flags.voltD && isST(L2.c) && (L2.t || []).length === 1 && L2.t[0] === c, piercing: (g, c) => !!c.flags.voltC, atk: (g, c) => c.flags.voltAA ? 1000 : 0 },
     effs: [{ type: 'trig', mand: true, label: 'Gain the Batteryman effect',
       on: (g, ev, c) => evSummoned(ev, c, ['tribute']) && (ev.tribs || []).some(x => ['Batteryman D', 'Batteryman C', 'Batteryman AA'].includes(D(x).n)),
       res: function* (g, c, p, L2) { if (!onField(c)) return; for (const x of L2.ev.tribs || []) { const n = D(x).n;
         if (n === 'Batteryman D') c.flags.voltD = true; if (n === 'Batteryman C') c.flags.voltC = true; if (n === 'Batteryman AA') c.flags.voltAA = true; }
         log(g, `${name(c)} gained its Batteryman effect.`); } },
-      { type: 'quick', speed: 3, ds: true, label: 'Negate the Spell/Trap that targets it',
-        cond: (g, c, p, x) => !!c.flags.voltD && !!x.top && isST(x.top.c) && !x.top.negated && x.top.t.length === 1 && x.top.t[0] === c,
-        target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
-        res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, false); } }] },
+    ] },
 
   /* ----- Sword ----- */
   'Sword Hunter': { self: { atk: (g, c) => 200 * stOnField(g).filter(x => x.equipTo === c.u && x.flags.swordHunt).length },
@@ -373,9 +370,9 @@ E.addScripts({
         !g.events.some(e => e.type === 'move' && e.c === ev.t && e.battle && e.turn === g.turnNo && e.seq > (g.events.slice().reverse().find(d => d.type === 'dsStart') || {}).seq),
       cond: (g, c, p) => freeM(g, p) >= 0,
       res: function* (g, c, p) { if (c.zone === 'hand') ss(g, p, c, 'atk'); } }] },
-  'Sword of Dark Destruction': { cont: eqBonus(400, -200), effs: [equipAct(m => attr(m) === 'DARK', 'Equip to which DARK monster?')] },
+  'Sword of Dark Destruction': { cont: eqBonus(400, -200), effs: [equipAct(m => E.lib.isAttr(m, 'DARK'), 'Equip to which DARK monster?')] },
   // PARTIAL: "Tributed" is read from the monster's move (reason tribute or ritual); scripts that Tribute as a plain cost may not count.
-  'Sword of Dark Rites': { cont: eqBonus(400, 0), effs: [equipAct(m => attr(m) === 'DARK', 'Equip to which DARK monster?'),
+  'Sword of Dark Rites': { cont: eqBonus(400, 0), effs: [equipAct(m => E.lib.isAttr(m, 'DARK'), 'Equip to which DARK monster?'),
     { type: 'trig', loc: 'gy', mand: true, label: 'Return this card to the hand', on: (g, ev, c) => sentWithEquipped(g, ev, c, e => e.to === 'gy' && ['tribute', 'ritual'].includes(e.reason)),
       res: function* (g, c, p) { if (c.zone === 'gy') { move(g, c, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} returned Sword of Dark Rites to the hand.`); } } }] },
   'Sword of Deep-Seated': { cont: eqBonus(500, 500), effs: [equipAct(),

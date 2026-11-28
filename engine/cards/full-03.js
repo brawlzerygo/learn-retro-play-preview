@@ -97,10 +97,10 @@ E.addScripts({
   // "Must first be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere (revived only after a proper summon, c.proper).
   'Black Luster Soldier - Envoy of the Beginning': {
     proc: { label: 'Special Summon (banish a LIGHT and a DARK)',
-      cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'LIGHT') && g.p[p].gy.some(x => isMon(x) && attr(x) === 'DARK'),
+      cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')) && g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'DARK')),
       cost: function* (g, c, p, grp) {
-        const [l] = yield* pick(g, p, 'Banish a LIGHT monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT'), 1, 1, 'cost');
-        const [d] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'), 1, 1, 'cost');
+        const [l] = yield* pick(g, p, 'Banish a LIGHT monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')), 1, 1, 'cost');
+        const [d] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'DARK')), 1, 1, 'cost');
         for (const x of [l, d]) if (x) move(g, x, 'ban', { reason: 'cost', group: grp });
         log(g, `${PN(g, p)} banished ${[l, d].filter(Boolean).map(name).join(' and ')}.`); } },
     self: { cantAttack: (g, c) => c.flags.envoyBanish === g.turnNo && !(c.flags.envoyL && c.flags.envoyL.actNegated) },   // no lock if the activation was negated (Divine Wrath)
@@ -210,7 +210,7 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which destroyed monster?', (c.flags.bcK || []).filter(k => k.turn === g.turnNo && k.ctrl === p && k.x.zone === 'gy').map(k => k.x), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   'Brain Golem': {
-    cont: { negates: (g, src, c) => c !== src && c.zone === 'm' && faceUp(c) && isMon(c) && attr(c) === 'LIGHT' },
+    cont: { negates: (g, src, c) => c !== src && c.zone === 'm' && faceUp(c) && isMon(c) && E.lib.isAttr(c, 'LIGHT') },
     effs: [{ type: 'trig', mand: true, label: 'Attack once again',
       on: (g, ev, c) => battleKill(ev, c) && ev.snap && ev.snap.attr === 'LIGHT' && !!g.battle && g.battle.a === c,
       res: function* (g, c) { if (onField(c) && faceUp(c)) { c.flags.maxAttacks = c.attacks + 1; c.flags.maxAttacksTurn = g.turnNo; log(g, `${name(c)} can attack once again.`); } } }] },
@@ -292,7 +292,7 @@ E.addScripts({
       cost: function* (g, c, p) { move(g, c, 'ban', { reason: 'cost', by: p }); log(g, `${PN(g, p)} banished Burning Skull Head.`); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which banished Skull Flame to the GY?', allCards(g, 'ban').filter(x => named(x, 'Skull Flame')), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'ban') { move(g, t, 'gy', { reason: 'effect' }); log(g, 'Skull Flame returned to the GY.'); } } }] },
-  'Burning Spear': { cont: eqBonus(400, -200), effs: [equipAct(m => attr(m) === 'FIRE', 'Equip to which face-up FIRE monster?')] },
+  'Burning Spear': { cont: eqBonus(400, -200), effs: [equipAct(m => E.lib.isAttr(m, 'FIRE'), 'Equip to which face-up FIRE monster?')] },
   'Burst Breath': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Dragon'),
     cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute 1 Dragon monster', monsOf(g, p).filter(x => race(x) === 'Dragon'), 1, 1, 'cost'); if (!x) return;
@@ -434,7 +434,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { const { n, q } = L2.data; if (!n) return; const xs = sameName(g, q, n); const grp = g.group;
       for (const x of xs) { const fromDeck = x.zone === 'deck'; move(g, x, 'gy', { reason: 'effect', destroyed: true, by: p, group: grp }); if (fromDeck) shuffleDeck(g, q); }
       log(g, xs.length ? `${xs.length} cop${xs.length > 1 ? 'ies' : 'y'} of ${n} in ${PN(g, q)}'s hand and Deck ${xs.length > 1 ? 'were' : 'was'} destroyed.` : `${PN(g, q)} had no other ${n}.`); shuffleDeck(g, q); } }] },
-  'Chain Detonation': { effs: [{ type: 'act',
+  'Chain Detonation': { effs: [{ type: 'act', cond: (g, c) => !(g.chain.length >= 1 && g.chain.length <= 2 && L.toDeckBlocked(g, c, true)),   // as Chain Healing under G.B. Hunter
     res: function* (g, c, p, L2) { damage(g, opp(p), 500, { src: c, srcP: p }); chainReturn(g, c, L2); } }] },
   'Chain Disappearance': { effs: [{ type: 'act',
     cond: (g, c, p) => !!g.sw && g.sw.cs.some(x => x.zone === 'm' && faceUp(x) && atk(g, x) <= 1000),
@@ -450,11 +450,13 @@ E.addScripts({
       if (a.p == null || E.lib.canPay(g, a.p, 500 * chainEnergies(g).length)) return false;
       if (a.type === 'ns' || a.type === 'set' || a.type === 'setST') return true;
       if (a.type === 'ss') return !!(a.c && a.c.zone === 'hand');
-      if (a.type === 'activate') return a.c.zone === 'hand' && a.eff.type === 'act' && a.c !== src;
-      return false; } },
+      if (a.type === 'activate') return a.c.zone === 'hand' && a.c !== src;   // monster effects from the hand too (Kuriboh: Netrep; 2026-11-28 audit)
+      return false; },
+      // a monster effect activated from the hand pays 500 per Chain Energy as a cost (Netrep Kuriboh; EDOPro ACTIVATE_COST); a card activated from the hand pays as it moves (below)
+      actCost: (g, src, L2) => L2.actZone === 'hand' && L2.eff.type !== 'act' ? 500 : 0 },
     effs: [noop,
       { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'move' && ev.c !== c && ev.from === 'hand' && ['m', 'st', 'fz'].includes(ev.to)) pay(g, ev.c.ctrl, 500); return false; }, res: function* () {} }] },
-  'Chain Healing': { effs: [{ type: 'act',
+  'Chain Healing': { effs: [{ type: 'act', cond: (g, c) => !(g.chain.length >= 1 && g.chain.length <= 2 && L.toDeckBlocked(g, c, true)),   // G.B. Hunter ruling 3: not as Chain Link 2 or 3
     res: function* (g, c, p, L2) { gain(g, p, 500); chainReturn(g, c, L2); } }] },
   // ENGINE: the engine's Fusion Summon helper has no hook for "banish materials from the field, Deck, hand or GY instead".
   // PARTIAL: at resolution its controller may send a Polymerization from the hand to the GY (standing in for activating it) and

@@ -122,7 +122,7 @@ E.addScripts({
       res: function* (g, c, p) { damage(g, opp(p), 300, { src: c, srcP: p }); } }] },
   // The monster is still destroyed by battle (Great Dezard counts it), but goes to the Deck: no "sent to the GY" triggers.
   'Grave Protector': { cont: { replaceDestroy: (g, src, m, o) => {
-    if (!o.battle || m === src || !onField(m)) return false;
+    if (!o.battle || m === src || !onField(m) || L.toDeckBlocked(g, m)) return false;   // G.B. Hunter: to the GY instead (G.B. Hunter ruling 2)
     move(g, m, 'deck', { reason: 'battle', destroyed: true, battle: true, killer: o.killer }); log(g, `${D(m).n} was destroyed by battle and shuffled into the Deck.`); return true; } } },
   'Grave Squirmer': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy 1 card on the field',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
@@ -209,9 +209,9 @@ E.addScripts({
     self: { replaceAsk: L.replaceOther((g, c) => monsOf(g, c.ctrl).filter(x => faceUp(x) && isSixSam(x)), 'Destroy another face-up Six Samurai monster instead of %s?', 'Destroy which Six Samurai instead?') } },
   'Great Spirit': { effs: [flipDown(),
     { type: 'trig', when: true, label: 'Switch the original ATK and DEF of an EARTH monster', on: (g, ev, c) => evSummoned(ev, c, ['flip']),
-      cond: g => fieldMons(g).some(x => faceUp(x) && attr(x) === 'EARTH'),
-      target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Switch the original ATK and DEF of which EARTH monster?', fieldMons(g).filter(x => faceUp(x) && attr(x) === 'EARTH'), 1, 1, 'good'); },
-      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || attr(t) !== 'EARTH') return; const a = baseAtk(t), d = num(D(t).def);
+      cond: g => fieldMons(g).some(x => faceUp(x) && E.lib.isAttr(x, 'EARTH')),
+      target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Switch the original ATK and DEF of which EARTH monster?', fieldMons(g).filter(x => faceUp(x) && E.lib.isAttr(x, 'EARTH')), 1, 1, 'good'); },
+      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || E.lib.notAttr(t, 'EARTH')) return; const a = baseAtk(t), d = num(D(t).def);
         addMod(g, t, { atk: d - a, def: a - d, end: true }); log(g, `${name(t)}'s original ATK and DEF were switched.`); } }] },
   // PARTIAL: Normal Draws are told apart by the Draw Phase (an effect draw in the Draw Phase isn't counted).
   'Greed': { effs: [{ type: 'act', res: function* (g, c) { c.flags.greed = [0, 0]; g.seq++; } },
@@ -261,7 +261,7 @@ E.addScripts({
         move(g, x, 'st', { ctrl: p, pos: 'up', reason: 'equip' }); if (!equip(g, x, c)) move(g, x, 'gy', { reason: 'rule' }); g.seq++; } }] }; })(),
   'Guardian Grarl': { effs: [lockInstall], proc: { label: 'Special Summon (only card in your hand)', cond: (g, c, p) => g.p[p].hand.length === 1 && g.p[p].hand[0] === c } },
   "Guardian Kay'est": { effs: [lockInstall], self: { unaffectedSpells: true, noAttackTarget: true } },
-  'Guardian of Order': { effs: [lockInstall], proc: { label: 'Special Summon (2 LIGHT monsters)', cond: (g, c, p) => monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'LIGHT').length >= 2 } },
+  'Guardian of Order': { effs: [lockInstall], proc: { label: 'Special Summon (2 LIGHT monsters)', cond: (g, c, p) => monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'LIGHT')).length >= 2 } },
   'Guardian Sphinx': { effs: [flipDown(),
     { type: 'trig', mand: true, label: 'Return all their monsters to the hand', on: (g, ev, c) => evSummoned(ev, c, ['flip']),
       res: function* (g, c, p) { const xs = monsOf(g, opp(p)); for (const x of xs) move(g, x, 'hand', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.map(x => D(x).n).join(', ')} returned to the hand.`); } }] },
@@ -275,7 +275,7 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && ev.to === 'gy' && c.summonType === 'tribute' && (c.tributes || []).length > 0,
     cond: (g, c, p) => freeM(g, p) >= 0,
     res: function* (g, c, p) { const u = (c.tributes || [])[0]; const x = [...g.p[0].gy, ...g.p[1].gy].find(y => y.u === u); if (x && isMon(x) && !/Cannot be Special Summoned|Must (?:first )?be Special Summoned/i.test(txt(x))) ss(g, p, x); } }] },
-  'Harpie Lady 1': { cont: { atk: (g, src, c) => faceUp(c) && attr(c) === 'WIND' ? 300 : 0 } },
+  'Harpie Lady 1': { cont: { atk: (g, src, c) => faceUp(c) && E.lib.isAttr(c, 'WIND') ? 300 : 0 } },
   // Its battle with a Flip monster that will be destroyed: that monster's effects can't be activated this turn.
   'Harpie Lady 2': { effs: [{ type: 'trig', on: (g, ev, c) => {
     if (ev.type === 'afterCalc' && (ev.a === c || ev.t === c)) { const o = ev.a === c ? ev.t : ev.a; if (o && o.flags.battleDoomed && isFlipMon(o)) addRule(g, (g2, a) => a.type === 'activate' && a.c === o, { end: g.turnNo }); }

@@ -113,9 +113,9 @@ E.addScripts({
   'Infernal Flame Emperor': { cont: noSSFromGY,
     effs: [{ type: 'trig', when: true, tags: { destroy: 1 }, label: 'Banish FIRE monsters: destroy Spells/Traps',
       on: (g, ev, c) => evSummoned(ev, c, ['tribute']),
-      cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'FIRE') && stOnField(g).length > 0,
+      cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'FIRE')) && stOnField(g).length > 0,
       res: function* (g, c, p) {
-        const fires = g.p[p].gy.filter(x => isMon(x) && attr(x) === 'FIRE'); const sts = stOnField(g); if (!fires.length || !sts.length) return;
+        const fires = g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'FIRE')); const sts = stOnField(g); if (!fires.length || !sts.length) return;
         const xs = yield* pick(g, p, 'Banish up to 5 FIRE monsters from your GY', fires, 1, Math.min(5, fires.length, sts.length), 'cost');
         for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); log(g, `${PN(g, p)} banished ${xs.map(x => D(x).n).join(', ')}.`);
         const left = stOnField(g); if (!left.length) return;
@@ -135,8 +135,8 @@ E.addScripts({
         if (t) { move(g, t, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(t).n}.`); }
         g.ns[p]++; } } },
   'Inferno': {
-    proc: { label: 'Special Summon (banish a FIRE monster from your GY)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'FIRE'),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish 1 FIRE monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'FIRE'), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${D(x).n}.`); } } },
+    proc: { label: 'Special Summon (banish a FIRE monster from your GY)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'FIRE')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish 1 FIRE monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'FIRE')), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${D(x).n}.`); } } },
     effs: [{ type: 'trig', mand: true, label: '1500 damage', on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
       res: function* (g, c, p) { damage(g, opp(p), 1500, { src: c, srcP: p }); } }] },
   // The "can't attack" part applies when it resolves (Magic Jammer stops it, the rulings say). The damage uses the
@@ -199,7 +199,7 @@ E.addScripts({
           return ev.type === 'phase' && ev.ph === 'end' && c.flags.queenKill === g.turnNo; },
         cond: (g, c, p) => freeM(g, p) >= 0,
         res: function* (g, c, p) { if (onField(c)) tokens(g, p, { n: 'Insect Monster Token', a: 'EARTH', r: 'Insect', lv: 1, atk: 100, def: 100 }, 1, 'atk'); } }] },
-  'Insect Soldiers of the Sky': { self: { atk: (g, c) => g.inDS && g.battle && g.battle.a === c && g.battle.t && faceUp(g.battle.t) && attr(g.battle.t) === 'WIND' ? 1000 : 0 } },
+  'Insect Soldiers of the Sky': { self: { atk: (g, c) => g.inDS && g.battle && g.battle.a === c && g.battle.t && faceUp(g.battle.t) && E.lib.isAttr(g.battle.t, 'WIND') ? 1000 : 0 } },
 
   /* ----- Iron ----- */
   'Iron Blacksmith Kotetsu': { effs: [{ type: 'trig', mand: true, faceDownOk: true, label: 'Add an Equip Spell', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
@@ -239,7 +239,7 @@ E.addScripts({
         res: function* (g, c) { const m = c.f10mill; c.f10mill = null; if (m && m.n > 0) mill(g, m.p, m.n); } }] },
   // PARTIAL: the ATK loss applies through the whole Damage Step, and sending this card instead is automatic (no prompt).
   "Iron Core Armor": {
-    cont: { atk: (g, src, m) => { const e = equippedTo(g, src); if (!e || !g.inDS || !g.battle || m === e) return 0; const b = g.battle; return (b.a === e && b.t === m) || (b.t === e && b.a === m) ? -100 * lv(e) : 0; },
+    cont: { atk: (g, src, m) => { const e = equippedTo(g, src); if (!e || !E.lib.dcalc(g) || !g.battle || m === e) return 0; const b = g.battle; return (b.a === e && b.t === m) || (b.t === e && b.a === m) ? -100 * lv(e) : 0; },
       replaceDestroy: (g, src, c, o) => { if (!onField(src) || src.equipTo !== c.u || g.phase !== 'end') return false; move(g, src, 'gy', { reason: 'effect' }); log(g, `${PN(g, src.ctrl)} sent Iron Core Armor to the GY instead.`); return true; } },
     effs: [spellAct(isKoaki, "Equip to which Koa'ki Meiru monster?")] },
   "Iron Core Immediate Disposal": { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.some(x => named(x, "Iron Core of Koa'ki Meiru")),
@@ -319,7 +319,7 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which monster to the hand?', fieldMons(g), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && t.zone === 'm') toHand(g, t, p); } }] },
   // PARTIAL: with a face-up Kaiser Sea Horse, a LIGHT monster needs 1 Tribute, but any monster can be that Tribute.
-  'Kaiser Sea Horse': { cont: { tributes: (g, s, c, p, need) => need === 2 && s.ctrl === p && c !== s && attr(c) === 'LIGHT' ? 1 : null } },
+  'Kaiser Sea Horse': { cont: { tributes: (g, s, c, p, need) => need === 2 && s.ctrl === p && c !== s && E.lib.isAttr(c, 'LIGHT') ? 1 : null } },
 
   /* ----- King ----- */
   // Port of goat-5.js (same Edison text). PARTIAL: other Dragons are untargetable for both players.
@@ -359,8 +359,8 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'flip' && ev.c === c, cond: (g, c, p) => g.p[p].deck.length >= 3,
     res: function* (g, c, p) { const d = g.p[p].deck; if (d.length < 3) return; for (let i = 0; i < 3; i++) move(g, d[d.length - 1], 'ban', { reason: 'effect', by: p }); log(g, `${PN(g, p)} banished the top 3 cards of the Deck.`); damage(g, opp(p), 800, { src: c, srcP: p }); } }] },
   'Lady Ninja Yae': { effs: [{ type: 'ign', label: 'Discard a WIND: return their Spells/Traps',
-    cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && attr(x) === 'WIND') && stOf(g, opp(p)).length > 0,
-    cost: function* (g, c, p) { yield* discardOne(g, p, g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WIND'), 'Discard 1 WIND monster'); },
+    cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'WIND')) && stOf(g, opp(p)).length > 0,
+    cost: function* (g, c, p) { yield* discardOne(g, p, g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND')), 'Discard 1 WIND monster'); },
     res: function* (g, c, p) { const xs = stOf(g, opp(p)); for (const x of xs) move(g, x, 'hand', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.length} Spell/Trap Card(s) returned to ${PN(g, opp(p))}'s hand.`); } }] },
   // Same shape as Crimson Sentry (full-04.js): used before the battle, it returns the next one destroyed this turn.
   'Lady Panther': { effs: [bkMark,
@@ -443,13 +443,14 @@ E.addScripts({
       const [b] = yield* pick(g, p, 'Special Summon a Level 3 or lower Dragon from your GY', y, 1, 1, 'good');
       if (a) ss(g, p, a, 'atk'); if (b && b.zone === 'gy') ss(g, p, b, 'atk'); } }] },
   // Port of goat-2.js.
+  // 2026-11-28 audit, E4b (goat-02 Lava Golem 2 and 3): the procedure summons straight to the opponent's field (proc.toOpp: your own zones
+  // can be full), and the "no Normal Summon or Set this turn" lock follows any Special Summon of it, Monster Reborn included (Netrep).
   'Lava Golem': {
-    proc: { label: 'Special Summon to their field (Tribute 2 of their monsters)', cond: (g, c, p) => monsOf(g, opp(p)).length >= 2 && g.ns[p] < 1,
-      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Tribute 2 monsters your opponent controls', monsOf(g, opp(p)), 2, 2, 'bad');
-        for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed 2 of ${PN(g, opp(p))}'s monsters.`);
-        c.flags.lavaTo = opp(p); addRule(g, (g2, a) => (a.type === 'ns' || a.type === 'set') && a.p === p, { end: g.turnNo }); } },
+    proc: { toOpp: true, label: 'Special Summon to their field (Tribute 2 of their monsters)', cond: (g, c, p) => monsOf(g, opp(p)).filter(x => !L.noTribOf(x) || L.noTribOf(x) === 'summon').length >= 2 && g.ns[p] < 1,
+      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Tribute 2 monsters your opponent controls', monsOf(g, opp(p)).filter(x => !L.noTribOf(x) || L.noTribOf(x) === 'summon'), 2, 2, 'bad');
+        for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed 2 of ${PN(g, opp(p))}'s monsters.`); } },
     effs: [
-      { type: 'trig', on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.to === 'm' && c.flags.lavaTo != null) { const to = c.flags.lavaTo; c.flags.lavaTo = null; if (c.ctrl !== to) takeControl(g, to, c, false); } return false; }, res: noop },
+      { type: 'trig', on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c) && !['normal', 'tribute', 'flip', 'gemini'].includes(ev.how)) { const q = ev.p; addRule(g, (g2, a) => (a.type === 'ns' || a.type === 'set') && a.p === q, { end: g.turnNo }); } return false; }, res: noop },
       { type: 'trig', mand: true, label: 'Take 1000 damage', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
         res: function* (g, c, p) { damage(g, p, 1000, { src: c, srcP: p }); } }] },
 
@@ -499,9 +500,9 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target 1 face-up monster you control', monsOf(g, p).filter(x => faceUp(x) && lv(x) > 1), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const l = lv(t);
       const n = l > 2 ? 1 + (yield* choose(g, p, `Reduce ${name(t)}'s Level by how much?`, ['1', '2'])) : 1;
-      t.flags.lv = Math.max(1, l - n); t.flags.lvUntil = null; log(g, `${name(t)} is now Level ${t.flags.lv}.`); } }] },
+      L.lvAdd(g, t, -n); log(g, `${name(t)} is now Level ${lv(t)}.`); } }] },
   'Level Tuning': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(faceUp),
-    res: function* (g, c, p) { const ms = monsOf(g, p).filter(x => faceUp(x) && lv(x) > 0); for (const m of ms) { m.flags.lv = Math.max(1, lv(m) - 1); m.flags.lvUntil = true; } if (ms.length) log(g, `${PN(g, p)}'s face-up monsters lost 1 Level until the End Phase.`); } }] },
+    res: function* (g, c, p) { const ms = monsOf(g, p).filter(x => faceUp(x) && lv(x) > 0); for (const m of ms) L.lvAdd(g, m, -1, true); if (ms.length) log(g, `${PN(g, p)}'s face-up monsters lost 1 Level until the End Phase.`); } }] },
   'Level Up!': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && isLV(m) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && x !== m && D(x).n !== D(m).n && tx(m).includes(`"${D(x).n}"`))),
     cost: function* (g, c, p, L2) {

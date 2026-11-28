@@ -83,8 +83,8 @@ E.addScripts({
 
   'Flying Kamakiri #1': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Summon a WIND from the Deck',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'WIND' && L.baseAtk(x) <= 1500),
-    res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'WIND' && L.baseAtk(x) <= 1500 && D(x).k !== 'ritual');
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && E.lib.isAttr(x, 'WIND') && L.baseAtk(x) <= 1500),
+    res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => isMon(x) && E.lib.isAttr(x, 'WIND') && L.baseAtk(x) <= 1500 && D(x).k !== 'ritual');
       const [x] = yield* pick(g, p, 'Special Summon a WIND monster with 1500 or less ATK from your Deck', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
 
   'Gernia': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon itself',
@@ -144,7 +144,7 @@ E.addScripts({
         cond: (g, c, p) => freeM(g, p) >= 0,
         res: function* (g, c, p) { tokens(g, p, { n: 'Insect Monster Token', a: 'EARTH', r: 'Insect', lv: 1, atk: 100, def: 100 }, 1, 'atk'); } }] },
 
-  'Insect Soldiers of the Sky': { self: { atk: (g, c) => g.inDS && g.battle && g.battle.a === c && g.battle.t && faceUp(g.battle.t) && attr(g.battle.t) === 'WIND' ? 1000 : 0 } },
+  'Insect Soldiers of the Sky': { self: { atk: (g, c) => g.inDS && g.battle && g.battle.a === c && g.battle.t && faceUp(g.battle.t) && E.lib.isAttr(g.battle.t, 'WIND') ? 1000 : 0 } },
 
   'Kaiser Glider': {
     self: { noBattleDestroy: (g, c) => { const b = g.battle; if (!b || (b.a !== c && b.t !== c)) return false; const o = b.a === c ? b.t : b.a; return !!o && onField(o) && faceUp(o) && atkOf(g, o) === atkOf(g, c); } },

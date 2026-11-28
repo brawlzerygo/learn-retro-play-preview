@@ -114,8 +114,8 @@ E.addScripts({
   'Aqua Dragon': { effs: [] }, // its recipe is read from its text
   // ported from goat-5.js
   'Aqua Spirit': {
-    proc: { label: 'Special Summon (banish a WATER from your GY)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'WATER'),
-      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish a WATER monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WATER'), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${name(x)}.`); } } },
+    proc: { label: 'Special Summon (banish a WATER from your GY)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && E.lib.isAttr(x, 'WATER')),
+      cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish a WATER monster from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER')), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${name(x)}.`); } } },
     effs: [nomiRule, { type: 'trig', label: 'Change a monster’s position', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp !== c.ctrl,
       cond: (g, c, p) => oppFaceUp(g, p).length > 0,
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Change the battle position of which monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
@@ -177,12 +177,12 @@ E.addScripts({
   // PARTIAL: the substitute is used whenever possible (no prompt inside a destruction); in the GY the negation blocks
   // that monster's activated effects.
   'Armed Sea Hunter': {
-    self: { replaceDestroy: (g, c, o) => { if (o.rule) return false; const xs = monsOf(g, c.ctrl).filter(x => x !== c && faceUp(x) && attr(x) === 'WATER' && lv(x) <= 3 && !has(g, x, 'noEffectDestroy') && !x.flags.battleDoomed);
+    self: { replaceDestroy: (g, c, o) => { if (o.rule) return false; const xs = monsOf(g, c.ctrl).filter(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'WATER') && lv(x) <= 3 && !has(g, x, 'noEffectDestroy') && !x.flags.battleDoomed);
       if (!xs.length) return false; xs.sort((a, b) => atk(g, a) - atk(g, b)); move(g, xs[0], 'gy', { reason: 'effect', destroyed: true, by: c.ctrl }); log(g, `${D(xs[0]).n} was destroyed instead of Armed Sea Hunter.`); return true; } },
     effs: [{ type: 'trig', mand: true, label: 'Negate the monster’s effects',
       on: (g, ev, c) => ev.type === 'afterCalc' && (ev.a === c || ev.t === c) && (() => { const o = ev.a === c ? ev.t : ev.a; return !!o && D(o).k === 'effect'; })(),
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && attr(x) === 'WATER'),
-      res: function* (g, c, p, L2) { if (!monsOf(g, p).some(x => x !== c && faceUp(x) && attr(x) === 'WATER')) return; const o = L2.ev.a === c ? L2.ev.t : L2.ev.a; if (!o) return;
+      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'WATER')),
+      res: function* (g, c, p, L2) { if (!monsOf(g, p).some(x => x !== c && faceUp(x) && E.lib.isAttr(x, 'WATER'))) return; const o = L2.ev.a === c ? L2.ev.t : L2.ev.a; if (!o) return;
         if (onField(o)) { o.flags.negated = true; g.seq++; }
         addRule(g, (g2, a) => a.type === 'activate' && a.c === o && a.c.zone === 'gy');
         log(g, `${D(o).n}'s effects were negated.`); } }] },
@@ -422,9 +422,9 @@ E.addScripts({
   'Big Shield Gardna': { effs: [{ type: 'trig', mand: true, faceDownOk: true, label: 'Change to Attack Position',
     on: (g, ev, c) => ev.type === 'dsEnd' && ev.t === c && onField(c) && c.pos !== 'atk',
     res: function* (g, c, p) { if (onField(c) && c.pos !== 'atk') { c.pos = 'atk'; g.seq++; log(g, 'Big Shield Gardna changed to Attack Position.'); emit(g, { type: 'pos', c, p }); } } }] },
-  'Big Wave Small Wave': { effs: [{ type: 'act', tags: { destroy: 1, ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && attr(x) === 'WATER'),
-    res: function* (g, c, p) { const n = destroy(g, monsOf(g, p).filter(x => faceUp(x) && attr(x) === 'WATER'), { by: p, src: c }).length;
-      const cs = () => g.p[p].hand.filter(x => ssable(x) && attr(x) === 'WATER'); if (!n || !cs().length || freeM(g, p) < 0) return;
+  'Big Wave Small Wave': { effs: [{ type: 'act', tags: { destroy: 1, ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && E.lib.isAttr(x, 'WATER')),
+    res: function* (g, c, p) { const n = destroy(g, monsOf(g, p).filter(x => faceUp(x) && E.lib.isAttr(x, 'WATER')), { by: p, src: c }).length;
+      const cs = () => g.p[p].hand.filter(x => ssable(x) && E.lib.isAttr(x, 'WATER')); if (!n || !cs().length || freeM(g, p) < 0) return;
       const xs = yield* pick(g, p, `Special Summon up to ${n} WATER monster(s) from your hand`, cs(), 0, Math.min(n, cs().length), 'good');
       for (const x of xs) if (x.zone === 'hand' && freeM(g, p) >= 0) ss(g, p, x, 'atk'); } }] },
   'Big-Tusked Mammoth': { cont: { forbid: (g, src, a) => a.type === 'attack' && a.c.ctrl !== src.ctrl && summonedNow(g, a.c) }, effs: [markSummon] },

@@ -85,6 +85,10 @@ const allTypes = () => TYPES || (TYPES = [...new Set(E.cards().filter(x => ['nor
 // Buster Rancher: its own boost is left out when checking the equipped monster's ATK
 let RANCH = 0;
 
+// Barrel Behind the Door: the link's damage is certain and hits this player (rulings: not Barrel itself, not coin/dice effects like Time
+// Wizard or Dice Jar, only damage to YOUR LP; 2026-11-28 audit, E4b, goat-04)
+const barrelOk = (t, p) => { const tx = String(D(t.c).ps || D(t.c).tx || ''); if (D(t.c).n === 'Barrel Behind the Door' || /\bcoin\b|\bdie\b|\bdice\b/i.test(tx)) return false;
+  if (/damage to (?:both|each)|(?:both|each) players? (?:take|takes)/i.test(tx)) return true; return t.p !== p ? /opponent/i.test(tx) : /damage to you\b|you take|inflict[^.]*damage to (?:you|its controller)|take[^.]*damage/i.test(tx); };
 E.addScripts({
   /* ----- A ----- */
   'Archlord Zerato': {
@@ -94,8 +98,8 @@ E.addScripts({
         if (x) { move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed Warrior of Zera.`); } } },
     effs: [lockInstall,
       { type: 'ign', tags: { destroy: 1 }, label: 'Discard a LIGHT: destroy all their monsters',
-        cond: (g, c, p) => sanctuaryOf(g, p) && g.p[p].hand.some(x => isMon(x) && attr(x) === 'LIGHT') && monsOf(g, opp(p)).length > 0,
-        cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard which LIGHT monster?', g.p[p].hand.filter(x => isMon(x) && attr(x) === 'LIGHT'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } },
+        cond: (g, c, p) => sanctuaryOf(g, p) && g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')) && monsOf(g, opp(p)).length > 0,
+        cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard which LIGHT monster?', g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } },
         res: function* (g, c, p) { if (!sanctuaryOf(g, p)) { log(g, 'The Sanctuary in the Sky is gone, so nothing happens.'); return; } destroy(g, monsOf(g, opp(p)), { by: p }); } }] },
   // The Type is declared on activation and kept on the card. Summons are noted on each monster (the flag clears if it is
   // turned face-down, so a monster flipped back up by an effect can attack, ruling).
@@ -196,7 +200,7 @@ E.addScripts({
       if (onField(c)) { move(g, c, 'deck', { reason: 'effect' }); log(g, 'Bait Doll was shuffled into the Deck.'); } } }] },
   // The +1500 is noted when its battle starts against a face-down Defense Position monster and counts in that Damage Step.
   'Ballista of Rampart Smashing': {
-    cont: { atk: (g, src, m) => src.equipTo === m.u && g.inDS && g.battle && g.battle.a === m && src.flags.f19bal === g.battle ? 1500 : 0 },
+    cont: { atk: (g, src, m) => src.equipTo === m.u && E.lib.dcalc(g) && g.battle && g.battle.a === m && src.flags.f19bal === g.battle ? 1500 : 0 },
     effs: [equipAct(),
       { type: 'trig', loc: 'st', res: noop, on: (g, ev, c) => { if (ev.type === 'dsStart' && ev.a && ev.a.u === c.equipTo && ev.t && ev.t.pos === 'set') { c.flags.f19bal = g.battle; g.seq++; } return false; } }] },
   // Counters are kept in flags (they clear when it leaves the field or is turned face-down), so the GY trigger can count them.
@@ -224,7 +228,7 @@ E.addScripts({
     cont: { loc: 'gy', dmg: (g, src, p, n, o) => { if (o.barrel || !o.src || !g.barrel) return; const b = g.barrel.find(x => x.by === src.u && x.p === p && x.u === o.src.u); if (!b) return;
       log(g, 'Barrel Behind the Door turned the damage around.'); damage(g, opp(p), n, { ...o, barrel: true }); return 0; } },
     effs: [{ type: 'act',
-      cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && t.c !== c && t.p !== p && burnText(t.c) && !['Continuous', 'Equip', 'Field'].includes(D(t.c).sub || '')); },
+      cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && t.c !== c && t.p !== p && burnText(t.c) && barrelOk(t, p) && !['Continuous', 'Equip', 'Field'].includes(D(t.c).sub || '')); },
       target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
       res: function* (g, c, p, L2) { const T = L2.data.L; if (!T || T.negated) return; const res0 = T.eff.res, entry = { by: c.u, p, u: T.c.u };
         T.eff = { ...T.eff, res: function* (g2, c2, p2, L3) { (g2.barrel || (g2.barrel = [])).push(entry); try { yield* res0(g2, c2, p2, L3); } finally { g2.barrel = g2.barrel.filter(x => x !== entry); } } };
@@ -243,10 +247,10 @@ E.addScripts({
   // ENGINE: substitute Fusion Materials ("You can substitute this card for any 1 Fusion Material Monster") aren't read.
   'Beastking of the Swamps': { effs: [] },
   'Beckoning Light': { effs: [{ type: 'act',
-    cond: (g, c, p) => { const h = g.p[p].hand.length; return h > 0 && g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT').length >= h; },
-    res: function* (g, c, p) { const h = g.p[p].hand.slice(); if (!h.length || g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT').length < h.length) return;
+    cond: (g, c, p) => { const h = g.p[p].hand.length; return h > 0 && g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')).length >= h; },
+    res: function* (g, c, p) { const h = g.p[p].hand.slice(); if (!h.length || g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')).length < h.length) return;
       for (const x of h) move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded the whole hand (${h.length} card${h.length > 1 ? 's' : ''}).`);
-      const n = h.filter(x => x.zone === 'gy').length; const cs = g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT'); if (!n || !cs.length) return;
+      const n = h.filter(x => x.zone === 'gy').length; const cs = g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')); if (!n || !cs.length) return;
       const xs = yield* pick(g, p, `Add ${n} LIGHT monster${n > 1 ? 's' : ''} from your GY to your hand`, cs, Math.min(n, cs.length), Math.min(n, cs.length), 'good');
       for (const x of xs) move(g, x, 'hand', { reason: 'effect' }); if (xs.length) log(g, `${PN(g, p)} added ${xs.map(name).join(', ')} to the hand.`); } }] },
   // With 1 Tribute its original ATK becomes 2000 (noted on the Summon or Set; turned face-down it is 2700 again, ruling).
@@ -265,8 +269,8 @@ E.addScripts({
     effs: [lockInstall,
       { type: 'trig', mand: true, label: 'Lose 500 ATK', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
         res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: -500, own: true }); log(g, 'Berserk Dragon lost 500 ATK.'); } } }] },
-  // Port of goat-3.js. ENGINE: no forced attacks ("must attack if able" isn't enforced).
-  'Berserk Gorilla': { effs: [{ type: 'trig', mand: true, label: 'Destroy itself (face-up Defense Position)',
+  // Port of goat-3.js. "Must attack if able": self.mustAttack (the engine keeps the Battle Phase open while it can attack, 2026-11-28 audit).
+  'Berserk Gorilla': { self: { mustAttack: true }, effs: [{ type: 'trig', mand: true, label: 'Destroy itself (face-up Defense Position)',
     on: (g, ev, c) => faceUp(c) && c.pos === 'def',
     res: function* (g, c, p) { if (onField(c) && faceUp(c) && c.pos === 'def') destroy(g, [c], { by: p }); } }] },
 
@@ -289,7 +293,7 @@ E.addScripts({
     cond: (g, c, p) => monsOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which of their monsters?', monsOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
-  'Bladefly': { cont: { atk: (g, src, m) => faceUp(m) ? (attr(m) === 'WIND' ? 500 : 0) + (attr(m) === 'EARTH' ? -400 : 0) : 0 }, effs: [] },
+  'Bladefly': { cont: { atk: (g, src, m) => faceUp(m) ? (E.lib.isAttr(m, 'WIND') ? 500 : 0) + (E.lib.isAttr(m, 'EARTH') ? -400 : 0) : 0 }, effs: [] },
   'Blasting the Ruins': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].gy.length >= 30,
     res: function* (g, c, p) { damage(g, opp(p), 3000, { src: c, srcP: p }); } }] },
   // PARTIAL: a discard counts as the opponent's when the move names them (by), or when it is a plain discard during the

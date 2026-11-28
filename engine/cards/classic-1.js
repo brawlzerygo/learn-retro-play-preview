@@ -146,7 +146,7 @@ E.addScripts({
   'Great Mammoth of Goldfine': { effs: [] },
   // Direct attack when the opponent has face-up monsters and every one of them is EARTH, WATER or FIRE.
   "Alligator's Sword Dragon": { effs: [],
-    self: { directAttack: (g, c) => { const fu = monsOf(g, opp(c.ctrl)).filter(faceUp); return fu.length > 0 && fu.every(x => ['EARTH', 'WATER', 'FIRE'].includes(attr(x))); } } },
+    self: { directAttack: (g, c) => { const fu = monsOf(g, opp(c.ctrl)).filter(faceUp); return fu.length > 0 && fu.every(x => E.lib.attrs(x).some(a_ => ['EARTH', 'WATER', 'FIRE'].includes(a_))); } } },
   'Chimera the Flying Mythical Beast': { effs: [{ type: 'trig', loc: 'any', when: true, tags: { ss: 1 }, label: 'Summon Berfomet or Gazelle',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed,
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Berfomet') || named(x, 'Gazelle the King of Mythical Beasts')),

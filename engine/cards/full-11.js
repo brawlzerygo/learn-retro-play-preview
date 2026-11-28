@@ -120,16 +120,16 @@ E.addScripts({
       res: function* (g, c, p, L2) { gain(g, p, num(D(L2.ev.c).atk)); } }] },
   // PARTIAL: while it is face-up, a LIGHT Normal Monster that needs 2 Tributes can be Tribute Summoned with 1, but the
   // engine lets any one monster be that Tribute (not only this card).
-  'Light Effigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && D(c).k === 'normal' && attr(c) === 'LIGHT' ? 1 : null } },
+  'Light Effigy': { cont: { tributes: (g, src, c, p, need) => src.ctrl === p && need === 2 && D(c).k === 'normal' && E.lib.isAttr(c, 'LIGHT') ? 1 : null } },
   // PARTIAL: Synchro Summoned with its own rule (non-Tuners must be LIGHT), always in Attack Position.
-  'Light End Dragon': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => attr(c) === 'LIGHT' }),
+  'Light End Dragon': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => E.lib.isAttr(c, 'LIGHT') }),
     effs: [{ type: 'trig', label: 'Lose 500: the other monster loses 1500',
       on: (g, ev, c) => ev.type === 'attack' && ((ev.a === c && !!ev.t) || ev.t === c),
       cond: (g, c) => stat(g, c, 'atk') >= 500 && stat(g, c, 'def') >= 500,
       res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c) || stat(g, c, 'atk') < 500 || stat(g, c, 'def') < 500) return;
         addMod(g, c, { atk: -500, def: -500, own: true }); log(g, `${name(c)} lost 500 ATK and DEF.`);
         const o = L2.ev.a === c ? L2.ev.t : L2.ev.a; if (o && onField(o) && faceUp(o)) { addMod(g, o, { atk: -1500, def: -1500, end: true }); log(g, `${name(o)} lost 1500 ATK and DEF.`); } } }] },
-  'Light Laser': { effs: [equipAct(m => attr(m) === 'LIGHT' && race(m) === 'Warrior', 'Equip to which face-up LIGHT Warrior?'),
+  'Light Laser': { effs: [equipAct(m => E.lib.isAttr(m, 'LIGHT') && race(m) === 'Warrior', 'Equip to which face-up LIGHT Warrior?'),
     { type: 'trig', loc: 'st', mand: true, label: 'Banish the monster it battled',
       on: (g, ev, c) => ev.type === 'dsEnd' && !!c.equipTo && !!ev.t && (ev.a.u === c.equipTo || ev.t.u === c.equipTo),
       res: function* (g, c, p, L2) { const o = L2.ev.a.u === c.equipTo ? L2.ev.t : L2.ev.a; if (o && onField(o) && o.zone === 'm') { move(g, o, 'ban', { reason: 'effect', by: p }); log(g, `${D(o).n} was banished.`); } } }] },
@@ -139,16 +139,16 @@ E.addScripts({
       (a.type === 'activate' && a.c && (['Book of Moon', 'Darkness Approaches'].includes(D(a.c).n) || /face-down/i.test((a.eff && a.eff.label) || ''))) },
     effs: [noop] },
   'Light of Judgment': { effs: [{ type: 'act',
-    cond: (g, c, p) => sanctuary(g) && g.p[p].hand.some(x => isMon(x) && attr(x) === 'LIGHT') && (g.p[opp(p)].hand.length > 0 || fieldMons(g).concat(stOf(g, opp(p))).some(x => x.ctrl === opp(p))),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard 1 LIGHT monster', g.p[p].hand.filter(x => isMon(x) && attr(x) === 'LIGHT'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } },
+    cond: (g, c, p) => sanctuary(g) && g.p[p].hand.some(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')) && (g.p[opp(p)].hand.length > 0 || fieldMons(g).concat(stOf(g, opp(p))).some(x => x.ctrl === opp(p))),
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard 1 LIGHT monster', g.p[p].hand.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } },
     res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand, f = allField(g).filter(x => x.ctrl === o);
       const modes = []; if (h.length) modes.push('Look at their hand and discard 1 card'); if (f.length) modes.push('Send 1 card they control to the GY'); if (!modes.length) return;
       const i = modes.length > 1 ? yield* choose(g, p, 'Light of Judgment: which effect?', modes) : 0;
       if (/hand/.test(modes[i])) { log(g, `${PN(g, o)}'s hand: ${h.map(name).join(', ')}.`); const [x] = yield* pick(g, p, 'Discard which card?', h, 1, 1, 'bad'); if (x) { move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, o)} discarded ${name(x)}.`); } }
       else { const [x] = yield* pick(g, p, 'Send which card to the GY?', f, 1, 1, 'bad'); if (x && onField(x)) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${D(x).n} was sent to the GY.`); } } } }] },
-  'Light of Redemption': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 800, c) && g.p[p].ban.some(x => isMon(x) && attr(x) === 'LIGHT' && !x.faceDown),
+  'Light of Redemption': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 800, c) && g.p[p].ban.some(x => isMon(x) && E.lib.isAttr(x, 'LIGHT') && !x.faceDown),
     cost: function* (g, c, p) { pay(g, p, 800); },
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which banished LIGHT monster to your hand?', g.p[p].ban.filter(x => isMon(x) && attr(x) === 'LIGHT' && !x.faceDown), 1, 1, 'good'); },
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which banished LIGHT monster to your hand?', g.p[p].ban.filter(x => isMon(x) && E.lib.isAttr(x, 'LIGHT') && !x.faceDown), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'ban') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } }] },
   // A Lightsworn mill: one batch-2.js marks (g.lsMill) or one made while a Lightsworn monster's effect resolves (Ryko, in engine.js).
   'Light Spiral': { effs: [noop,

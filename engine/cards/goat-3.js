@@ -26,11 +26,11 @@ E.addScripts({
       res: function* (g, c, p, L2) { const t = L2.ev.c; if (t.zone !== 'gy' || !isMon(t)) return;
         const f = L2.ev.snap && L2.ev.snap.flags, n = f && f.baseAtk != null && !f.ownBaseAtk ? f.baseAtk : baseAtk(t);
         damage(g, opp(p), n, { src: c, srcP: p }); } }] },
-  // No shared script. PARTIAL: the +2000 applies for the whole Damage Step of a battle with a Warrior, not only during damage calculation.
+  // No shared script. The +2000 applies during damage calculation only (E.lib.dcalc, 2026-11-28 audit).
   'Cipher Soldier': {
     self: { atk: (g, c) => cipher(g, c), def: (g, c) => cipher(g, c) },
     effs: [] },
 }, 'goat');
 
-function cipher(g, c) { const o = foeOf(g, c); return g.inDS && o && race(o) === 'Warrior' ? 2000 : 0; }
+function cipher(g, c) { const o = foeOf(g, c); return E.lib.dcalc(g) && o && race(o) === 'Warrior' ? 2000 : 0; }
 })();

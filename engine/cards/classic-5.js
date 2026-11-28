@@ -167,8 +167,8 @@ E.addScripts({
   'Crush Card Virus': { effs: [{ type: 'act', tags: { destroy: 1 },
       // what it would destroy: the opponent's face-up monsters with 1500 or more ATK (Stardust ruling 7; Starlight Road ruling 9: face-down ones don't count)
       destroys: (g, c, p) => monsOf(g, opp(p)).filter(m => faceUp(m) && stat(g, m, 'atk') >= 1500),
-      cond: (g, c, p) => monsOf(g, p).some(m => attr(m) === 'DARK' && stat(g, m, 'atk') <= 1000),
-      cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute a DARK monster with 1000 or less ATK', monsOf(g, p).filter(m => attr(m) === 'DARK' && stat(g, m, 'atk') <= 1000), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
+      cond: (g, c, p) => monsOf(g, p).some(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000),
+      cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute a DARK monster with 1000 or less ATK', monsOf(g, p).filter(m => E.lib.isAttr(m, 'DARK') && stat(g, m, 'atk') <= 1000), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
       res: function* (g, c, p) {
         const o = opp(p);
         const h = g.p[o].hand; log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand: ${h.length ? h.map(x => D(x).n).join(', ') : 'empty'}.`);
@@ -194,7 +194,7 @@ E.addScripts({
     res: function* (g, c, p, L2) {
       const ts = live(L2); if (ts.length < 2) return;
       for (const x of ts) move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${ts.map(x => D(x).n).join(' and ')} were sent to the GY.`);
-      const cs = [...g.p[p].deck, ...g.p[p].gy].filter(x => isMon(x) && attr(x) === 'DARK' && race(x) === 'Spellcaster' && D(x).k !== 'ritual');
+      const cs = [...g.p[p].deck, ...g.p[p].gy].filter(x => isMon(x) && E.lib.isAttr(x, 'DARK') && race(x) === 'Spellcaster' && D(x).k !== 'ritual');
       if (!cs.length || freeM(g, p) < 0 || !(yield* yn(g, p, 'Special Summon a DARK Spellcaster from your Deck or GY?'))) return;
       const [x] = yield* pick(g, p, 'Special Summon which DARK Spellcaster?', cs, 1, 1, 'good'); if (!x) return;
       const fromDeck = x.zone === 'deck'; ss(g, p, x, 'atk'); if (fromDeck) shuffleDeck(g, p); } }] },
@@ -271,7 +271,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Equip to which face-up monster?', fieldMons(g).filter(faceUp), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { equipTrap(g, c, live(L2)[0], L2); } }],
     // "During damage calculation only": read in the Damage Step, when the equipped monster is the attacker.
-    cont: { atk: (g, src, m) => src.equipTo !== m.u ? 0 : 300 + (g.inDS && g.battle && g.battle.a === m && g.battle.t && onField(g.battle.t) ? Math.floor(stat(g, g.battle.t, 'atk') / 2) : 0),
+    cont: { atk: (g, src, m) => src.equipTo !== m.u ? 0 : 300 + (E.lib.dcalc(g) && g.battle && g.battle.a === m && g.battle.t && onField(g.battle.t) ? Math.floor(stat(g, g.battle.t, 'atk') / 2) : 0),
       def: (g, src, m) => src.equipTo === m.u ? 300 : 0 } },
   // Cards drawn while the targeted draw effect resolves (the next resolution after this one) go straight to the GY.
   'Muko': { effs: [

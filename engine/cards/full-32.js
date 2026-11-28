@@ -228,7 +228,7 @@ E.addScripts({
   // PARTIAL: Doom stops LIGHT and DARK monster effects from being activated in the Main Phase, instead of negating them
   // as they activate. ENGINE: no hook that sees an activation as it happens.
   "Koa'ki Meiru Doom": { effs: [maint('Reveal a Fiend monster', x => isMon(x) && race(x) === 'Fiend')],
-    cont: { forbid: (g, src, a) => a.type === 'activate' && mainPh(g) && a.eff && a.eff.type !== 'act' && isMon(a.c) && ['LIGHT', 'DARK'].includes(attr(a.c)) } },
+    cont: { forbid: (g, src, a) => a.type === 'activate' && mainPh(g) && a.eff && a.eff.type !== 'act' && isMon(a.c) && E.lib.attrs(a.c).some(a_ => ['LIGHT', 'DARK'].includes(a_)) } },
   // PARTIAL: the replacement is always used when a Koa'ki Meiru monster can be banished (no prompt inside destruction)
   "Koa'ki Meiru Ghoulungulate": { effs: [maint('Reveal a Zombie monster', x => isMon(x) && race(x) === 'Zombie')],
     cont: { replaceDestroy: (g, src, c, o) => {
@@ -253,7 +253,7 @@ E.addScripts({
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which card from your hand to the GY?', g.p[p].hand, 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${name(x)} to the GY.`); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Special Summoned monster?', fieldMons(g).filter(ssed), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
-  "Koa'ki Meiru Sea Panther": { effs: [maint('Reveal a WATER monster', x => isMon(x) && attr(x) === 'WATER'),
+  "Koa'ki Meiru Sea Panther": { effs: [maint('Reveal a WATER monster', x => isMon(x) && E.lib.isAttr(x, 'WATER')),
     { type: 'ign', opt: true, label: 'Send an Iron Core: a Spell to the Deck top',
       cond: (g, c, p) => g.p[p].hand.some(isIC) && g.p[p].gy.some(isSpell),
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which Iron Core to the GY?', g.p[p].hand.filter(isIC), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent Iron Core of Koa'ki Meiru to the GY.`); },

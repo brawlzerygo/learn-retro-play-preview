@@ -59,8 +59,8 @@ function tagOut(self, n = 1, except = self, gbOnly = false) {
   return { type: 'trig', loc: 'any', ownChain: true, tags: { ss: 1 }, label: 'Tag out',
     on: (g, ev, c) => endBP(g, ev, c) && (!gbOnly || c.flags.gb),
     cond: (g, c, p) => c.zone === 'm' && faceUp(c) && cands(g, p, true).length >= n && nFreeM(g, p) + 1 >= n,
-    cost: function* (g, c, p) { move(g, c, 'deck', { reason: 'cost' }); log(g, `${PN(g, p)} shuffled ${nm(c)} into the ${L.isExtraD(D(c)) ? 'Extra Deck' : 'Deck'}.`); },
-    res: function* (g, c, p) {
+    cost: function* (g, c, p, L2) { L2.data.dar = !!c.flags.dariusBy && L.negd(g, c); move(g, c, 'deck', { reason: 'cost' }); log(g, `${PN(g, p)} shuffled ${nm(c)} into the ${L.isExtraD(D(c)) ? 'Extra Deck' : 'Deck'}.`); },
+    res: function* (g, c, p, L2) { if (L2.data.dar) { log(g, `${nm(c)}'s effect was negated (Gladiator Beast Darius).`); return; }   // Darius ruling 3
       for (let i = 0; i < n; i++) {
         const cs = cands(g, p, false); if (!cs.length || freeM(g, p) < 0) break;
         const [x] = yield* pick(g, p, 'Special Summon a Gladiator Beast from your Deck', cs, 1, 1, 'good'); if (!x) break;

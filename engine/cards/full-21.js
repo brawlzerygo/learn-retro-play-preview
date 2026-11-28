@@ -119,8 +119,8 @@ E.addScripts({
   // Flip: control lasts while Eria is face-up on the field (checked at every game event).
   'Eria the Water Charmer': { effs: [
     { type: 'trig', mand: true, faceDownOk: true, label: 'Take control of a WATER monster', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
-      target: function* (g, c, p, L2) { const cs = oppFaceUp(g, p).filter(m => attr(m) === 'WATER'); if (cs.length) yield* tgt(g, p, L2, 'Take control of which face-up WATER monster?', cs, 1, 1, 'bad'); },
-      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || attr(t) !== 'WATER' || t.ctrl === p || !onField(c) || !faceUp(c)) return;
+      target: function* (g, c, p, L2) { const cs = oppFaceUp(g, p).filter(m => E.lib.isAttr(m, 'WATER')); if (cs.length) yield* tgt(g, p, L2, 'Take control of which face-up WATER monster?', cs, 1, 1, 'bad'); },
+      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || E.lib.notAttr(t, 'WATER') || t.ctrl === p || !onField(c) || !faceUp(c)) return;
         const from = t.ctrl; if (takeControl(g, p, t, false)) c.f21charm = { u: t.u, from }; } },
     { type: 'trig', loc: 'any', mand: true, label: 'Control returns',
       on: (g, ev, c) => !!c.f21charm && (!onField(c) || !faceUp(c) || c.zone !== 'm'),
@@ -150,8 +150,8 @@ E.addScripts({
     res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c, 'atk'); } }] },
   'Fenrir': {
     proc: { label: 'Special Summon (banish 2 WATER monsters from your GY)',
-      cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WATER').length >= 2,
-      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Banish 2 WATER monsters from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WATER'), 2, 2, 'cost');
+      cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER')).length >= 2,
+      cost: function* (g, c, p, grp) { const xs = yield* pick(g, p, 'Banish 2 WATER monsters from your GY', g.p[p].gy.filter(x => isMon(x) && E.lib.isAttr(x, 'WATER')), 2, 2, 'cost');
         for (const x of xs) move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${xs.map(name).join(' and ')}.`); c.flags.f21proc = true; } },
     effs: [lockInstall,
       { type: 'trig', res: noopG, on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c) && c.flags.f21proc) c.f21proper = true; return false; } },
@@ -234,8 +234,8 @@ E.addScripts({
         on: (g, ev, c) => { if (!(ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl)) return false; c.flags.f21sb = (c.flags.f21sb || 0) + 1; return c.flags.f21sb >= 2; },
         res: function* (g, c, p) { if (onField(c)) destroy(g, [c], { rule: true }); } }] },
   'Earth Chant': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => canRitual(g, p, { monster: x => attr(x) === 'EARTH', exact: true }),
-    res: function* (g, c, p) { yield* ritualSummon(g, p, { monster: x => attr(x) === 'EARTH', exact: true }); } }] },
+    cond: (g, c, p) => canRitual(g, p, { monster: x => E.lib.isAttr(x, 'EARTH'), exact: true }),
+    res: function* (g, c, p) { yield* ritualSummon(g, p, { monster: x => E.lib.isAttr(x, 'EARTH'), exact: true }); } }] },
   'Earthquake': { effs: [{ type: 'act', cond: g => fieldMons(g).some(m => m.pos === 'atk'),
     res: function* (g) { const ms = fieldMons(g).filter(m => m.pos === 'atk'); for (const m of ms) { m.pos = 'def'; g.seq++; } if (ms.length) log(g, `${ms.map(name).join(', ')} changed to Defense Position.`); for (const m of ms) emit(g, { type: 'pos', c: m, p: m.ctrl }); } }] },
   // Ported from classic-4.js.
@@ -264,7 +264,7 @@ E.addScripts({
       const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => L.nameIs(x, 'Harpie Lady') || named(x, 'Harpie Lady Sisters')); const [x] = yield* pick(g, p, 'Special Summon Harpie Lady or Harpie Lady Sisters', cs, 1, 1, 'good');
       if (x) { const fromDeck = x.zone === 'deck'; ss(g, p, x); if (fromDeck) shuffleDeck(g, p); } } }] },
   // Ported from classic-4.js.
-  "Elf's Light": { cont: eqBonus(400, -200), effs: [equipAct(m => attr(m) === 'LIGHT', 'Equip to which face-up LIGHT monster?')] },
+  "Elf's Light": { cont: eqBonus(400, -200), effs: [equipAct(m => E.lib.isAttr(m, 'LIGHT'), 'Equip to which face-up LIGHT monster?')] },
   'Emblem of Dragon Destroyer': { effs: [{ type: 'act', cond: (g, c, p) => [...g.p[p].deck, ...g.p[p].gy].some(x => named(x, 'Buster Blader')),
     res: function* (g, c, p) { const cs = [...g.p[p].deck, ...g.p[p].gy].filter(x => named(x, 'Buster Blader')); if (!cs.length) return;
       if (cs.every(x => x.zone === 'deck') && L.forbid(g, { type: 'search', p })) return;

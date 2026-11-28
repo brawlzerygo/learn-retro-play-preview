@@ -210,7 +210,7 @@ E.addScripts({
     cond: (g, c, p) => E.lib.canPay(g, p, 500) && !!c.f33st && onField(c.f33st) && faceUp(c.f33st),
     cost: function* (g, c, p) { pay(g, p, 500); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Psychic monster?', [c.f33st].filter(x => onField(x) && faceUp(x)), 1, 1, 'good'); },
-    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; t.flags.lv = lv(t) + 1; addMod(g, t, { atk: 300 }); g.seq++; log(g, `${name(t)} gained 1 Level and 300 ATK.`); } }] },
+    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; L.lvAdd(g, t, 1); addMod(g, t, { atk: 300 }); g.seq++; log(g, `${name(t)} gained 1 Level and 300 ATK.`); } }] },
   'Psychic Emperor': { effs: [{ type: 'trig', mand: true, label: 'Gain 500 LP per Psychic in your GY',
     on: (g, ev, c) => ev.type === 'summon' && ev.cs.includes(c) && !['flip', 'gemini'].includes(ev.how),
     res: function* (g, c, p) { const n = g.p[p].gy.filter(isPsy).length; if (n) gain(g, p, 500 * n); } }] },
@@ -301,8 +301,8 @@ E.addScripts({
     res: function* (g, c, p) { destroy(g, monsOf(g, opp(p)).filter(x => x.pos === 'atk'), { by: p, src: c }); } }] },
   'Radiant Spirit': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy face-down and non-LIGHT monsters',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.wasField && ev.to === 'gy',
-    cond: g => fieldMons(g).some(x => x.pos === 'set' || attr(x) !== 'LIGHT'),
-    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.pos === 'set' || attr(x) !== 'LIGHT'), { by: p }); } }] },
+    cond: g => fieldMons(g).some(x => x.pos === 'set' || E.lib.notAttr(x, 'LIGHT')),
+    res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.pos === 'set' || E.lib.notAttr(x, 'LIGHT')), { by: p }); } }] },
 
   /* ----- Reptilianne ----- */
   'Reptilianne Gardna': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Add a Reptilianne monster',
@@ -429,7 +429,7 @@ E.addScripts({
 });
 
 function aZone(g, src, m) {
-  if (!g.inDS || !g.battle || !g.battle.a || !g.battle.t) return 0;
+  if (!E.lib.dcalc(g) || !g.battle || !g.battle.a || !g.battle.t) return 0;
   const { a, t } = g.battle; const me = src.ctrl;
   const alien = x => x && x.ctrl === me && faceUp(x) && /Alien/.test(name(x));
   if (m.ctrl !== me && ((m === a && alien(t)) || (m === t && alien(a)))) return -300;
