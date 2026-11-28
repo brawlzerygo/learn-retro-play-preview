@@ -28,7 +28,8 @@ const atkLock = { forbid: (g, src, a) => a.type === 'activate' && a.eff.type ===
 function gbSS(g, p, x, pos = 'atk') { x.flags.gb = true; const ok = ss(g, p, x, pos); if (!ok) delete x.flags.gb; return ok; }
 const byGB = (ev, c) => evSummoned(ev, c) && c.flags.gb;
 // remembers that this monster was in damage calculation this turn ("if this card battled")
-const battledHook = { type: 'trig', on: (g, ev, c) => { if (ev.type === 'afterCalc' && (ev.a === c || ev.t === c)) c.flags.battled = g.turnNo; return false; }, res: function* () {} };
+// bookkeeping, not an effect: read from any zone so Skill Drain doesn't hide that it battled (tag outs can be activated under it)
+const battledHook = { type: 'trig', loc: 'any', on: (g, ev, c) => { if (ev.type === 'afterCalc' && c.zone === 'm' && (ev.a === c || ev.t === c)) c.flags.battled = g.turnNo; return false; }, res: function* () {} };
 const endBP = (g, ev, c) => ev.type === 'phase' && ev.ph === 'bpEnd' && c.zone === 'm' && faceUp(c) && c.flags.battled === g.turnNo;
 
 /* ---------- "Cannot be Special Summoned (except by ...)" ----------
@@ -52,10 +53,10 @@ const noSSHook = { type: 'trig', loc: 'any', on: (g, ev, c) => {
 
 /* Tag out: at the end of the Battle Phase, if this card battled, you can shuffle it into the (Extra) Deck to Special Summon
  n "Gladiator Beast" monsters from your Deck. It is read from any zone so Skill Drain doesn't stop it (rulings).
- PARTIAL: several end-of-Battle-Phase effects go on one chain instead of one chain each. */
+ Each end-of-Battle-Phase Gladiator Beast effect goes on its own chain (ownChain; site ruling, edison-s01: Secutor and Torax too). */
 function tagOut(self, n = 1, except = self, gbOnly = false) {
   const cands = (g, p, pre) => g.p[p].deck.filter(y => gbMon(y) && nm(y) !== except && (pre ? !(nm(y) in NOSS) || NOSS[nm(y)] === self : !forbid(g, { type: 'ss', c: y, p, how: 'special' })));
-  return { type: 'trig', loc: 'any', tags: { ss: 1 }, label: 'Tag out',
+  return { type: 'trig', loc: 'any', ownChain: true, tags: { ss: 1 }, label: 'Tag out',
     on: (g, ev, c) => endBP(g, ev, c) && (!gbOnly || c.flags.gb),
     cond: (g, c, p) => c.zone === 'm' && faceUp(c) && cands(g, p, true).length >= n && nFreeM(g, p) + 1 >= n,
     cost: function* (g, c, p) { move(g, c, 'deck', { reason: 'cost' }); log(g, `${PN(g, p)} shuffled ${nm(c)} into the ${L.isExtraD(D(c)) ? 'Extra Deck' : 'Deck'}.`); },
@@ -139,7 +140,7 @@ E.addScripts({
         if (i === 1) yield* discard1(g, p); else { move(g, c, 'deck', { reason: 'effect' }); log(g, `${PN(g, p)} shuffled Gladiator Beast Octavius into the Deck.`); } } }] },
   // Resolves even with 1 or no free zone: the monsters that don't fit are destroyed (rulings).
   'Gladiator Beast Secutor': { effs: [battledHook,
-    { type: 'trig', mand: true, tags: { ss: 1 }, label: 'Special Summon 2 Gladiator Beasts', on: (g, ev, c) => endBP(g, ev, c) && c.flags.gb,
+    { type: 'trig', mand: true, ownChain: true, tags: { ss: 1 }, label: 'Special Summon 2 Gladiator Beasts', on: (g, ev, c) => endBP(g, ev, c) && c.flags.gb,
       cond: (g, c, p) => g.p[p].deck.some(y => gbMon(y) && nm(y) !== 'Gladiator Beast Secutor'),
       res: function* (g, c, p) {
         let cs = g.p[p].deck.filter(y => gbMon(y) && nm(y) !== 'Gladiator Beast Secutor'); if (!cs.length) return;
@@ -151,7 +152,7 @@ E.addScripts({
       cond: (g, c, p) => g.p[p].deck.some(x => isSpell(x) && D(x).sub === 'Equip' && isGB(x)),
       res: function* (g, c, p) { yield* search(g, p, x => isSpell(x) && D(x).sub === 'Equip' && isGB(x), 'Add a Gladiator Beast Equip Spell from your Deck'); } }] },
   'Gladiator Beast Torax': { effs: [battledHook,
-    { type: 'trig', loc: 'any', label: 'Shuffle it into the Deck: draw 1', on: (g, ev, c) => endBP(g, ev, c) && c.flags.gb,
+    { type: 'trig', loc: 'any', ownChain: true, label: 'Shuffle it into the Deck: draw 1', on: (g, ev, c) => endBP(g, ev, c) && c.flags.gb,
       cond: (g, c, p) => c.zone === 'm' && faceUp(c),
       cost: function* (g, c, p) { move(g, c, 'deck', { reason: 'cost' }); log(g, `${PN(g, p)} shuffled Gladiator Beast Torax into the Deck.`); },
       res: function* (g, c, p) { draw(g, p, 1); } }] },

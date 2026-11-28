@@ -132,7 +132,7 @@ E.addScripts({
   'Dark Paladin': {
     self: { atk: (g, c) => 500 * (fieldMons(g).filter(x => faceUp(x) && race(x) === 'Dragon').length + allCards(g, 'gy').filter(x => isMon(x) && race(x) === 'Dragon').length) },
     effs: [lockEff,
-      { type: 'quick', ds: true, label: 'Discard: negate the Spell',
+      { type: 'quick', ds: true, sameChain: true, label: 'Discard: negate the Spell',   // several times in one chain (ruling 4)
         cond: (g, c, p, x) => topSpellAct(x.top) && g.p[p].hand.length > 0,
         cost: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; yield* discardPick(g, p, 1, 'Discard 1 card'); },
         // Edison ruling: the Spell is still negated if Dark Paladin left the field or was turned face-down.

@@ -71,7 +71,7 @@ const archCost = n => ({ type: 'trig', mand: true, label: `Pay ${n} LP`, on: (g,
 const archDice = (hits, label) => ({ type: 'quick', speed: 3, ds: true, label,
   cond: (g, c, p, x) => { const T = x.top; return !!T && !T.negated && T.p !== p && !(T.f28dice || []).includes(c.u) && T.t.includes(c); },
   target: function* (g, c, p, L2) { const T = g.chain[g.chain.length - 1]; (T.f28dice || (T.f28dice = [])).push(c.u); L2.data.L = T; },
-  res: function* (g, c, p, L2) { const T = L2.data.L; if (!T || T.negated) return; const n = dice(g, p); if (hits.includes(n)) { T.negBy = p; negate(g, T, true); } else log(g, 'Nothing happened.'); } });
+  res: function* (g, c, p, L2) { const T = L2.data.L; if (!T || T.negated) return; const n = (yield* L.roll(g, p)); if (hits.includes(n)) { T.negBy = p; negate(g, T, true); } else log(g, 'Nothing happened.'); } });
 // Kazejin, Sanga, Suijin (as classic-2.js): the attacker's ATK becomes 0 for this damage calculation, once while face-up.
 // PARTIAL: the engine has no window during damage calculation, so it is used in the Damage Step windows of the battle;
 // the 0 lasts until damage calculation is done (removed at afterCalc).

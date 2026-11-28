@@ -24,21 +24,26 @@ function* posPick(g, p, x) { const i = yield* choose(g, p, `${nm(x)}: which posi
 function gbSS(g, p, x, pos = 'atk') { x.flags.gb = true; const ok = ss(g, p, x, pos); if (!ok) delete x.flags.gb; return ok; }
 const byGB = (ev, c) => evSummoned(ev, c) && c.flags.gb;
 /* Remembers that this monster was in damage calculation this turn (for the Gladiator Beast tag out). */
-const battledHook = { type: 'trig', on: (g, ev, c) => { if (ev.type === 'afterCalc' && (ev.a === c || ev.t === c)) c.flags.battled = g.turnNo; return false; }, res: function* () {} };
-/* Tag out. PARTIAL: the engine has no "end of the Battle Phase" moment, so it is a Quick Effect the turn player can use in the
- Battle Step after this card battled; using it ends the Battle Phase, so the new monster can't attack. ENGINE: end-of-Battle-Phase triggers. */
+// bookkeeping, not an effect: read from any zone so Skill Drain doesn't hide that it battled (tag outs can be activated under it)
+const battledHook = { type: 'trig', loc: 'any', on: (g, ev, c) => { if (ev.type === 'afterCalc' && c.zone === 'm' && (ev.a === c || ev.t === c)) c.flags.battled = g.turnNo; return false; }, res: function* () {} };
+/* Tag out (2026-11-28 audit, edison-11): "At the end of the Battle Phase, if this card battled, you can shuffle it into the Deck: Special
+ Summon n Gladiator Beasts from your Deck". An optional trigger at the end of either player's Battle Phase (bpEnd), for the card's
+ controller; read from any zone so Skill Drain doesn't stop it (site: "can activate and resolve while Skill Drain is applying"); each tag
+ out on its own chain, the turn player's first (ownChain; site ruling, archive). */
+const endBP = (g, ev, c) => ev.type === 'phase' && ev.ph === 'bpEnd' && c.zone === 'm' && faceUp(c) && c.flags.battled === g.turnNo;
 function tagOut(self, n = 1, except = self) {
-  return { type: 'quick', label: 'Tag out', tags: { ss: 1 },
-    cond: (g, c, p, x) => !x.top && g.phase === 'battle' && g.tp === p && !g.inDS && !g.aw && c.flags.battled === g.turnNo
-      && g.p[p].deck.filter(y => gbMon(y) && nm(y) !== except && E.lib.ssable(g, p, y)).length >= n && nFreeM(g, p) + 1 >= n,
+  const cands = (g, p) => g.p[p].deck.filter(y => gbMon(y) && nm(y) !== except && E.lib.ssable(g, p, y));
+  return { type: 'trig', loc: 'any', ownChain: true, tags: { ss: 1 }, label: 'Tag out',
+    on: (g, ev, c) => endBP(g, ev, c),
+    cond: (g, c, p) => c.zone === 'm' && faceUp(c) && cands(g, p).length >= n && nFreeM(g, p) + 1 >= n,
     cost: function* (g, c, p) { move(g, c, 'deck', { reason: 'cost' }); log(g, `${PN(g, p)} shuffled ${nm(c)} into the ${L.isExtraD(D(c)) ? 'Extra Deck' : 'Deck'}.`); },
     res: function* (g, c, p) {
       for (let i = 0; i < n; i++) {
-        const cands = g.p[p].deck.filter(y => gbMon(y) && nm(y) !== except); if (!cands.length || freeM(g, p) < 0) break;
-        const [x] = yield* pick(g, p, 'Special Summon a Gladiator Beast from your Deck', cands, 1, 1, 'good'); if (!x) break;
+        const cs = g.p[p].deck.filter(y => gbMon(y) && nm(y) !== except); if (!cs.length || freeM(g, p) < 0) break;
+        const [x] = yield* pick(g, p, 'Special Summon a Gladiator Beast from your Deck', cs, 1, 1, 'good'); if (!x) break;
         gbSS(g, p, x, yield* posPick(g, p, x));
       }
-      shuffleDeck(g, p); g.bpEnd = true; log(g, 'The Battle Phase ended.');
+      shuffleDeck(g, p);
     } };
 }
 /* Contact Fusion: shuffle the listed monsters you control into the Deck. preds: one test per material. */
@@ -168,7 +173,7 @@ E.addScripts({
       res: function* (g, c) { const xs = fieldMons(g).filter(x => x.flags.rekindleBy === c.u && x.flags.rekindleTurn === g.turnNo); for (const x of xs) move(g, x, 'ban', { reason: 'effect' }); if (xs.length) log(g, `${xs.map(nm).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished (Rekindling).`); } }] },
 
   /* ===== Gladiator Beast ===== */
-  'Gladiator Beast Laquari': { self: { atk: (g, c) => c.flags.gb ? 300 : 0 }, effs: [battledHook, tagOut('Gladiator Beast Laquari')] },
+  'Gladiator Beast Laquari': { self: { atk: (g, c) => c.flags.gb && !c.flags.gbOff ? 300 : 0, onNegated: (g, c) => { c.flags.gbOff = true; } }, effs: [battledHook, tagOut('Gladiator Beast Laquari')] },
   'Gladiator Beast Equeste': { effs: [battledHook, tagOut('Gladiator Beast Equeste'),
     { type: 'trig', mand: true, on: (g, ev, c) => byGB(ev, c), cond: (g, c, p) => g.p[p].gy.some(isGB),
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Return which Gladiator Beast card to your hand?', g.p[p].gy.filter(isGB), 1, 1, 'good'); },
@@ -242,7 +247,7 @@ E.addScripts({
       res: function* (g, c, p, L) { const t = live(L)[0]; if (t) { move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${D(t).n} returned to the hand.`); } } },
     { type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end',
       res: function* (g, c) { if (onField(c)) { move(g, c, 'extra', { reason: 'effect' }); log(g, 'Elemental HERO Grand Neos was shuffled into the Extra Deck.'); } } }] },
-  'Gladiator Beast Hoplomus': { self: { def: (g, c) => c.flags.gb ? 300 : 0 }, effs: [battledHook, tagOut('Gladiator Beast Hoplomus')] },
+  'Gladiator Beast Hoplomus': { self: { def: (g, c) => c.flags.gb && !c.flags.gbOff ? 300 : 0, onNegated: (g, c) => { c.flags.gbOff = true; } }, effs: [battledHook, tagOut('Gladiator Beast Hoplomus')] },
   'Neo-Spacian Grand Mole': { effs: [{ type: 'trig', label: 'Return both battling monsters to the hand',
     on: (g, ev, c) => ev.type === 'dsStart' && (ev.a === c || ev.t === c) && !!ev.a && !!ev.t,
     res: function* (g, c, p, L) { const o = L.ev.a === c ? L.ev.t : L.ev.a; if (!onField(c) || !o || !onField(o)) return; move(g, o, 'hand', { reason: 'effect', by: p }); move(g, c, 'hand', { reason: 'effect', by: p }); log(g, `${D(o).n} and Neo-Spacian Grand Mole returned to the hand.`); } }] },
@@ -252,12 +257,13 @@ E.addScripts({
       cost: function* (g, c, p, L) { L.data.m = [g.battle.a, g.battle.t].find(x => x && x.ctrl === p); move(g, c, 'gy', { reason: 'cost' }); },
       res: function* (g, c, p, L) { const m = L.data.m; if (!m || !onField(m) || !faceUp(m)) return; const A = atk(g, m); addMod(g, m, { set: Math.ceil(A / 2), which: 'atk', end: true }); m.flags.noBattleDestroy = true; m.flags.hedgeBy = c.u; log(g, `${name(m)}'s ATK was halved and it can't be destroyed by this battle.`); } },
     { type: 'trig', loc: 'gy', on: (g, ev, c) => { if (ev.type === 'dsEnd') for (const m of fieldMons(g)) if (m.flags.hedgeBy === c.u) { delete m.flags.noBattleDestroy; delete m.flags.hedgeBy; } return false; }, res: function* () {} }] },
-  // ENGINE: the engine collects no triggers from the Field Zone, so the ② (destroy attackers) is written but does not fire yet.
-  // PARTIAL: it is set for the End Phase, not the end of the Battle Phase.
+  // ②: at the end of the Battle Phase (site: "the same timing as the tag out"), the monsters that declared an attack (attackWent: not
+  // every attack of theirs negated) (2026-11-28 audit, edison-11)
   'Ancient Forest': { effs: [
     { type: 'act', res: function* (g, c, p) { for (const m of fieldMons(g)) if (m.pos !== 'atk') { if (m.pos === 'set') log(g, `The face-down monster was ${nm(m)}.`); m.pos = 'atk'; } log(g, 'All Defense Position monsters changed to Attack Position.'); } },
-    { type: 'trig', loc: 'fz', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.declared),
-      res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.declared), { by: p }); } }] },
+    { type: 'trig', loc: 'fz', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'bpEnd' && fieldMons(g).some(L.attackWent),
+      destroys: (g, c) => onField(c) ? fieldMons(g).filter(L.attackWent) : [],
+      res: function* (g, c, p) { if (onField(c)) destroy(g, fieldMons(g).filter(L.attackWent), { by: p }); } }] },
   // "Any monster sent to the GY is banished instead": a replacement in move() (cont.gyBan), no chain link (2026-11-28 audit)
   'Dimensional Fissure': { effs: [{ type: 'act', res: function* (g) { g.seq++; } }], cont: { gyBan: 'mon' } },
   'Trap Hole': { effs: [{ type: 'act', tags: { destroy: 1 },
@@ -323,7 +329,7 @@ E.addScripts({
     self: { directAttack: (g, c) => c.flags.drillDirect === g.turnNo },
     effs: [
       { type: 'ign', opt: true, label: 'Halve ATK: attack directly', cond: g => g.phase === 'main1',
-        res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; const A = atk(g, c); addMod(g, c, { set: Math.ceil(A / 2), which: 'atk' }); c.flags.drillDirect = g.turnNo; log(g, 'Drill Warrior halved its ATK and can attack directly this turn.'); } },
+        res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; const A = atk(g, c); addMod(g, c, { set: Math.ceil(A / 2), which: 'atk', own: true }); c.flags.drillDirect = g.turnNo; log(g, 'Drill Warrior halved its ATK and can attack directly this turn.'); } },
       { type: 'ign', opt: true, label: 'Discard: banish until your next Standby Phase', cond: (g, c, p) => g.p[p].hand.length > 0,
         res: function* (g, c, p) { if (!g.p[p].hand.length) return; const [x] = yield* pick(g, p, 'Discard a card', g.p[p].hand, 1, 1, 'cost'); move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${nm(x)}.`);
           if (onField(c)) { move(g, c, 'ban', { reason: 'effect' }); c.flags.drillRet = { p: c.owner, turn: g.turnNo }; log(g, 'Drill Warrior was banished.'); } } },
@@ -374,8 +380,8 @@ E.addScripts({
     res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
 
   /* ===== Ancient Gear ===== */
-  // ENGINE: the ③ "destroy this card instead" substitution needs a destruction replacement hook.
-  'Machina Peacekeeper': { effs: [
+  // ③ "If the equipped monster would be destroyed, destroy this card instead" (a Union's replacement, mandatory: unionStandIn)
+  'Machina Peacekeeper': { cont: { replaceDestroy: L.unionStandIn }, effs: [
     { type: 'trig', loc: 'gy', when: true, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && ev.to === 'gy',
       cond: (g, c, p) => g.p[p].deck.some(x => isMon(x) && hasAb(x, 'Union')),
       res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && hasAb(x, 'Union'), 'Add a Union monster from your Deck'); } },
@@ -409,9 +415,9 @@ E.addScripts({
     { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && ev.to === 'gy',
       cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => E.lib.ssable(g, p, x)).some(isAG),
       res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(isAG); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon an Ancient Gear monster', cs, 1, 1, 'good'); if (x) { const fromDeck = x.zone === 'deck'; ss(g, p, x); if (fromDeck) shuffleDeck(g, p); } } }] },
-  // ENGINE: ① (every monster becomes a Zombie) needs race() to read it; ② blocks face-up Tribute Summons of non-Zombies.
+  // ① every monster on the field and in the GYs is a Zombie (cont.race); ② only Zombies can be Tribute Summoned
   'Zombie World': { effs: [{ type: 'act', res: function* () {} }],
-    cont: { forbid: (g, src, a) => a.type === 'ns' && lv(a.c) >= 5 && race(a.c) !== 'Zombie' } },
+    cont: { race: (g, src, c) => onField(c) || c.zone === 'gy' ? 'Zombie' : null, forbid: (g, src, a) => a.type === 'ns' && lv(a.c) >= 5 && race(a.c) !== 'Zombie' } },
   'Limiter Removal': { effs: [
     { type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Machine'),
       res: function* (g, c, p) { const ms = monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Machine'); for (const m of ms) { addMod(g, m, { set: 2 * atk(g, m), which: 'atk', end: true }); /* doubling sets the value, like halving (2026-11-28 audit) */ m.flags.limiterBy = c.u; m.flags.limiterTurn = g.turnNo; } if (ms.length) log(g, `${ms.map(name).join(', ')} doubled ATK.`); } },

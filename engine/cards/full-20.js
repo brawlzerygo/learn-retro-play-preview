@@ -61,7 +61,7 @@ function miniBattle(g, a, t) {
 const archDice = (who, hits, label) => ({ type: 'quick', speed: 3, ds: true, label,
   cond: (g, c, p, x) => { const T = x.top; return !!T && !T.negated && T.p !== p && !(T.f20dice || []).includes(c.u) && T.t.some(m => onField(m) && m.zone === 'm' && faceUp(m) && m.ctrl === p && who(g, c, m)); },
   target: function* (g, c, p, L2) { const T = g.chain[g.chain.length - 1]; (T.f20dice || (T.f20dice = [])).push(c.u); L2.data.L = T; },
-  res: function* (g, c, p, L2) { const T = L2.data.L; if (!T || T.negated) return; const n = dice(g, p); if (hits.includes(n)) { T.negBy = p; negate(g, T, true); } else log(g, 'Nothing happened.'); } });
+  res: function* (g, c, p, L2) { const T = L2.data.L; if (!T || T.negated) return; const n = (yield* L.roll(g, p)); if (hits.includes(n)) { T.negBy = p; negate(g, T, true); } else log(g, 'Nothing happened.'); } });
 const archCost = { type: 'trig', mand: true, label: 'Pay 500 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
   // PARTIAL: with 500 LP or less the card is destroyed instead of paying (the text gives no rule for it).
   res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } };

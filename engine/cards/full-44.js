@@ -32,12 +32,8 @@ const dwDiscard = (g, ev, c) => {
 // once per turn, it can't be destroyed by battle (Sphere of Chaos, Stardust Xiaolong)
 const oncePerTurnBattle = { replaceDestroy: (g, c, o) => { if (!o.battle || c.flags.f44bt === g.turnNo) return false; c.flags.f44bt = g.turnNo; log(g, `${name(c)} was not destroyed by battle.`); return true; } };
 // Trap Monsters (as batch-7.js). PARTIAL: as a monster it has no Type/Attribute (ENGINE: no Attribute/Type override).
-function trapMonster(g, c, p, st) {
-  if (!onField(c) || freeM(g, p) < 0) return false;
-  if (!ss(g, p, c, 'def')) return false;
-  c.flags.baseAtk = st.atk; c.flags.lv = st.lv; c.flags.trapMon = true; addMod(g, c, { set: st.def, which: 'def' });
-  return true;
-}
+// Trap Monsters: the engine's notion (L.trapMonster, 2026-11-28 audit): a monster and a Trap Card, Type/Attribute from the text, its S/T Zone kept
+const trapMonster = L.trapMonster;
 // Synchro Summon with a named Tuner (as full-41.js; Sun Dragon Inti needs "Fire Ant Ascator")
 function synMats(g, p, sx, tunerOk) {
   const mons = monsOf(g, p).filter(faceUp), out = [], Lv = num(D(sx).lv);
@@ -291,7 +287,7 @@ E.addScripts({
     cond: (g, c, p) => g.p[p].hand.length > 0 && allField(g).some(x => x !== c),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard which card?', g.p[p].hand, 1, 1, 'cost'); move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, p)} discarded ${D(x).n}.`); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target which card?', allField(g).filter(x => x !== c), 1, 1, 'bad'); },
-    res: function* (g, c, p, L2) { const n = dice(g, p); const t = live(L2)[0]; if (!t) return; if (n === 1 || n === 6) { log(g, 'Nothing happens.'); return; } destroy(g, [t], { by: p, src: c }); } }] },
+    res: function* (g, c, p, L2) { const n = (yield* L.roll(g, p)); const t = live(L2)[0]; if (!t) return; if (n === 1 || n === 6) { log(g, 'Nothing happens.'); return; } destroy(g, [t], { by: p, src: c }); } }] },
   // Targets a face-up Fortune Lady (Level 3 or more) and another face-up monster. PARTIAL: a Level 3 Fortune Lady stays Level 1
   // (the engine can't show Level 0).
   'Solitaire Magician': { effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Lower a Fortune Lady\'s Level: destroy a monster',

@@ -100,7 +100,7 @@ E.addScripts({
       res: function* (g, c, p) { destroy(g, stOf(g, opp(p)), { by: p, src: c }); } }] },
   // "When ... you can": misses the timing if it leaves the field in the middle of a chain.
   'Mokey Mokey King': { effs: [{ type: 'trig', loc: 'any', when: true, tags: { ss: 1 }, label: 'Summon Mokey Mokey from the GY',
-    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to !== 'm',
+    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to !== 'm' && !!ev.snap && ev.snap.faceUp,   // it must have been face-up (goat-11, EDOPro)
     cond: (g, c) => freeM(g, c.owner) >= 0 && g.p[c.owner].gy.some(x => named(x, 'Mokey Mokey') && canSS(g, c.owner, x)),
     res: function* (g, c) { const p = c.owner; for (const x of g.p[p].gy.filter(y => named(y, 'Mokey Mokey'))) { if (freeM(g, p) < 0) break; ss(g, p, x, 'atk'); } } }] },
   // Mokey Mokey on your field at resolution become 3000 ATK until the End Phase; one Summoned later that turn does too (ruling).

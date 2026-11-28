@@ -245,7 +245,7 @@ E.addScripts({
   // Mandatory trigger, once for each batch of face-up Beasts destroyed at the same time.
   'Maji-Gire Panda': { effs: [{ type: 'trig', mand: true, label: 'Gain 500 ATK',
     on: (g, ev, c) => ev.type === 'move' && ev.destroyed && ev.wasField && ev.c !== c && ev.snap && ev.snap.mon && ev.snap.faceUp && ev.snap.race === 'Beast',
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500 }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, own: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
   // PARTIAL: "by your opponent's effect" is read from the move's own player when the effect gave one, else the turn player.
   'Major Riot': { effs: [trapTrig({ label: 'Return every monster and Set from the hand', tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'move' && ev.wasField && ev.from === 'm' && ev.to === 'hand' && ev.prevCtrl === c.ctrl && (ev.by != null && ev.by !== c.ctrl),

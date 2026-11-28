@@ -363,10 +363,10 @@ E.addScripts({
   // Ported from goat-6.js. A "Toon" card, or Manga Ryu-Ran (rulings).
   'Toon Table of Contents': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.some(x => /Toon/.test(D(x).n) || named(x, 'Manga Ryu-Ran')) && !forbid(g, { type: 'search', p }),
     res: function* (g, c, p) { yield* search(g, p, x => /Toon/.test(D(x).n) || named(x, 'Manga Ryu-Ran'), 'Add which "Toon" card to your hand?'); } }] },
-  // Ported from goat-6.js: paying 1000 LP is the cost (none while Spell Economics is face-up, the only LP hook there is).
+  // Paying 1000 LP is the cost; the engine's LP hook waives it under a face-up, not negated Spell Economics (goat-09).
   'Toon World': { effs: [{ type: 'act',
-    cond: (g, c, p) => stOf(g, p).some(x => faceUp(x) && named(x, 'Spell Economics')) || g.p[p].lp > 1000,
-    cost: function* (g, c, p) { if (stOf(g, p).some(x => faceUp(x) && named(x, 'Spell Economics'))) log(g, `${PN(g, p)} paid no LP (Spell Economics).`); else pay(g, p, 1000); },
+    cond: (g, c, p) => L.spellLPFree(g, p) || g.p[p].lp > 1000,
+    cost: function* (g, c, p) { pay(g, p, 1000); },
     res: noop }] },
 
   /* ----- Tornado ----- */

@@ -56,16 +56,8 @@ function* returnAndRevive(g, p, t, kind) {
   if (!(yield* yn(g, p, `Special Summon ${mats.map(name).join(' and ')} from your GY (${kind} Materials)?`))) return;
   const grp2 = g.group; for (const m of mats) ss(g, p, m, 'atk', { group: grp2 });
 }
-// Dice rolled by this batch's cards honor Dice Re-Roll (g.reroll[p] = {turn, used}).
-// PARTIAL: dice rolled by cards in other files don't check it.
-function* roll(g, p) {
-  let n = dice(g, p);
-  for (const q of [p, opp(p)]) {
-    const r = g.reroll && g.reroll[q];
-    if (r && r.turn === g.turnNo && !r.used && (yield* yn(g, q, `${PN(g, p)} rolled a ${n}. Use Dice Re-Roll to roll again?`))) { r.used = true; log(g, `${PN(g, q)} used Dice Re-Roll.`); n = dice(g, p); }
-  }
-  return n;
-}
+// Dice go through the engine's shared roll, which honors Dice Re-Roll (2026-11-28 audit).
+const roll = L.roll;
 const rollsDice = c => /\broll(s|ed)?\b[^.]*\b(die|dice)\b|\b(die|dice)\b[^.]*\broll/i.test(txt(c));
 /* A Trap that responds to something with no response window (copied from classic-5.js): an optional trigger while it is Set. */
 const trapTrig = o => ({ type: 'trig', loc: 'any', label: o.label,
@@ -411,10 +403,10 @@ E.addScripts({
       const a = yield* choose(g, opp(p), 'Declare an Attribute', ATTRS); const rest = ATTRS.filter((_, i) => i !== a); const b = yield* choose(g, opp(p), 'Declare a second Attribute', rest);
       const dec = [ATTRS[a], rest[b]]; log(g, `${PN(g, opp(p))} declared ${dec.join(' and ')}. The monster was ${D(t).n} (${attr(t)}).`);
       if (dec.includes(attr(t))) draw(g, opp(p), 2); else draw(g, p, 2); } }] },
-  // ENGINE: no Type change hook in race(), so the declared Type is only noted.
-  'DNA Surgery': { effs: [{ type: 'act', res: function* (g, c, p) { const i = yield* choose(g, p, 'Declare a Type', TYPES); c.flags.dna = TYPES[i]; log(g, `${PN(g, p)} declared ${TYPES[i]}: all face-up monsters become that Type.`); } }] },
-  // ENGINE: no Attribute change hook in attr(), so the declared Attribute is only noted.
-  'DNA Transplant': { effs: [{ type: 'act', res: function* (g, c, p) { const i = yield* choose(g, p, 'Declare an Attribute', ATTRS); c.flags.dna = ATTRS[i]; log(g, `${PN(g, p)} declared ${ATTRS[i]}: all face-up monsters become that Attribute.`); } }] },
+  // the declared Type applies to every face-up monster on the field (cont.race, 2026-11-28 audit)
+  'DNA Surgery': { cont: { race: (g, src, c) => src.flags.dna && c.zone === 'm' && faceUp(c) ? src.flags.dna : null }, effs: [{ type: 'act', res: function* (g, c, p) { const i = yield* choose(g, p, 'Declare a Type', TYPES); c.flags.dna = TYPES[i]; log(g, `${PN(g, p)} declared ${TYPES[i]}: all face-up monsters become that Type.`); } }] },
+  // the declared Attribute applies to every face-up monster on the field (cont.attr, 2026-11-28 audit)
+  'DNA Transplant': { cont: { attr: (g, src, c) => src.flags.dna && c.zone === 'm' && faceUp(c) ? src.flags.dna : null }, effs: [{ type: 'act', res: function* (g, c, p) { const i = yield* choose(g, p, 'Declare an Attribute', ATTRS); c.flags.dna = ATTRS[i]; log(g, `${PN(g, p)} declared ${ATTRS[i]}: all face-up monsters become that Attribute.`); } }] },
 
   /* ----- Double ----- */
   'Double Attack': { effs: [{ type: 'act',

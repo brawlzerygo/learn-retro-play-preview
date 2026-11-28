@@ -92,7 +92,7 @@ E.addScripts({
     effs: [{ type: 'quick', label: 'Lose 400 ATK: piercing damage',
       cond: (g, c, p) => g.tp === p && !g.inDS && g.aw && g.aw.a === c && g.aw.t && onField(g.aw.t) && g.aw.t.pos !== 'atk' && c.flags.f38exa !== g.aw.group,
       cost: function* (g, c) { c.flags.f38exa = g.aw.group; },
-      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: -400, end: true }); c.flags.f38pierce = g.turnNo; g.seq++; log(g, 'Exarion Universe lost 400 ATK and inflicts piercing damage this turn.'); } }] },
+      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: -400, end: true, own: true }); c.flags.f38pierce = g.turnNo; g.seq++; log(g, 'Exarion Universe lost 400 ATK and inflicts piercing damage this turn.'); } }] },
   // Original 2010 text: no once-per-Duel limit (added by later errata). The cards are swapped, not sent (no "sent to the GY" effects); Extra Deck monsters go back to the Extra Deck.
   'Exchange of the Spirit': { effs: [{ type: 'act',
     cond: (g, c, p) => g.p[0].gy.length >= 15 && g.p[1].gy.length >= 15 && g.p[p].lp > 1000,
@@ -372,7 +372,7 @@ E.addScripts({
       return false; } },
       { type: 'ign', opt: true, label: 'Reveal Fiends: +300 ATK each', cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && race(x) === 'Fiend'),
         cost: function* (g, c, p, L2) { const xs = yield* pick(g, p, 'Reveal which Fiend monsters?', g.p[p].hand.filter(x => isMon(x) && race(x) === 'Fiend'), 1, 99, 'good'); L2.data.n = xs.length; log(g, `${PN(g, p)} revealed ${xs.map(name).join(', ')}.`); },
-        res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300 * L2.data.n, end: true }); log(g, `Gaap gained ${300 * L2.data.n} ATK.`); } } }] },
+        res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300 * L2.data.n, end: true, own: true }); log(g, `Gaap gained ${300 * L2.data.n} ATK.`); } } }] },
   // The Extra Deck monster wasn't properly summoned, so it can't be Special Summoned from the GY or banishment.
   'Gale Dogra': { effs: [lockInstall,
     { type: 'ign', label: 'Pay 3000: send an Extra Deck monster to the GY', cond: (g, c, p) => g.p[p].lp > 3000 && g.p[p].extra.length > 0,

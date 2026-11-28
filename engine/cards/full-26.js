@@ -399,7 +399,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { const x = L2.data.x; if (x.zone !== 'gy' || !ss(g, p, x, 'atk')) return; addMod(g, x, { atk: 800 }); log(g, `${name(x)} gained 800 ATK.`); } })] },
   'Roulette Barrel': { effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Roll 2 dice: destroy a monster',
     res: function* (g, c, p) {
-      const a = dice(g, p), b = dice(g, p);
+      const [a, b] = yield* L.roll(g, p, 2);   // Dice Re-Roll rolls both again (its ruling 4)
       const i = a === b ? 0 : yield* choose(g, p, 'Use which result?', ['Level ' + a, 'Level ' + b]); const n = i ? b : a;
       const ms = fieldMons(g).filter(x => faceUp(x) && lv(x) === n); if (!ms.length) { log(g, `No face-up Level ${n} monster.`); return; }
       const [t] = yield* pick(g, p, `Destroy which Level ${n} monster?`, ms, 1, 1, 'bad'); if (t) destroy(g, [t], { by: p }); } }] },

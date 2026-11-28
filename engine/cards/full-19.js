@@ -235,7 +235,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { let h = 0; for (let i = 0; i < 3; i++) if (coin(g, p)) h++; log(g, `${h} of 3 coins came up Heads.`); if (h >= 2) destroy(g, live(L2), { by: p }); } }] },
   // Port of goat-3.js: the gain lasts until the end of the opponent's next turn
   'Bazoo the Soul-Eater': {
-    self: { atk: (g, c) => (c.flags.bazoo || []).filter(b => g.turnNo <= b.until).reduce((s, b) => s + 300 * b.n, 0) },
+    self: { atk: (g, c) => (c.flags.bazoo || []).filter(b => g.turnNo <= b.until).reduce((s, b) => s + 300 * b.n, 0), onNegated: (g, c) => { c.flags.bazoo = null; } },
     effs: [{ type: 'ign', opt: true, label: 'Banish up to 3 monsters: +300 ATK each',
       cond: (g, c, p) => g.p[p].gy.some(isMon),
       cost: function* (g, c, p, L2) { const xs = yield* pick(g, p, 'Banish up to 3 monsters from your GY', g.p[p].gy.filter(isMon), 1, 3, 'cost'); for (const x of xs) move(g, x, 'ban', { reason: 'cost' }); L2.data.n = xs.length; log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); },
@@ -302,7 +302,7 @@ E.addScripts({
   // Face-up monsters only (a face-down monster's Level isn't known).
   'Blind Destruction': { effs: [{ type: 'act', res: noop },
     { type: 'trig', loc: 'st', mand: true, opt: true, tags: { destroy: 1 }, label: 'Roll a die', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; const n = dice(g, p);
+      res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; const n = (yield* L.roll(g, p));
         const xs = fieldMons(g).filter(faceUp).filter(m => lv(m) > 0 && (n === 6 ? lv(m) >= 6 : lv(m) === n));
         if (xs.length) destroy(g, xs, { by: p, src: c }); else log(g, 'No monster had that Level.'); } }] },
   // ENGINE: takeControl() doesn't check for "control can't switch". PARTIAL: it can't be targeted by effects that take

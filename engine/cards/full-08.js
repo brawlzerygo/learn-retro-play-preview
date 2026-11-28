@@ -30,9 +30,12 @@ const eqBonus = (a, d) => ({ atk: (g, src, m) => src.equipTo === m.u ? a : 0, de
 // (Goblin Attack Force ruling): the attack counts once it reaches the Damage Step.
 const goblinLock = (more = {}) => ({ ...more,
   cont: { ...(more.cont || {}), forbid: (g, src, a) => a.type === 'pos' && a.c === src && src.flags.gobLock >= g.turnNo },
-  effs: [{ type: 'trig', on: (g, ev, c) => {
+  // the attack is recorded even while negated, and negation is checked at the end of the Battle Phase (2026-11-28 audit, goat-07 ruling:
+  // attacking under Skill Drain, Skill Drain destroyed before the end of the Battle Phase, it still changes to Defense Position)
+  effs: [{ type: 'trig', loc: 'any', on: (g, ev, c) => {
+    if (c.zone !== 'm') return false;
     if (ev.type === 'dsStart' && ev.a === c) c.flags.gobAtk = g.turnNo;
-    if (ev.type === 'phase' && ev.ph === 'bpEnd' && c.flags.gobAtk === g.turnNo && onField(c)) { c.flags.gobAtk = 0; c.flags.gobLock = g.turnNo + 2; toDef(g, c); }
+    if (ev.type === 'phase' && ev.ph === 'bpEnd' && c.flags.gobAtk === g.turnNo && faceUp(c) && !negd(g, c)) { c.flags.gobAtk = 0; c.flags.gobLock = g.turnNo + 2; toDef(g, c); }
     return false; }, res: function* () {} }, ...(more.effs || [])] });
 // Flint
 const flintOf = (g, m) => stOnField(g).find(x => faceUp(x) && named(x, 'Flint') && x.equipTo === m.u) || null;
@@ -120,7 +123,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.ascTurn === g.turnNo && fieldMons(g).some(x => x.flags.ascator === g.turnNo),
       res: function* (g, c) { c.flags.ascTurn = 0; for (const x of fieldMons(g).filter(x => x.flags.ascator === g.turnNo)) { move(g, x, 'gy', { reason: 'effect' }); log(g, `${D(x).n} was sent to the GY.`); } } }] },
   'Fire Darts': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.length === 0,
-    res: function* (g, c, p) { const n = dice(g, p) + dice(g, p) + dice(g, p); damage(g, opp(p), n * 100, { src: c, srcP: p }); } }] },
+    res: function* (g, c, p) { const n = (yield* L.roll(g, p, 3)).reduce((x, y) => x + y, 0); damage(g, opp(p), n * 100, { src: c, srcP: p }); } }] },
   // A Continuous Effect (ruling): the damage happens with no chain link whenever its controller's LP has gone up.
   // PARTIAL: LP is compared at each game event, so a gain and a loss between two events can be missed.
   'Fire Princess': { effs: [{ type: 'trig', on: (g, ev, c) => {
@@ -286,7 +289,7 @@ E.addScripts({
   'Graceful Charity': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 3,
     res: function* (g, c, p) { draw(g, p, 3); yield* discardPick(g, p, 2, 'Discard 2 cards'); } }] },
   'Graceful Dice': { effs: [{ type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).length > 0,
-    res: function* (g, c, p) { const n = dice(g, p) * 100; for (const m of monsOf(g, p)) addMod(g, m, { atk: n, def: n, end: true }); if (monsOf(g, p).length) log(g, `${PN(g, p)}'s monsters gained ${n} ATK and DEF.`); } }] },
+    res: function* (g, c, p) { const n = (yield* L.roll(g, p)) * 100; for (const m of monsOf(g, p)) addMod(g, m, { atk: n, def: n, end: true }); if (monsOf(g, p).length) log(g, `${PN(g, p)}'s monsters gained ${n} ATK and DEF.`); } }] },
   'Graceful Revival': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && lv(x) <= 2),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Level 2 or lower monster?', g.p[p].gy.filter(x => isMon(x) && lv(x) <= 2), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'atk')) link(g, c, t); } }] },

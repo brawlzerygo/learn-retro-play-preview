@@ -279,7 +279,7 @@ E.addScripts({
     { type: 'ign', opt: true, label: 'Set this card', cond: (g, c) => faceUp(c),
       res: function* (g, c) { if (onField(c) && faceUp(c)) { setFaceDown(g, c); c.posChanged = true; } } },
     { type: 'trig', on: (g, ev, c) => {
-      if (ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos === 'set') { addMod(g, c, { set: 2400, which: 'atk', scorp: true }); log(g, '8-Claws Scorpion\'s ATK became 2400.'); }
+      if (ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos === 'set') { addMod(g, c, { set: 2400, which: 'atk', scorp: true, own: true }); log(g, '8-Claws Scorpion\'s ATK became 2400.'); }
       if (ev.type === 'dsEnd' && ev.a === c) c.mods = c.mods.filter(m => !m.scorp);
       return false; }, res: function* () {} }] },
   'Abare Ushioni': { effs: [{ type: 'ign', opt: true, label: 'Toss a coin and call it',
@@ -338,7 +338,7 @@ E.addScripts({
   // The roll is mandatory; the summon is optional.
   'Agido': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Roll a die: revive a Fairy',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    res: function* (g, c, p) { const n = dice(g, p); const cs = g.p[p].gy.filter(x => isMon(x) && race(x) === 'Fairy' && (n === 6 ? lv(x) >= 6 : lv(x) === n));
+    res: function* (g, c, p) { const n = (yield* L.roll(g, p)); const cs = g.p[p].gy.filter(x => isMon(x) && race(x) === 'Fairy' && (n === 6 ? lv(x) >= 6 : lv(x) === n));
       if (!cs.length || freeM(g, p) < 0 || !(yield* yn(g, p, `Special Summon a Level ${n === 6 ? '6 or higher' : n} Fairy from your GY?`))) return;
       const [x] = yield* pick(g, p, 'Special Summon which Fairy?', cs, 1, 1, 'good'); if (x && x.zone === 'gy') ss(g, p, x, 'atk'); } }] },
   // Port of goat-1.js.

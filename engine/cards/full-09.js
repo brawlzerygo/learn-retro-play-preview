@@ -165,7 +165,7 @@ E.addScripts({
   "Gravekeeper's Visionary": { self: {
     tributes: (g, c, p) => monsOf(g, p).some(isGK) ? 1 : null,
     atk: (g, c) => 200 * g.p[c.ctrl].gy.filter(isGK).length,
-    replaceDestroy: (g, c) => { const x = g.p[c.ctrl].hand.find(isGK); if (!x) return false; move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, c.ctrl)} discarded ${D(x).n} so Gravekeeper's Visionary wasn't destroyed.`); return true; } } },
+    replaceAsk: L.replaceOther((g, c) => g.p[c.ctrl].hand.filter(isGK), "Discard a Gravekeeper's monster instead of %s being destroyed?", "Discard which Gravekeeper's monster?", 'discard') } },
   // PARTIAL: "could make them discard" is read from the activated card's text.
   "Gravekeeper's Watcher": { effs: [{ type: 'quick', loc: 'hand', label: 'Negate a discard effect',
     cond: (g, c, p, x) => { const t = x && x.top; return !!t && t.p !== p && !t.negated && (spellTrapAct(t) || (isMon(t.c) && t.eff.type !== 'act')) && makesDiscard(t.c); },
@@ -206,8 +206,7 @@ E.addScripts({
   'Great Shogun Shien': {
     proc: { label: 'Special Summon (2 face-up Six Samurai)', cond: (g, c, p) => monsOf(g, p).filter(x => faceUp(x) && isSixSam(x)).length >= 2 },
     cont: { forbid: (g, src, a) => a.type === 'activate' && a.p === opp(src.ctrl) && a.c && isST(a.c) && a.eff && a.eff.type === 'act' && stActsThisTurn(g, a.p) >= 1 },
-    self: { replaceDestroy: (g, c) => { const xs = monsOf(g, c.ctrl).filter(x => x !== c && faceUp(x) && isSixSam(x)).sort((a, b) => stat(g, a, 'atk') - stat(g, b, 'atk')); if (!xs.length) return false;
-      log(g, `${PN(g, c.ctrl)} destroyed ${name(xs[0])} instead of Great Shogun Shien.`); destroy(g, [xs[0]], { by: c.ctrl }); return true; } } },
+    self: { replaceAsk: L.replaceOther((g, c) => monsOf(g, c.ctrl).filter(x => faceUp(x) && isSixSam(x)), 'Destroy another face-up Six Samurai monster instead of %s?', 'Destroy which Six Samurai instead?') } },
   'Great Spirit': { effs: [flipDown(),
     { type: 'trig', when: true, label: 'Switch the original ATK and DEF of an EARTH monster', on: (g, ev, c) => evSummoned(ev, c, ['flip']),
       cond: g => fieldMons(g).some(x => faceUp(x) && attr(x) === 'EARTH'),
@@ -378,7 +377,7 @@ E.addScripts({
     c.f09ctrl = c.ctrl; return false; } }] },
   'Horus the Black Flame Dragon LV6': { self: { unaffectedSpells: true }, effs: [horusKill, horusUp('LV8')] },
   'Horus the Black Flame Dragon LV8': { effs: [lockInstall,
-    { type: 'quick', ds: true, needsSelf: true, label: 'Negate a Spell', cond: (g, c, p, x) => { const t = x && x.top; return !!(t && spellTrapAct(t) && isSpell(t.c) && !t.negated); },
+    { type: 'quick', ds: true, needsSelf: true, sameChain: true, label: 'Negate a Spell', cond: (g, c, p, x) => { const t = x && x.top; return !!(t && spellTrapAct(t) && isSpell(t.c) && !t.negated); },   // several times in one chain (ruling 3)
       target: function* (g, c, p, L2) { L2.data.tl = g.chain[g.chain.length - 1]; },
       res: function* (g, c, p, L2) { const t = L2.data.tl; if (!onField(c) || !faceUp(c) || !t || t.negated) return; t.negBy = p; negate(g, t, true); } }] },
 });

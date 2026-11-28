@@ -358,7 +358,7 @@ E.addScripts({
     { type: 'act', res: noop },
     { type: 'trig', loc: 'st', mand: true, opt: true, tags: { destroy: 1 }, label: 'Roll a die',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; let n = 6; for (let i = 0; i < 20 && n === 6; i++) n = dice(g, p); if (n === 6) return;
+      res: function* (g, c, p) { if (!onField(c)) return; let n = 6; for (let i = 0; i < 20 && n === 6; i++) n = (yield* L.roll(g, p)); if (n === 6) return;
         const m = g.p[opp(p)].m[n - 1]; if (m) destroy(g, [m], { by: p, src: c }); else log(g, 'There was no monster in that zone.'); } }] },
 
   'Needle Worm': { effs: [{ type: 'trig', mand: true, label: "Send 5 of their cards to the GY", on: (g, ev, c) => ev.type === 'flip' && ev.c === c,

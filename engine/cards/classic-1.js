@@ -117,7 +117,7 @@ E.addScripts({
         on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute']),
         cond: (g, c, p) => g.p[p].lp > 100,
         cost: function* (g, c, p, L2) { const n = g.p[p].lp - 100; L2.data.n = n; pay(g, p, n); },
-        res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { set: L2.data.n, which: 'both' }); log(g, `${name(c)} gained ${L2.data.n} ATK and DEF.`); } },
+        res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { set: L2.data.n, which: 'both', own: true }); log(g, `${name(c)} gained ${L2.data.n} ATK and DEF.`); } },
       { type: 'ign', tags: { destroy: 1 }, label: 'Pay 1000: destroy a monster',
         cond: (g, c, p) => g.p[p].lp > 1000 && fieldMons(g).some(x => x !== c),
         cost: function* (g, c, p) { pay(g, p, 1000); },

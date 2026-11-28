@@ -114,7 +114,7 @@ E.addScripts({
         if (x) { delete x.flags.chron; move(g, x, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(x)} to the hand.`); } } }] },
   // ENGINE: there is no hook for paying LP to activate a Spell Card, so this card does nothing yet (goat-6.js has the same
   // stand-in, with Toon World checking it by hand).
-  'Spell Economics': { effs: [{ type: 'act', res: noop }] },
+  'Spell Economics': { effs: [{ type: 'act', res: noop }], cont: { noSpellLP: (g, src, p) => p === src.ctrl } },   // the engine's pay() hook (negated: no effect)
   'Spell Gear': { effs: [{ type: 'act', tags: { ss: 1, destroy: 1 },
     cond: (g, c, p) => fieldOf(g, p).filter(x => x !== c && faceUp(x) && /Ancient Gear/.test(name(x))).length >= 3 && g.p[p].deck.some(x => named(x, 'Ancient Gear Golem')),
     cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Send 3 "Ancient Gear" cards you control to the GY', fieldOf(g, p).filter(x => x !== c && faceUp(x) && /Ancient Gear/.test(name(x))), 3, 3, 'cost');

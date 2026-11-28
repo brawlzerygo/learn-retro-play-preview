@@ -126,15 +126,15 @@ E.addScripts({
     res: function* (g, c, p) { draw(g, p, 2); mill(g, p, 2); } }] },
 
   /* ----- Machina ----- */
-  'Machina Gearframe': { effs: [
+  // ③ "If the equipped monster would be destroyed, destroy this card instead" (a Union's replacement, mandatory: unionStandIn)
+  'Machina Gearframe': { cont: { replaceDestroy: L.unionStandIn }, effs: [
     { type: 'trig', when: true, on: (g, ev, c) => evSummoned(ev, c, ['normal']),
       cond: (g, c, p) => !forbid(g, { type: 'search', p }) && g.p[p].deck.some(x => isMon(x) && /Machina/.test(D(x).n) && D(x).n !== 'Machina Gearframe'),
       res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && /Machina/.test(D(x).n) && D(x).n !== 'Machina Gearframe', 'Add a Machina monster'); } },
-    // ENGINE: ③ "destroy this card instead" needs a destruction-replacement hook.
     { type: 'ign', label: 'Equip to a Machine',
       cond: (g, c, p) => c.used[1] !== g.turnNo && c.used[2] !== g.turnNo && freeST(g, p) >= 0 && monsOf(g, p).some(x => x !== c && faceUp(x) && race(x) === 'Machine' && !unionOn(g, x)),
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Equip Machina Gearframe to which Machine?', monsOf(g, p).filter(x => x !== c && faceUp(x) && race(x) === 'Machine' && !unionOn(g, x)), 1, 1, 'good'); },
-      res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t) || t.ctrl !== p || !onField(c) || c.zone !== 'm' || freeST(g, p) < 0) return; move(g, c, 'st', { ctrl: p, pos: 'up', reason: 'equip' }); equip(g, c, t); } },
+      res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t) || t.ctrl !== p || !onField(c) || c.zone !== 'm' || freeST(g, p) < 0) return; move(g, c, 'st', { ctrl: p, pos: 'up', reason: 'equip' }); equip(g, c, t); c.flags.union = true; } },
     { type: 'ign', loc: 'st', tags: { ss: 1 }, label: 'Unequip and Special Summon',
       cond: (g, c, p) => c.used[1] !== g.turnNo && c.used[2] !== g.turnNo && !!c.equipTo && freeM(g, p) >= 0,
       res: function* (g, c, p) { if (c.zone !== 'st') return; c.equipTo = null; ssx(g, p, c, 'atk'); } }] },
@@ -200,7 +200,8 @@ E.addScripts({
     // PARTIAL: "can't be Special Summoned except by its own effect" is checked while it is in the GY (and Lonefire skips it); from the hand other Special Summons aren't blocked.
     cont: { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src && g.amaOwn !== src.u },
     effs: [
-      { type: 'trig', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'afterCalc' && ev.a === c,
+      // ①: "Apply this effect before any Chain is built once Damage Calculation has concluded" (ruling 6): not a chain link
+      { type: 'trig', mand: true, noChain: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'afterCalc' && ev.a === c,
         res: function* (g, c, p) { if (onField(c)) destroy(g, [c], { by: p }); } },
       { type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.to === 'gy' && ev.prevCtrl === c.owner,
         res: function* (g, c, p) { damage(g, opp(p), 800, { src: c, srcP: p }); } },
@@ -257,8 +258,9 @@ E.addScripts({
     effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000, cost: function* (g, c, p) { pay(g, p, 1000); }, res: function* () {} }] },
 
   /* ----- Cat ----- */
-  'Summoner Monk': { effs: [
-    { type: 'trig', mand: true, on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c)) c.flags.noTribute = true; return evSummoned(ev, c, ['normal', 'flip']); },
+  'Summoner Monk': { self: { noTribute: true },   // "This card cannot be Tributed": live, so Skill Drain switches it off (site ruling)
+    effs: [
+    { type: 'trig', mand: true, on: (g, ev, c) => evSummoned(ev, c, ['normal', 'flip']),
       res: function* (g, c) { if (onField(c) && c.pos === 'atk') { c.pos = 'def'; log(g, `${name(c)} changed to Defense Position.`); } } },
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Discard a Spell: summon a Level 4',
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(isSpell) && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && lv(x) === 4 && !noSS(x)),
@@ -273,7 +275,7 @@ E.addScripts({
         const xs = yield* pick(g, p, 'Special Summon 2 Level 3 or lower Beasts', cands, 2, 2, 'good');
         for (const x of xs) if (ssx(g, p, x, 'atk')) x.flags.rescueEnd = g.turnNo;
         shuffleDeck(g, p); } },
-    { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.rescueEnd === g.turnNo && x.owner === c.owner) && !g.p[c.owner].gy.concat(g.p[c.owner].ban, g.p[c.owner].hand, g.p[c.owner].deck, fieldMons(g)).some(y => y !== c && D(y).n === 'Rescue Cat' && y.u < c.u),
+    { type: 'trig', loc: 'any', mand: true, noChain: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.rescueEnd === g.turnNo && x.owner === c.owner) && !g.p[c.owner].gy.concat(g.p[c.owner].ban, g.p[c.owner].hand, g.p[c.owner].deck, fieldMons(g)).some(y => y !== c && D(y).n === 'Rescue Cat' && y.u < c.u),
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.flags.rescueEnd === g.turnNo && x.owner === c.owner), { by: p }); } }] },
   'X-Saber Airbellum': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.direct && ev.src === c,
     res: function* (g, c, p) { randomDiscard(g, opp(p)); } }] },
@@ -347,7 +349,7 @@ E.addScripts({
     res: function* (g, c, p) { yield* ssFromDeck(g, p, x => novaOk(g, x), 'Special Summon from your Deck'); } }] },
   'Dimensional Alchemist': { effs: [
     { type: 'ign', opt: true, label: 'Banish the top card: +500 ATK', cond: (g, c, p) => g.p[p].deck.length > 0,
-      res: function* (g, c, p) { const P = g.p[p]; if (!P.deck.length) return; const x = P.deck[P.deck.length - 1]; move(g, x, 'ban', { reason: 'effect' }); log(g, `${PN(g, p)} banished ${name(x)} from the top of the Deck.`); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true }); log(g, 'Dimensional Alchemist gained 500 ATK.'); } } },
+      res: function* (g, c, p) { const P = g.p[p]; if (!P.deck.length) return; const x = P.deck[P.deck.length - 1]; move(g, x, 'ban', { reason: 'effect' }); log(g, `${PN(g, p)} banished ${name(x)} from the top of the Deck.`); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true, own: true }); log(g, 'Dimensional Alchemist gained 500 ATK.'); } } },
     { type: 'trig', loc: 'gy', when: true, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.to === 'gy' && ev.prevCtrl === c.owner,
       cond: (g, c, p) => g.p[p].ban.some(isMon),
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Return which banished monster to your hand?', g.p[p].ban.filter(isMon), 1, 1, 'good'); },

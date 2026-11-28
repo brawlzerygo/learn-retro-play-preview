@@ -57,7 +57,8 @@ const endShuffle = (more = {}) => ({ type: 'trig', mand: true, label: 'Shuffle i
   res: function* (g, c) { toExtra(g, c); }, ...more });
 // "If this card destroys a monster by battle and sends it to the GY": the destroyed monster's original ATK.
 const wingDamage = (label, heal) => ({ type: 'trig', mand: true, label, on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
-  res: function* (g, c, p, L2) { const t = L2.ev.c; if (!isMon(t)) return; const n = baseAtk(t); if (heal) gain(g, p, n); else damage(g, opp(p), n, { src: c, srcP: p }); } });
+  // the destroyed monster's original ATK as it was on the field (2026-11-28 audit, goat-08: a tributeless Fusilier's 1100, not 2800)
+  res: function* (g, c, p, L2) { const t = L2.ev.c; if (!isMon(t)) return; const n = L2.ev.snap && L2.ev.snap.batk != null ? L2.ev.snap.batk : baseAtk(t); if (heal) gain(g, p, n); else damage(g, opp(p), n, { src: c, srcP: p }); } });
 
 /* ---------- summon rules and bookkeeping (one rule per duel, kept up by the HOOK effect on every card here) ---------- */
 // Must be Fusion Summoned and Cannot be Special Summoned by other ways.

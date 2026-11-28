@@ -476,7 +476,7 @@ E.addScripts({
     { type: 'act', cond: (g, c, p) => g.p[p].hand.some(isMon),
       res: function* (g, c, p) { const ms = g.p[p].hand.filter(isMon); if (!ms.length) return;
         const [x] = yield* pick(g, p, 'Show which monster in your hand?', ms, 1, 1, 'good'); if (!x) return; log(g, `${PN(g, p)} showed ${name(x)}.`);
-        const n = dice(g, p);
+        const n = (yield* L.roll(g, p));
         if (n === 1) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${name(x)} was sent to the GY.`); }
         else { x.flags.lv = n; x.flags.lvUntil = true; x.flags.f10lab = g.turnNo; log(g, `${name(x)} is Level ${n} this turn.`); } } }] },
   'Level Down': { effs: [{ type: 'act', tags: { ss: 1 },

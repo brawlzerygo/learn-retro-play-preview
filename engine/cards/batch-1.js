@@ -253,7 +253,7 @@ const S = {
         if (cs.length > 1) { const i = yield* choose(g, p, 'Send which Fusion Materials from your Deck?', cs.map(m => m.map(x => D(x).n).join(' + '))); mats = cs[i]; }
         for (const m of mats) move(g, m, 'gy', { reason: 'effect' }); log(g, `${PN(g, p)} sent ${mats.map(x => D(x).n).join(', ')} from the Deck to the GY.`); shuffleDeck(g, p);
         if (onField(c)) c.flags.b1ff = { name: D(fx).n, n: 0 }; } },
-    { type: 'trig', loc: 'st', mand: true, tags: { ss: 1 }, label: 'Fusion Summon the revealed monster',
+    { type: 'trig', loc: 'st', mand: true, noChain: true, tags: { ss: 1 }, label: 'Fusion Summon the revealed monster',   // ruling 22: "without starting a chain"
       on: (g, ev, c) => { if (ev.type !== 'phase' || ev.ph !== 'standby' || ev.tp !== c.ctrl || !c.flags.b1ff || c.flags.b1ff.done || !faceUp(c)) return false; c.flags.b1ff.n++; return c.flags.b1ff.n === 2; },
       res: function* (g, c, p) { const f = c.flags.b1ff; if (!f || !onField(c)) return; f.done = true; const fx = g.p[p].extra.find(x => D(x).n === f.name);
         if (fx && freeM(g, p) >= 0 && ss(g, p, fx, 'atk', { how: 'fusion' })) link(g, c, fx); } }] },
@@ -307,7 +307,7 @@ const S = {
       const A = baseAtk(t), cs = oppFaceUp(g, p).filter(x => atk(g, x) <= A); if (!cs.length) return; const [x] = yield* pick(g, p, 'Destroy which monster?', cs, 1, 1, 'bad'); if (x) destroy(g, [x], { by: p, src: c }); } }] },
   'Sea Dragon Lord Gishilnodon': { hook: true, effs: [{ type: 'trig', mand: true,
     on: (g, ev, c) => ev.type === 'move' && ev.wasField && ev.to === 'gy' && ev.snap && ev.snap.faceUp && ev.snap.mon && ev.snap.lv <= 3,
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { set: 3000, which: 'atk', end: true }); log(g, 'Sea Dragon Lord Gishilnodon’s ATK became 3000.'); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { set: 3000, which: 'atk', end: true, own: true }); log(g, 'Sea Dragon Lord Gishilnodon’s ATK became 3000.'); } } }] },
   // "Your opponent can't banish cards from either GY": no effect that banishes from a GY, as cost or effect, and no summon procedure that
   // does (Chaos Sorcerer, Gigantes): read from each card's text by the engine (banishesFromGY), not a list of names.
   'Kycoo the Ghost Destroyer': { cont: { forbid: (g, src, a) => a.p != null && a.p !== src.ctrl && ((a.type === 'banish' && a.from === 'gy') || (!!a.c &&
@@ -317,9 +317,9 @@ const S = {
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish up to 2 monsters from their GY', g.p[opp(p)].gy.filter(isMon), 1, 2, 'bad'); },
       res: function* (g, c, p, L2) { const xs = L2.t.filter(x => x.zone === 'gy'); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.map(x => D(x).n).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished.`); } }] },
   /* ----- Dragon Turbo ----- */
-  // ENGINE: destroy() has no replacement hook, so "discard 1 card instead" of being destroyed by an opponent's effect is missing.
+  // "If this card would be destroyed by an opponent's card effect, you can discard 1 card instead" (replaceOther, 2026-11-28 audit)
   // PARTIAL: the doubled ATK applies through the whole Damage Step, not only during damage calculation.
-  'Clear Vice Dragon': { self: { atk: (g, c) => { const b = g.battle; if (!g.inDS || !b || b.a !== c || !b.t || D(b.t).n === 'Clear Vice Dragon') return 0; return 2 * atk(g, b.t) - baseAtk(c); } }, effs: [] },
+  'Clear Vice Dragon': { self: { replaceAsk: L.replaceOther((g, c) => g.p[c.ctrl].hand, 'Discard 1 card instead of %s being destroyed?', 'Discard which card?', 'discard', (g, c, o) => !o.battle && !o.rule && o.by != null && o.by !== c.ctrl), atk: (g, c) => { const b = g.battle; if (!g.inDS || !b || b.a !== c || !b.t || D(b.t).n === 'Clear Vice Dragon') return 0; return 2 * atk(g, b.t) - baseAtk(c); } }, effs: [] },
   'Debris Dragon': { hook: true, effs: [{ type: 'trig', when: true, tags: { ss: 1 }, on: (g, ev, c) => evSummoned(ev, c, ['normal']),
     cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && baseAtk(x) <= 500 && L.canSS(g, p, x)),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon a monster with 500 or less ATK from your GY', g.p[p].gy.filter(x => isMon(x) && baseAtk(x) <= 500 && L.canSS(g, p, x)), 1, 1, 'good'); },

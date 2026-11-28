@@ -342,7 +342,7 @@ E.addScripts({
   'Sand Moth': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon this card',
     on: (g, ev, c) => fromFieldToGY(ev, c) && ev.destroyed && !ev.battle && ev.snap && ev.snap.pos === 'set',
     res: function* (g, c) { const q = c.owner; if (c.zone !== 'gy' || freeM(g, q) < 0) return;
-      if (ss(g, q, c, 'atk')) { c.flags.baseAtk = 2000; addMod(g, c, { def: -1000 }); g.seq++; log(g, 'Sand Moth now has 2000 ATK and 1000 DEF.'); } } }] },
+      if (ss(g, q, c, 'atk')) { c.flags.baseAtk = 2000; addMod(g, c, { def: -1000, own: true }); g.seq++; log(g, 'Sand Moth now has 2000 ATK and 1000 DEF.'); } } }] },
   // Its continuous effects start no chain; "destroy this card" is done as a mandatory trigger. PARTIAL: face-down cards turned
   // face-up by other ways (Flip effects of monsters) are not covered, only Spell/Trap activations.
   'Sanguine Swamp': {
@@ -383,7 +383,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Copy which of your opponent’s banished monsters?', g.p[opp(p)].ban.filter(isMon), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const x = L2.t[0]; if (!x || x.zone !== 'ban' || !onField(c) || !faceUp(c)) return;
       c.flags.lv = lv(x); c.flags.lvUntil = true; c.flags.banishOnLeave = true; c.flags.f43scan = g.turnNo;
-      addMod(g, c, { set: baseAtk(x), which: 'atk', end: true }); addMod(g, c, { set: num(D(x).def), which: 'def', end: true }); g.seq++;
+      addMod(g, c, { set: baseAtk(x), which: 'atk', end: true, own: true }); addMod(g, c, { set: num(D(x).def), which: 'def', end: true, own: true }); g.seq++;
       log(g, `${name(c)} copied ${D(x).n}.`); } },
     { type: 'trig', mand: true, res: noop, on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'end' && c.flags.f43scan != null) { c.flags.banishOnLeave = false; c.flags.f43scan = null; } return false; } }] },
   'Scarr, Scout of Dark World': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Add a Dark World monster',

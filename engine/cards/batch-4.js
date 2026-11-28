@@ -190,11 +190,10 @@ E.addScripts({
   // ENGINE: the engine's Synchro check reads D(c).tu only, so a Gemini-Summoned Tuned Magician is not a Tuner for normal
   // Synchro Summons. This batch's own Synchro procs (Black Brutdrago, Gaia Knight, Gol'gar) do count it as a Tuner.
   'Tuned Magician': { effs: [] },
-  // PARTIAL: only battle destruction can be replaced (no hook for "would be destroyed" by card effects).
-  'Nettles': { effs: [{ type: 'trig', label: 'Destroy a Plant instead',
-    on: (g, ev, c) => ev.type === 'afterCalc' && (ev.a === c || ev.t === c) && !!c.flags.battleDoomed && !(ev.flipped && ev.t === c),
-    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && race(x) === 'Plant'),
-    res: function* (g, c, p) { if (!onField(c) || !c.flags.battleDoomed) return; const cs = monsOf(g, p).filter(x => x !== c && faceUp(x) && race(x) === 'Plant'); if (!cs.length) return; const [x] = yield* pick(g, p, 'Destroy which Plant instead of Nettles?', cs, 1, 1, 'cost'); if (x && destroy(g, [x], { by: p }).length) { c.flags.battleDoomed = false; log(g, 'Nettles was not destroyed.'); } } }] },
+  // "If this face-up card would be destroyed, you can destroy 1 face-up Plant monster you control instead" (replaceOther, 2026-11-28 audit:
+  // card effects too, ruling 2: not when it was attacked face-down)
+  'Nettles': { self: { replaceAsk: L.replaceOther((g, c) => monsOf(g, c.ctrl).filter(x => faceUp(x) && race(x) === 'Plant'), 'Destroy a face-up Plant monster instead of %s?', 'Destroy which Plant instead?', 'destroy',
+    (g, c, o) => !(o.battle && g.battle && g.battle.flipped === c)) }, effs: [] },
   'Supervise': { effs: [
     { type: 'act', cond: g => fieldMons(g).some(x => faceUp(x) && isGemini(x)),
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Equip Supervise to which Gemini monster?', fieldMons(g).filter(x => faceUp(x) && isGemini(x)), 1, 1, 'good'); },
@@ -400,7 +399,7 @@ E.addScripts({
     { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Psychic' && lv(x) <= 3),
       res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => isMon(x) && race(x) === 'Psychic' && lv(x) <= 3); const [x] = yield* pick(g, p, 'Special Summon a Level 3 or lower Psychic from your hand or Deck', cs, 1, 1, 'good');
         if (x) { const fromDeck = x.zone === 'deck'; if (ss(g, p, x)) x.flags.etBy = c.u; if (fromDeck) shuffleDeck(g, p); } } },
-    { type: 'trig', loc: 'any', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.etBy === c.u),
+    { type: 'trig', loc: 'any', mand: true, noChain: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.etBy === c.u),   // ruling 1: no chain
       res: function* (g, c) { const xs = fieldMons(g).filter(x => x.flags.etBy === c.u); if (noBanish(g)) return; for (const x of xs) move(g, x, 'ban', { reason: 'effect' }); if (xs.length) log(g, `${xs.map(x => D(x).n).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished (Emergency Teleport).`); } }] },
   'Telekinetic Power Well': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Psychic' && lv(x) <= 2),
@@ -436,7 +435,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy' && !!ev.killer,
       res: function* (g, c, p, L) { const k = L.ev.killer; if (k && onField(k) && k.zone === 'm') { addCtr(g, k, 'A', 2); log(g, `${name(k)} got 2 A-Counters.`); } } }] },
   'Code A Ancient Ruins': { effs: [{ type: 'act', res: function* (g) { touch(g); } },
-    { type: 'trig', loc: 'st', mand: true,
+    { type: 'trig', loc: 'st', mand: true, noChain: true,   // ruling 2: "does not start a chain"
       on: (g, ev, c) => faceUp(c) && ev.type === 'move' && ev.destroyed && ev.wasField && ev.snap && ev.snap.faceUp && ev.snap.mon && /Alien/.test(ev.snap.name),
       res: function* (g, c) { if (!onField(c)) return; addCtr(g, c, 'A', 1); log(g, 'Code A Ancient Ruins got an A-Counter.'); } },
     { type: 'ign', loc: 'st', opt: true, tags: { ss: 1 }, label: 'Remove 2 A-Counters: revive an Alien',
@@ -480,7 +479,7 @@ E.addScripts({
   // PARTIAL: Flip Summons by the opponent are not blocked (the engine's Flip Summon option checks no forbid rule).
   'Swords of Concealing Light': { effs: [
     { type: 'act', res: function* (g, c, p) { touch(g); if (!onField(c)) return; c.flags.scl = 0; for (const m of monsOf(g, opp(p))) { if (D(m).k === 'token') { m.pos = 'def'; continue; } if (faceUp(m)) setFaceDown(g, m); } log(g, `${PN(g, opp(p))}'s monsters were changed to face-down Defense Position.`); } },
-    { type: 'trig', loc: 'st', mand: true, tags: { destroy: 1 },
+    { type: 'trig', loc: 'st', mand: true, noChain: true, tags: { destroy: 1 },   // ruling 5: the self-destruction "does not start a chain"
       on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && c.flags.scl != null && faceUp(c)) { c.flags.scl++; return c.flags.scl >= 2; } return false; },
       res: function* (g, c, p) { if (onField(c)) destroy(g, [c], { by: p, rule: true }); } }],
     cont: { forbid: (g, src, a) => a.type === 'pos' && a.c && a.c.ctrl !== src.ctrl } },

@@ -109,16 +109,9 @@ function record(g, ev) {
 const REC = { type: 'trig', loc: 'any', res: noop, on: (g, ev) => { record(g, ev); return false; } };
 const sumCount = (g, p) => g.f34sl && g.f34sl.turn === g.turnNo ? g.f34sl.s[p] : [];
 
-/* Six Samurai "destroy another face-up Six Samurai monster you control instead".
- PARTIAL: no prompt: it is always used when it can be, and destroys your lowest-ATK other face-up Six Samurai. */
-let SUB = 0;
-const samReplace = (g, c) => {
-  if (SUB) return false;
-  const xs = monsOf(g, c.ctrl).filter(x => x !== c && faceUp(x) && isSixSam(x)).sort((a, b) => atk(g, a) - atk(g, b)); if (!xs.length) return false;
-  log(g, `${PN(g, c.ctrl)} destroyed ${name(xs[0])} instead of ${name(c)}.`);
-  SUB++; try { destroy(g, [xs[0]], { by: c.ctrl, rule: true }); } finally { SUB--; }
-  return true;
-};
+/* Six Samurai "If this card would be destroyed, you can destroy another face-up Six Samurai monster you control instead": the engine's
+ optional replacement (replaceOther): the player is asked, and each protected card needs its own substitute (rulings 12 to 14). */
+const samRepl = L.replaceOther((g, c) => monsOf(g, c.ctrl).filter(x => faceUp(x) && /Six Samurai/.test(name(x))), 'Destroy another face-up Six Samurai monster instead of %s?', 'Destroy which Six Samurai instead?');
 
 /* Yubel: the forms are summoned with a mark the lock lets through. */
 function* yubelNext(g, p, n) {
@@ -148,8 +141,8 @@ E.addScripts({
     cond: (g, c, p) => monsOf(g, p).some(faceUp) && freeM(g, opp(p)) >= 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Give control of which face-up monster?', monsOf(g, p).filter(faceUp), 1, 1, 'cost'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && t.ctrl === p) takeControl(g, opp(p), t, true); } }] },
-  "The Six Samurai - Nisashi": { self: { maxAttacks: (g, c) => otherSam(g, c) ? 2 : (c.flags.extraAttack === g.turnNo ? 2 : 1), replaceDestroy: samReplace }, effs: [] },
-  "The Six Samurai - Yariza": { self: { directAttack: (g, c) => otherSam(g, c), replaceDestroy: samReplace }, effs: [] },
+  "The Six Samurai - Nisashi": { self: { maxAttacks: (g, c) => otherSam(g, c) ? 2 : (c.flags.extraAttack === g.turnNo ? 2 : 1), replaceAsk: samRepl }, effs: [] },
+  "The Six Samurai - Yariza": { self: { directAttack: (g, c) => otherSam(g, c), replaceAsk: samRepl }, effs: [] },
   // No chain: at the end of the Damage Step of the first battle of your Six Samurai each turn.
   "Swift Samurai Storm!": { effs: [actNoop,
     { type: 'trig', loc: 'st', res: noop, on: (g, ev, c) => {

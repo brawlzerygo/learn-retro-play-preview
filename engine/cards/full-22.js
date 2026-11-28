@@ -155,12 +155,14 @@ E.addScripts({
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && race(x) === 'Zombie' && !forbid(g, { type: 'ss', c: x, p, how: 'special' })),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Zombie from your GY?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Zombie' && !forbid(g, { type: 'ss', c: x, p, how: 'special' })), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
-  // tributes returns [0]: the engine skips a bare 0. A no-Tribute Normal Summon or Set halves its original ATK/DEF (1400/1000)
-  // while face-up; Skill Drain gives the full stats back (the halving is its own effect). Turned face-down, it gets them back.
+  // tributes returns [0]: the engine skips a bare 0. A no-Tribute Normal Summon or Set makes its original ATK/DEF 1400/1000 once face-up
+  // (ruling 2: a Set one is 2800/2000 until flipped; ruling 5: Megamorph reads 1400). Its own effect: once negated it is 2800/2000 for good
+  // (ruling 4: ownBaseAtk, dropped by the engine). Turned face-down, it gets them back (ruling 3: the flags reset). 2026-11-28 audit, goat-08.
   'Fusilier Dragon, the Dual-Mode Beast': {
-    self: { tributes: () => [0], atk: (g, c) => c.flags.fusHalf ? -1400 : 0, def: (g, c) => c.flags.fusHalf ? -1000 : 0 },
+    self: { tributes: () => [0], def: (g, c) => c.flags.fusHalf && c.flags.ownBaseAtk ? -1000 : 0 },
     effs: [{ type: 'trig', faceDownOk: true, res: noop, on: (g, ev, c) => {
       if (((ev.type === 'summon' && ev.cs.includes(c) && ev.how === 'normal') || (ev.type === 'set' && ev.c === c)) && !(c.tributes || []).length) c.flags.fusHalf = true;
+      if (c.flags.fusHalf && !c.flags.ownBaseAtk && c.zone === 'm' && faceUp(c) && !negd(g, c)) { c.flags.baseAtk = 1400; c.flags.ownBaseAtk = true; }
       return false; } }] },
   'Garuda the Wind Spirit': {
     proc: { label: 'Special Summon (banish a WIND monster)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'WIND'),
@@ -231,12 +233,13 @@ E.addScripts({
     cond: (g, c, p) => monsOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which of their monsters to the hand?', monsOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && t.zone === 'm') { const n = faceUp(t) ? name(t) : 'A face-down monster'; move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${n} returned to the hand.`); } } }] },
-  'Gear Golem the Moving Fortress': { self: { directAttack: (g, c) => c.flags.gearDirect === g.turnNo },
+  'Gear Golem the Moving Fortress': { self: { directAttack: (g, c) => c.flags.gearDirect === g.turnNo, lasting: ['directAttack'] },
     effs: [{ type: 'ign', opt: true, label: 'Pay 800: attack directly', cond: (g, c, p) => g.phase === 'main1' && g.p[p].lp > 800,
       cost: function* (g, c, p) { pay(g, p, 800); },
       res: function* (g, c) { if (onField(c)) { c.flags.gearDirect = g.turnNo; log(g, `${name(c)} can attack directly this turn.`); } } }] },
   // Mandatory. PARTIAL: an equip that lands without an event (an Equip Spell resolving) is caught at the next game event.
-  'Gearfried the Iron Knight': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy the Equip Card',
+  // a continuous effect, no chain (goat-09: Netrep, Trap Hole and Snatch Steal Q&A; EDOPro): the Equip Card is destroyed at once
+  'Gearfried the Iron Knight': { effs: [{ type: 'trig', mand: true, noChain: true, tags: { destroy: 1 }, label: 'Destroy the Equip Card',
     on: (g, ev, c) => equipsOn(g, c).length > 0 || (ev.type === 'move' && ev.to === 'st' && ev.reason === 'activate' && isSpell(ev.c) && D(ev.c).sub === 'Equip'),
     cond: (g, c) => equipsOn(g, c).length > 0,
     res: function* (g, c, p) { if (onField(c) && faceUp(c)) destroy(g, equipsOn(g, c), { by: p, src: c }); } }] },
@@ -282,7 +285,8 @@ E.addScripts({
   'Greenkappa': { effs: [{ type: 'trig', mand: true, faceDownOk: true, tags: { destroy: 1 }, label: 'Destroy 2 Set Spells/Traps', on: flipOn,
     cond: g => allField(g).filter(x => isST(x) && x.pos === 'set').length >= 2,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which 2 Set Spells/Traps?', allField(g).filter(x => isST(x) && x.pos === 'set'), 2, 2, 'bad'); },
-    res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
+    // a target no longer Set when it resolves (chained, flipped face-up) isn't destroyed; the other still is (goat-10 archive, Granmarg ruling)
+    res: function* (g, c, p, L2) { destroy(g, live(L2).filter(x => x.pos === 'set'), { by: p }); } }] },
   'Gren Maju Da Eiza': { self: { atk: (g, c) => 400 * g.p[c.ctrl].ban.length, def: (g, c) => 400 * g.p[c.ctrl].ban.length } },
   // The player who just lost control of it gains 3000 (ruling: a stolen Griggle coming back gives the thief the LP), once while face-up.
   // PARTIAL: control changes make no event, so it triggers at the next game event.
@@ -405,7 +409,8 @@ E.addScripts({
       cost: function* (g, c, p) { yield* discardOne(g, p, c); },
       res: function* (g, c, p) { g.p[p].noBattleDamage = g.turnNo; (g.f22hlb || (g.f22hlb = [null, null]))[p] = g.turnNo; log(g, `${PN(g, p)} takes no damage from the opponent this turn.`); } }] },
   'Heavy Slump': { effs: [{ type: 'act', cond: (g, c, p) => g.p[opp(p)].hand.length >= 8,
-    res: function* (g, c, p) { const o = opp(p); const h = g.p[o].hand.slice(); if (h.length < 8) return; for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, o); log(g, `${PN(g, o)} shuffled ${h.length} cards into the Deck.`); draw(g, o, 2); } }] },
+    // the 8 cards are an activation condition only: it resolves with whatever is in the hand then (goat-11, EDOPro)
+    res: function* (g, c, p) { const o = opp(p); const h = g.p[o].hand.slice(); for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, o); log(g, `${PN(g, o)} shuffled ${h.length} cards into the Deck.`); draw(g, o, 2); } }] },
   'Hidden Spellbook': { effs: [{ type: 'act', cond: (g, c, p) => g.tp === p && g.p[p].gy.filter(isSpell).length >= 2,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Shuffle which 2 Spells into your Deck?', g.p[p].gy.filter(isSpell), 2, 2, 'good'); },
     res: function* (g, c, p, L2) { const ts = L2.t.filter(x => x.zone === 'gy'); for (const t of ts) move(g, t, 'deck', { reason: 'effect' }); if (ts.length) log(g, `${ts.map(x => D(x).n).join(' and ')} ${ts.length > 1 ? 'were' : 'was'} shuffled into the Deck.`); } }] },

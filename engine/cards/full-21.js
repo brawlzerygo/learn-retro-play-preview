@@ -173,7 +173,7 @@ E.addScripts({
       draw(g, g.tp, 5); draw(g, opp(g.tp), 5); } }] },
   'Firebird': { effs: [{ type: 'trig', mand: true, label: '+500 ATK',
     on: (g, ev, c) => ev.type === 'move' && ev.c !== c && ev.destroyed && ev.wasField && ev.from === 'm' && ev.prevCtrl === c.ctrl && ev.snap && ev.snap.faceUp && ev.snap.race === 'Winged Beast',
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500 }); log(g, 'Firebird gained 500 ATK.'); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, own: true }); log(g, 'Firebird gained 500 ATK.'); } } }] },
   'Flash Assailant': { self: { atk: (g, c) => -400 * g.p[c.ctrl].hand.length, def: (g, c) => -400 * g.p[c.ctrl].hand.length } },
   'Flower Wolf': { effs: [] },
   // Face-up at the start of the Damage Step and destroyed by battle: it comes back in the End Phase (to its owner).
@@ -356,11 +356,10 @@ E.addScripts({
     cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && ['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && g.sw.cs.some(x => onField(x) && faceUp(x) && atk(g, x) <= 500),
     target: function* (g, c, p, L2) { L2.data.cs = g.sw.cs.slice(); },
     res: function* (g, c, p, L2) { destroy(g, L2.data.cs.filter(x => onField(x) && faceUp(x) && atk(g, x) <= 500), { by: p, src: c }); } }] },
-  // Ported from classic-5.js. PARTIAL: as a monster it has no Type or Attribute (ENGINE: attr()/race() can't be set by a
-  // script) and it frees its Spell/Trap Zone.
+  // A Trap Monster (L.trapMonster, 2026-11-28 audit): EARTH Reptile Level 4, 1600/1800, its S/T Zone kept.
   'Embodiment of Apophis': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => mainPhase(g) && freeM(g, p) >= 0,
     res: function* (g, c, p) { if (!onField(c) || freeM(g, p) < 0) return; const i = yield* choose(g, p, 'Embodiment of Apophis: which position?', ['Attack Position', 'Defense Position']);
-      if (!ss(g, p, c, i ? 'def' : 'atk')) return; c.flags.baseAtk = 1600; c.flags.lv = 4; c.flags.trapMon = true; addMod(g, c, { set: 1800, which: 'def' }); } }] },
+      L.trapMonster(g, c, p, { pos: i ? 'def' : 'atk' }); } }] },
   'Enchanted Javelin': { effs: [{ type: 'act', cond: g => !!g.aw && !!g.aw.a && onField(g.aw.a),
     target: function* (g, c, p, L2) { L2.t = [g.aw.a]; },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) gain(g, p, atk(g, t)); } }] },

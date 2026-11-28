@@ -207,10 +207,10 @@ E.addScripts({
       const cs = monsOf(g, opp(p)).filter(m => faceUp(m) && m !== L2.data.a); if (!cs.length) return;
       const [n] = yield* pick(g, p, 'Which of their monsters attacks instead?', cs, 1, 1, 'bad'); if (!n) return;
       toAtk(g, n); n.attacks++; miniBattle(g, n, L2.data.t && onField(L2.data.t) ? L2.data.t : null); } }] },
-  // PARTIAL: as a monster it has no Type or Attribute (the engine can't change them) and it frees its Spell/Trap Zone.
+  // A Trap Monster (L.trapMonster, 2026-11-28 audit): EARTH Reptile Level 4, 1600/1800, its S/T Zone kept.
   'Embodiment of Apophis': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => mainPhase(g) && freeM(g, p) >= 0,
     res: function* (g, c, p) { if (!onField(c) || freeM(g, p) < 0) return; const i = yield* choose(g, p, 'Embodiment of Apophis: which position?', ['Attack Position', 'Defense Position']);
-      if (!ss(g, p, c, i ? 'def' : 'atk')) return; c.flags.baseAtk = 1600; c.flags.lv = 4; c.flags.trapMon = true; addMod(g, c, { set: 1800, which: 'def' }); } }] },
+      L.trapMonster(g, c, p, { pos: i ? 'def' : 'atk' }); } }] },
   'Energy Drain': { effs: [{ type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).some(faceUp),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target which of your face-up monsters?', monsOf(g, p).filter(faceUp), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const n = 200 * g.p[opp(p)].hand.length; if (!n) return; addMod(g, t, { atk: n, def: n, end: true }); log(g, `${name(t)} gained ${n} ATK and DEF.`); } }] },
@@ -314,7 +314,7 @@ E.addScripts({
       if (L2.data.L) { const T = L2.data.L; if (g.chain.includes(T)) { T.t = [n]; log(g, `${name(T.c)} now targets ${n.pos === 'set' ? 'a face-down monster' : name(n)}.`); } return; }
       const a = L2.data.a; if (!onField(a)) return; if (g.aw && g.aw.a === a) stopAttack(g); log(g, 'The attack target was switched.'); miniBattle(g, a, n); } }] },
   'Skull Dice': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, opp(p)).length > 0,
-    res: function* (g, c, p) { const n = dice(g, p) * 100; for (const m of monsOf(g, opp(p)).filter(faceUp)) addMod(g, m, { atk: -n, def: -n, end: true }); log(g, `${PN(g, opp(p))}'s monsters lost ${n} ATK and DEF.`); } }] },
+    res: function* (g, c, p) { const n = (yield* L.roll(g, p)) * 100; for (const m of monsOf(g, opp(p)).filter(faceUp)) addMod(g, m, { atk: -n, def: -n, end: true }); log(g, `${PN(g, opp(p))}'s monsters lost ${n} ATK and DEF.`); } }] },
   // The cards sent since the last time it applied are counted on the card, then the damage is dealt per owner.
   'Skull Invitation': { effs: [
     { type: 'act', res: function* () {} },
@@ -370,7 +370,7 @@ E.addScripts({
   'Roulette Spider': { effs: [{ type: 'act', cond: (g, c, p) => (!!(g.aw && g.aw.a.ctrl !== p)) && !!g.aw && E.lib.canTarget(g, g.aw.a, { c, p }),
     target: function* (g, c, p, L2) { L2.data.a = g.aw.a; L2.data.t = g.aw.t; L2.t = [g.aw.a]; },
     res: function* (g, c, p, L2) {
-      const a = L2.data.a; const n = dice(g, p); const o = opp(p);
+      const a = L2.data.a; const n = (yield* L.roll(g, p)); const o = opp(p);
       if (n === 1) { const h = Math.floor(g.p[p].lp / 2); g.p[p].lp -= h; log(g, `${PN(g, p)}'s LP were halved.`); return; }
       if (n === 6) { if (onField(a)) destroy(g, [a], { by: p, src: c }); return; }
       if (!onField(a) || a.zone !== 'm') return;

@@ -46,7 +46,14 @@ const D = c => DATA.get(c.id);
 const isMonD = d => d && !['spell', 'trap'].includes(d.k);
 const isExtraD = d => d && (d.k === 'synchro' || d.k === 'fusion');
 const isSpell = c => D(c).k === 'spell', isTrap = c => D(c).k === 'trap', isST = c => isSpell(c) || isTrap(c);
-const isMon = c => isMonD(D(c));
+/* Trap Monsters (2026-11-28 audit, edison-21: Zoma the Spirit, Metal Reflect Slime, Embodiment of Apophis, Cyber Shadow Gardna, Stronghold
+ the Moving Fortress, Machine King - 3000 B.C.): in a Monster Zone the card is a monster and still a Trap Card (isMon and isTrap are both
+ true), with the Type, Attribute, Level and ATK/DEF its text gives; it keeps its Spell & Trap Zone (Apophis ruling 1); MST and Heavy Storm
+ hit it (ruling 5: stOnField lists it); a Trap negator (Jinzo, Royal Decree, Trap Stun) sends it face-up to the Spell & Trap Zone, where it
+ stays meaninglessly (ruling 7); turned face-down it goes face-down to the Spell & Trap Zone (ruling 9). Off the field it is a Trap Card. */
+let TMPROBE = false;
+const isTrapMon = c => !!(c && c.flags && c.flags.trapMon && c.zone === 'm');
+const isMon = c => isMonD(D(c)) || (!TMPROBE && isTrapMon(c));
 const onField = c => c.zone === 'm' || c.zone === 'st' || c.zone === 'fz';
 const faceUp = c => onField(c) && c.pos !== 'set';
 const SC = c => (FMT !== 'edison' && FSCRIPTS[FMT] && FSCRIPTS[FMT][D(c).n]) || SCRIPTS[D(c).n] || null;
@@ -79,8 +86,16 @@ const isBW = c => /^Blackwing/.test(name(c));
 const isFrog = c => /frog/i.test(name(c));   // "Frog" cards include Unifrog (the word inside the name; 2026-11-28 audit)
 const isHERO = c => /HERO/.test(name(c));
 const isEHERO = c => /^Elemental HERO/.test(name(c));
-const attr = c => D(c).a || '';
-const race = c => D(c).r || '';
+/* Type and Attribute changes by a card's lasting effect (2026-11-28 audit, edison-11/goat-11): a static cont.race(g, src, c) or
+ cont.attr(g, src, c) returns the new one for c, or null (Zombie World: "All monsters on the field and in the GYs become Zombie"; DNA
+ Surgery / DNA Transplant: face-up monsters on the field become the declared Type / Attribute). The last one that applies wins. */
+let TYPEDEPTH = 0;
+function typeOver(c, k) {
+  const g = c && c.g; if (!g || TYPEDEPTH || !c.id || !isMonD(D(c)) && !isTrapMon(c)) return null;
+  TYPEDEPTH++; try { let v = null; for (const [s, ct] of statics(g)) if (ct[k]) { const r = ct[k](g, s, c); if (r) v = r; } return v; } finally { TYPEDEPTH--; }
+}
+const attr = c => typeOver(c, 'attr') || (isTrapMon(c) && c.flags.trapMon.a) || D(c).a || '';
+const race = c => typeOver(c, 'race') || (isTrapMon(c) && c.flags.trapMon.r) || D(c).r || '';
 /* Levels (2026-11-27, a player report: A Legendary Ocean didn't lower WATER Levels, so a Level 5 still needed a Tribute). A card knows its
  game (mk sets c.g, not enumerable, so it never travels in messages), and lv() applies ongoing Level effects the way stat() applies ATK:
  a face-up card's own self.lv(g, c) sets its Level (Morphtronic Scopen, Apocatequil), then every face-up cont.lv(g, src, c) adds to it
@@ -151,7 +166,10 @@ function negSource(g, c) { if (c.flags.negated) return 'flag'; if (ruleNeg(g, c)
  those effects are what is negated (Boomboxen, Celfon, Radion site rulings). 2026-11-28 audit, findings edison-11/12/19. */
 const POSFX_RE = /While in (?:Attack|Defense|face-up (?:Attack|Defense)) Position/i;
 function negActAllowed(g, c, eff) {
-  if (!eff || !eff.cost || hardNeg(g, c) || POSFX_RE.test(D(c).ps || D(c).tx || '')) return false;
+  // a mandatory trigger activates too and resolves negated (the same site ruling; EDOPro): it still makes its chain link (2026-11-28 audit,
+  // E3b). "Does not start a chain" self-rules (Cloudians) are the continuous effect itself, which Skill Drain stops.
+  const mandTrig = eff && eff.type === 'trig' && eff.mand && !eff.noChain && !eff.rule && (eff.loc || 'm') === 'm';
+  if (!eff || (!eff.cost && !mandTrig) || hardNeg(g, c) || POSFX_RE.test(D(c).ps || D(c).tx || '')) return false;
   let any = false; for (const [s, ct] of statics(g)) if (ct.negates && s !== c && ct.negates(g, s, c)) { if (!ct.actOk) return false; any = true; }
   return any;
 }
@@ -162,15 +180,46 @@ function negd(g, c) { // is this card's effect negated right now?
   try { for (const [s, ct] of statics(g)) if (ct.negates && s !== c && ct.negates(g, s, c)) return true; } finally { NEGDEPTH--; }
   return false;
 }
+/* self.lasting lists the self flags that an already resolved effect gave (Gear Golem's direct attack, Yaichi's and Kamon's "can't declare
+ an attack this turn"): later negation doesn't switch them off (2026-11-28 audit; Gear Golem ruling 3, Yaichi/Kamon ruling 8). */
 function has(g, c, flag) {
   const sc = SC(c);
-  if (sc && sc.self && sc.self[flag] != null && onField(c) && faceUp(c) && !negd(g, c)) { const v = sc.self[flag]; if (typeof v === 'function' ? v(g, c) : v) return true; }
+  if (sc && sc.self && sc.self[flag] != null && onField(c) && faceUp(c) && (!negd(g, c) || (sc.self.lasting && sc.self.lasting.includes(flag)))) { const v = sc.self[flag]; if (typeof v === 'function' ? v(g, c) : v) return true; }
   if (c.flags[flag]) return true;
   for (const [s, ct] of statics(g)) if (ct.grant && ct.grant(g, s, c, flag)) return true;
   return false;
 }
+/* "You can only control 1 face-up X" / "There can only be 1 X (monster) on the field" (2026-11-28 audit, edison-20 Grandmaster, edison-16
+ Earthbound Immortals): read from a monster's text. Only face-up ones count (Grandmaster PS: "1 face-up"; Aslla piscu site ruling: a Set one
+ is fine), so a summon or Flip Summon that would make a second one face-up can't happen, and one turned face-up by an effect while another
+ is face-up is destroyed by the rule (uniqSweep; not "by its own effect", so Aslla piscu's effect still activates). A quoted name followed
+ by "monster" is an archetype. */
+const uniqMemo = new Map();
+function uniqOf(c) {
+  const d = D(c); if (!isMonD(d)) return null; if (uniqMemo.has(d.n)) return uniqMemo.get(d.n);
+  const t = String(d.ps || '') + ' ' + String(d.tx || ''); let u = null;
+  let m = /You can only control 1 (?:face-up )?"([^"]+)"( monster)?/i.exec(t), side = 'own';
+  if (!m) { m = /There can only be 1 (?:face-up )?"([^"]+)"( monster)? on the field/i.exec(t); side = 'field'; }
+  if (m) { const n = m[1], arch = !!m[2]; u = { side, match: x => isMon(x) && (arch ? name(x).includes(n) : name(x) === n) }; }
+  uniqMemo.set(d.n, u); return u;
+}
+function uniqBlocked(g, a) {
+  if (!['ns', 'ss', 'flip'].includes(a.type) || !a.c || !a.c.id) return false;
+  const u = uniqOf(a.c); if (!u) return false; const p = a.p != null ? a.p : a.c.ctrl;
+  return fieldMons(g).some(x => x !== a.c && faceUp(x) && u.match(x) && (u.side === 'field' || x.ctrl === p));
+}
+function uniqSweep(g) {
+  if (g.uqBusy) return; const ms = fieldMons(g).filter(x => faceUp(x) && uniqOf(x)); if (ms.length < 2) return;
+  g.uqBusy = true;
+  try { const kill = [];
+    for (const c of ms) { const u = uniqOf(c); const same = ms.filter(x => u.match(x) && (u.side === 'field' || x.ctrl === c.ctrl)).sort((a, b) => (a.flags.upAt || a.moved || 0) - (b.flags.upAt || b.moved || 0));
+      if (same.length > 1 && same[0] !== c && !kill.includes(c)) kill.push(c); }
+    if (kill.length) { log(g, `Only one ${kill.map(name).join(', ')} can be face-up.`); destroy(g, kill, { rule: true }); } }
+  finally { g.uqBusy = false; }
+}
 function forbid(g, a) {
   if (a.type === 'ss' && ssLimited(g, a)) return true;
+  if (uniqBlocked(g, a)) return true;
   for (const [s, ct] of statics(g)) if (ct.forbid && !(a.type === 'ss' && g.ssBatch && g.ssBatch.cs.includes(s)) && ct.forbid(g, s, a)) return true;
   for (const r of g.rules) if (!(r.L && r.L.actNegated) && !(a.inCond && legacyLock(r)) && r.forbid(g, a)) return true;   // a lock from an activation that was negated is gone
   return false;
@@ -181,7 +230,7 @@ function forbid(g, a) {
  the text) apply there, and the rules still apply when it resolves. Locks with an end (this turn) or from an activation still count. */
 const legacyLock = r => r.end == null && r.startOf == null && !r.L;
 function stat(g, c, which) { // current ATK or DEF
-  const d = D(c); let v = which === 'atk' ? baseAtk(c) : num(d.def);
+  const d = D(c); let v = which === 'atk' ? baseAtk(c) : c.flags.baseDef != null ? c.flags.baseDef : num(d.def);
   if (c.flags.tokAtk != null) v = c.flags.tokAtk;
   if (!onField(c) || !faceUp(c) || c.zone !== 'm') return v;
   const nm = d.n, neg = negd(g, c);
@@ -208,7 +257,9 @@ const stOf = (g, p) => [...g.p[p].st.filter(Boolean), ...(g.p[p].fz ? [g.p[p].fz
 const fieldOf = (g, p) => [...monsOf(g, p), ...stOf(g, p)];
 const allField = g => [...fieldOf(g, 0), ...fieldOf(g, 1)];
 const freeM = (g, p) => g.p[p].m.findIndex(z => !z);
-const freeST = (g, p) => g.p[p].st.findIndex(z => !z);
+// a Trap Monster's Spell & Trap Zone stays taken (Embodiment of Apophis ruling 1)
+const heldST = (g, p) => [...g.p[0].m, ...g.p[1].m].filter(x => isTrapMon(x) && x.flags.trapMon.p === p).map(x => x.flags.trapMon.zi);
+const freeST = (g, p) => { const h = heldST(g, p); return g.p[p].st.findIndex((z, i) => !z && !h.includes(i)); };
 const nFreeM = (g, p) => g.p[p].m.filter(z => !z).length;
 E.fieldOf = fieldOf; E.monsOf = monsOf;
 
@@ -218,7 +269,7 @@ function detach(g, c) {
   else if (c.zone === 'fz') { if (g.p[c.ctrl].fz === c) g.p[c.ctrl].fz = null; }
   else if (g.p[c.owner][c.zone]) { const a = g.p[c.owner][c.zone]; const i = a.indexOf(c); if (i >= 0) a.splice(i, 1); }
 }
-function snap(g, c) { return { name: name(c), atk: onField(c) ? stat(g, c, 'atk') : baseAtk(c), def: onField(c) ? stat(g, c, 'def') : num(D(c).def), attr: attr(c), lv: lv(c), race: race(c), pos: c.pos, ctrl: c.ctrl, faceUp: faceUp(c), mon: isMon(c), flags: c.flags }; }
+function snap(g, c) { return { name: name(c), batk: baseAtk(c), atk: onField(c) ? stat(g, c, 'atk') : baseAtk(c), def: onField(c) ? stat(g, c, 'def') : num(D(c).def), attr: attr(c), lv: lv(c), race: race(c), pos: c.pos, ctrl: c.ctrl, faceUp: faceUp(c), mon: isMon(c), flags: c.flags }; }
 /* Move a card. to: hand, deck (shuffled in), deckTop, gy, ban, extra, m, st, fz. o: {reason, by (player), destroyed, battle, killer, ctrl, pos, zi, group, faceDown} */
 function move(g, c, to, o = {}) {
   // who moves it: an effect move carries the player whose effect it is, the resolving link's controller (or the player paying a cost),
@@ -276,6 +327,7 @@ function move(g, c, to, o = {}) {
       // zone: an effect's own pick, else the zone the player chose in the client (E.act's hint), else the first free one
       let i = o.zi != null && !P[to][o.zi] ? o.zi : -1;
       if (i < 0 && g.pz && g.pz.u === c.u && g.pz.to === to && g.pz.zi >= 0 && g.pz.zi < 5 && !P[to][g.pz.zi]) { i = g.pz.zi; g.pz = null; }
+      if (i < 0 && to === 'st') i = freeST(g, c.ctrl);
       if (i < 0) i = P[to].findIndex(z => !z);
       P[to][i] = c;
     }
@@ -327,6 +379,14 @@ function gyCostKind(c) {
       : /\b(?:Spell|Trap|Equip|Field)\b/.test(s) || /\bthis (?:face-up )?card\b/i.test(s) ? 'st' : 'any'; }
   gyCostMemo.set(k, v); return v;
 }
+/* A cost that banishes can't be paid while banishing is forbidden (2026-11-28 audit, edison-20/18: Psychic Lifetrancer, Djinn for Black
+ Illusion Ritual, Maximus, Rooklord, Aztekipede under Imperial Iron Wall, Kycoo or Necrovalley): checked when the effect or the summon
+ procedure is offered. The cost's script says it banishes ('ban'); its text says whether from the GY (banishesFromGY). */
+function banCostBlocked(g, p, c, eff) {
+  if (!eff || !eff.cost || !/['"]ban['"]/.test(String(eff.cost))) return false;
+  const fromGY = banishesFromGY(c, eff === (SC(c) || {}).proc ? 'proc' : eff);
+  return forbid(g, { type: 'banish', p, from: fromGY ? 'gy' : 'any', inCond: true });
+}
 function gyCostBlocked(g, c, eff) {   // eff: an effect, or a summon procedure (proc / 'cf')
   let kind = gyCostKind(c); if (!kind) return false;
   if (eff === 'cf' && kind === 'any') kind = 'mon';   // a contact Fusion's "above cards" are its monsters (Chimeratech under Dimensional Fissure: archive)
@@ -365,6 +425,9 @@ function dropOwnWhenNegated(g) {
     // a monster whose effects are negated can't hold Spell Counters and loses them (2026-11-28 audit; Skill Drain Edison ruling, Arcanite
     // Magician and Skilled Dark Magician archive: "Any Spell Counters that are on this monster are removed")
     if (c.ctr && c.ctr.spell > 0 && faceUp(c) && negd(g, c)) { c.ctr.spell = 0; log(g, `${D(c).n} lost its Spell Counters.`); }
+    // a gain the card's own effect keeps in its flags (Bazoo, Gladiator Beast Laquari and Hoplomus): self.onNegated drops it for good
+    // (2026-11-28 audit, goat-07 Bazoo and edison-11 Hoplomus site ruling 2: "Even if Skill Drain is later ... removed ... will remain")
+    { const sc = SC(c); if (sc && sc.self && sc.self.onNegated && faceUp(c) && negd(g, c)) sc.self.onNegated(g, c); }
     if (!c.flags.ownBaseAtk && !c.mods.some(m => m.own)) continue;
     if (!faceUp(c) || !negd(g, c)) continue;
     c.mods = c.mods.filter(m => !m.own); if (c.flags.ownBaseAtk) { c.flags.baseAtk = null; c.flags.ownBaseAtk = false; }
@@ -378,13 +441,60 @@ function raptinusSweep(g) {
   for (const x of ms) if (D(x).n === 'Superalloy Beast Raptinus' && faceUp(x)) { if (on === null) on = false; if (!negd(g, x)) { on = true; break; } }
   for (const x of ms) { if (!isGemini(x)) continue; if (on && faceUp(x) && !x.flags.gemini) x.flags.gemini = 'rap'; else if (!on && x.flags.gemini === 'rap') x.flags.gemini = false; }
 }
+const TM_RE = /\(([A-Za-z -]+?)(?:-Type)?\/(DARK|LIGHT|EARTH|WATER|FIRE|WIND|DIVINE)\/Level (\d+)\/ATK (\d+|\?)\/DEF (\d+|\?)\)/i;
+// Special Summon a face-up Trap Card from its Spell & Trap Zone as a monster; st overrides what the text gives ({atk, def, lv, a, r, pos})
+function trapMonster(g, c, p, st = {}) {
+  if (!onField(c) || c.zone !== 'st' || freeM(g, p) < 0) return false;
+  const m = TM_RE.exec(String(D(c).tx || '')), zi = g.p[c.ctrl].st.indexOf(c), owner = c.ctrl;
+  const s = { ...(m ? { r: m[1].trim(), a: m[2].toUpperCase(), lv: +m[3], atk: num(m[4]), def: num(m[5]) } : {}), ...st };
+  if (!ss(g, p, c, s.pos || 'def')) return false;
+  c.flags.baseAtk = s.atk || 0; c.flags.baseDef = s.def || 0; c.flags.lv = s.lv; c.flags.trapMon = { a: s.a, r: s.r, zi, p: owner };
+  g.seq++; return true;
+}
+// is a Trap negator (not a monster negator like Skill Drain) negating this Trap Monster?
+function trapNegated(g, c) {
+  if (ruleNeg(g, c)) return true;
+  TMPROBE = true; try { for (const [s, ct] of statics(g)) if (ct.negates && s !== c && ct.negates(g, s, c)) return true; } finally { TMPROBE = false; }
+  return false;
+}
+// the Trap Monster goes back to the Spell & Trap Zone: face-up when a Trap negator applies (rule), face-down when turned face-down
+function trapMonBack(g, c, pos) {
+  const tm = c.flags.trapMon, p = c.ctrl, zi = tm.p === p && !g.p[p].st[tm.zi] ? tm.zi : null;
+  if (zi == null && freeST(g, p) < 0) { move(g, c, 'gy', { reason: 'rule' }); return; }
+  move(g, c, 'st', { ctrl: p, pos, reason: 'rule', zi: zi != null ? zi : undefined, trapBack: true });
+  if (pos === 'up') c.flags.trapDone = true;   // "remains on the field meaninglessly"
+  log(g, `${D(c).n} went back to the Spell & Trap Zone${pos === 'set' ? ' face-down' : ''}.`);
+}
+function trapMonSweep(g) {
+  if (g.tmBusy) return; g.tmBusy = true;
+  try { for (const c of fieldMons(g)) if (isTrapMon(c) && faceUp(c) && trapNegated(g, c)) trapMonBack(g, c, 'up'); } finally { g.tmBusy = false; }
+}
+/* "Equip only to X" (2026-11-28 audit, goat-11 Lightning Blade, Machina rulings: "If the target is no longer Machine-Type, it is destroyed by
+ game mechanic"): an Equip Spell whose equipped monster stops being an X is destroyed. X read from the text: a Type and/or Attribute, an
+ archetype in quotes, or a list of card names; other wordings (Levels, who controls it) aren't rechecked. */
+const EQ_TYPES = ['Warrior', 'Machine', 'Psychic', 'Fairy', 'Insect', 'Reptile', 'Beast-Warrior', 'Beast', 'Aqua', 'Dinosaur', 'Zombie', 'Dragon', 'Plant', 'Spellcaster', 'Fiend', 'Pyro', 'Rock', 'Thunder', 'Sea Serpent', 'Fish', 'Winged Beast'];
+const eqReqMemo = new Map();
+function equipReq(c) {
+  const d = D(c); if (eqReqMemo.has(d.n)) return eqReqMemo.get(d.n);
+  let f = null; const m = /Equip only to ([^.;]*?)(?:[.;]|$)/i.exec(String(d.tx || '')), s = m ? m[1].trim() : '';
+  if (s && /^"[^"]+"(?:,? (?:or )?"[^"]+")*$/.test(s)) { const ns = [...s.matchAll(/"([^"]+)"/g)].map(x => x[1]); f = x => ns.includes(name(x)); }
+  else if (s) { const mm = /^an? (?:(DARK|LIGHT|EARTH|WATER|FIRE|WIND) )?(?:"([^"]+)" |([A-Z][A-Za-z-]*(?: [A-Z][a-z]+)?) )?monster$/.exec(s);
+    if (mm && (mm[1] || mm[2] || (mm[3] && EQ_TYPES.includes(mm[3])))) { const [, at, arch, ty] = mm; f = x => (!at || attr(x) === at) && (!arch || name(x).includes(arch)) && (!ty || race(x) === ty); } }
+  eqReqMemo.set(d.n, f); return f;
+}
+function equipSweep(g) {
+  if (g.eqBusy) return; g.eqBusy = true;
+  try { for (const P of g.p) for (const x of P.st) { if (!x || !x.equipTo || !faceUp(x) || !isSpell(x) || D(x).sub !== 'Equip') continue; const req = equipReq(x); if (!req) continue;
+    const m = fieldMons(g).find(y => y.u === x.equipTo); if (m && faceUp(m) && !req(m)) { log(g, `${D(x).n} can't stay equipped to ${name(m)}.`); destroy(g, [x], { rule: true }); } } }
+  finally { g.eqBusy = false; }
+}
 function emit(g, ev, group) {
-  g.seq++; dropOwnWhenNegated(g); raptinusSweep(g);   // the sweeps read the state as it is now (fresh statics)
+  g.seq++; dropOwnWhenNegated(g); raptinusSweep(g); trapMonSweep(g); equipSweep(g); uniqSweep(g);   // the sweeps read the state as it is now (fresh statics)
   if (g.flipWatch && ev.c && (ev.type === 'flip' || ev.type === 'move')) g.flipWatch.push(ev.c.u);
   if (g.posWatch && ev.c && ev.type === 'pos') g.posWatch.push(ev.c.u);
   ev.group = group != null ? group : g.group; ev.seq = ++g.seq; ev.turn = g.turnNo; ev.phase = g.phase;
   if (ev.type === 'summon') g.summoned[ev.p] = true;
-  if (ev.type === 'flip' && ev.c && ev.c.flags) ev.c.flags.flippedUp = true;
+  if (ev.type === 'flip' && ev.c && ev.c.flags) { ev.c.flags.flippedUp = true; ev.c.flags.upAt = g.seq; }
   g.events.push(ev); if (g.events.length > 120) g.events.splice(0, 40);
   if (g.hooks) g.hooks.ev(g, ev); // a client watching the live duel (Learn Retro Play); clones and tests have none
   // collect triggers from every card that can see it (g.inEmit: a rule a watcher installs here is never tied to an activation, see addRule)
@@ -397,10 +507,13 @@ function emit(g, ev, group) {
         if (eff.type !== 'trig') return;
         const loc = eff.loc || 'm';
         if (loc === 'any' ? false : loc === 'm' ? c.zone !== 'm' || !faceUp(c) && !eff.faceDownOk : loc !== c.zone || ((loc === 'st' || loc === 'fz') && !faceUp(c))) return;
-        if (loc === 'm' && negd(g, c) && !negActAllowed(g, c, eff)) return;
+        // eff.rule: not an effect at all (a maintenance cost: Koa'ki Meiru, Iron Core Specimen Lab; Skill Drain ruling "Maintenance costs
+        // must still be paid"), so negation doesn't stop it (2026-11-28 audit, edison-18)
+        if (loc === 'm' && negd(g, c) && !negActAllowed(g, c, eff) && !eff.rule) return;
         // a negated face-up Spell/Trap: its optional triggers and the lasting effects scripts run inside on() stop (2026-11-28 audit, goat-03:
         // Level Limit - Area B under Imperial Order, Swords of Revealing Light's count, Mirror Wall); mandatory ones resolve negated
-        if ((loc === 'st' || loc === 'fz') && !eff.mand && isST(c) && negd(g, c)) return;
+        // a negated Spell/Trap's "does not start a chain" continuous-like effects stop too (Code A's counters, Swords of Concealing Light)
+        if ((loc === 'st' || loc === 'fz') && (!eff.mand || eff.noChain) && !eff.rule && isST(c) && negd(g, c)) return;
         try { if (eff.on(g, ev, c)) g.pend.push({ c, eff, ei, ev, p: onField(c) ? c.ctrl : c.owner }); } catch (e) { throw e; }
       });
     }
@@ -469,12 +582,29 @@ function winDuel(g, p, why) { g.winner = p; g.why = why; log(g, why + '.'); thro
 // coin tosses and dice rolls, from the duel's own seeded random (replays and the computer's copies stay the same)
 function coin(g, p) { const h = g.rnd() < 0.5; log(g, `${PN(g, p)} tossed a coin: ${h ? 'Heads' : 'Tails'}.`); return h; }
 function dice(g, p) { const n = 1 + Math.floor(g.rnd() * 6); log(g, `${PN(g, p)} rolled a ${n}.`); return n; }
+/* One shared die roll (2026-11-28 audit, goat-07): rolls k dice for player p and lets a player with an unused Dice Re-Roll this turn
+ (g.reroll[q] = {turn, used}) have them rolled again, every die of that roll together (Dice Re-Roll ruling 4: Roulette Barrel's two dice).
+ Returns the number (k = 1) or the list. Card scripts call yield* L.roll(g, p) in place of dice(). */
+function* roll(g, p, k = 1) {
+  let ns = []; for (let i = 0; i < k; i++) ns.push(dice(g, p));
+  for (const q of [p, 1 - p]) {
+    const r = g.reroll && g.reroll[q];
+    if (r && r.turn === g.turnNo && !r.used && (yield* yn(g, q, `${PN(g, p)} rolled ${ns.join(' and ')}. Use Dice Re-Roll to roll again?`))) { r.used = true; log(g, `${PN(g, q)} used Dice Re-Roll.`); ns = []; for (let i = 0; i < k; i++) ns.push(dice(g, p)); }
+  }
+  return k === 1 ? ns[0] : ns;
+}
 /* Gaining or paying LP is something that happens: an 'lp' event in its own group, so a "when ... you can" trigger on an earlier event of the
  same effect misses its timing (2026-11-28 audit, Upstart Goblin site ruling: "If Infernity Archfiend is drawn by this effect, it misses its
  timing"), and LP watchers can read it. */
 function lpEv(g, p, n, kind) { g.group++; emit(g, { type: 'lp', p, n, kind }); }
 function gain(g, p, n) { if (n <= 0) return; g.p[p].lp += n; log(g, `${PN(g, p)} gained ${n} LP.`); lpEv(g, p, n, 'gain'); }
-function pay(g, p, n) { g.p[p].lp -= n; log(g, `${PN(g, p)} paid ${n} LP.`); if (n > 0) lpEv(g, p, n, 'pay'); }
+/* An LP payment hook (2026-11-28 audit, goat-09: Spell Economics, "You don't pay LP to activate Spell Cards"): while a Spell Card's
+ activation pays its cost, a face-up, not negated static cont.noSpellLP(g, src, p) waives it (ruling 1: not a Spell's effect like
+ Archfiend's Oath; ruling 2: only its controller). spellLPFree(g, p) answers for a cond. */
+const spellLPFree = (g, p) => statics(g).some(([s, ct]) => ct.noSpellLP && ct.noSpellLP(g, s, p));
+function pay(g, p, n) {
+  if (n > 0 && g.inCost && g.costEff && g.costEff.eff && g.costEff.eff.type === 'act' && isSpell(g.costEff.c) && spellLPFree(g, p)) { log(g, `${PN(g, p)} paid no LP (Spell Economics).`); return; }
+  g.p[p].lp -= n; log(g, `${PN(g, p)} paid ${n} LP.`); if (n > 0) lpEv(g, p, n, 'pay'); }
 /* Lingering effects that check drawn cards (Deck Devastation Virus: "is destroyed immediately and cannot chain its effect (because this
  does not start a Chain)"; a draw by an effect is checked once that effect has resolved: archive) register with E.lib.onDraw(f), called
  as f(g, cards) with no chain link. */
@@ -501,12 +631,17 @@ function* search(g, p, filter, text, to = 'hand') {
 }
 /* Destroy: checks "can't be destroyed", returns the cards destroyed. */
 function destroy(g, cards, o = {}) {
-  const out = []; const group = o.group != null ? o.group : g.group;
+  const out = [], moved = []; const group = o.group != null ? o.group : g.group;
+  const by = o.by != null ? o.by : !o.battle && g.resolvingL ? g.resolvingL.p : undefined;   // the player whose effect destroys (move's by)
+  const ro = { ...o, by, batch: o.batch || cards };
   for (const c of cards) {
     if (!c || !onField(c)) continue;
+    // a monster already destroyed by this battle (waiting to leave after damage calculation) isn't destroyed again by an effect: it is
+    // destroyed by battle (2026-11-28 audit, edison-21: Red Dragon Archfiend's effect and XX-Saber Emmersblade)
+    if (!o.battle && c.flags.battleDoomed) continue;
     if (o.battle && cantBattleDestroy(g, c)) continue;
     if (!o.battle && !o.rule && faceUp(c) && has(g, c, 'noEffectDestroy')) continue;
-    if (replaced(g, c, o)) continue;
+    const rp = replaced(g, c, ro); if (rp === 'moved') { moved.push(c); continue; } if (rp) continue;
     // the card doing the destroying: the script's src, else the chain link resolving now (2026-11-26: Mirror Force passed no src,
     // so "unaffected by Traps" monsters like Wildheart were still destroyed)
     const src = o.src || (!o.battle && !o.rule && g.resolvingL ? g.resolvingL.c : null);
@@ -515,16 +650,80 @@ function destroy(g, cards, o = {}) {
   }
   // cards destroyed together leave together: every protection is checked first, while all of them are still on the field
   // (2026-11-26: a Dark Hole that removed The Lady in Wight or Orichalcos Shunoros first also destroyed what they protect)
-  const by = o.by != null ? o.by : !o.battle && g.resolvingL ? g.resolvingL.p : undefined;   // the player whose effect destroys (move's by)
   for (const c of out) move(g, c, o.banish ? 'ban' : 'gy', { reason: o.battle ? 'battle' : 'effect', destroyed: true, battle: !!o.battle, killer: o.killer, by, group, noLater: true, ...(o.rule ? { rule: true } : null) });
   if (!o.noFlush) flushLater(g, group);
   if (out.length && !o.quietLog) log(g, `${out.map(x => x.snapName || name(x)).join(', ')} ${out.length > 1 ? 'were' : 'was'} destroyed${o.banish ? ' and banished' : ''}.`);
-  return out;
+  return moved.length ? [...out, ...moved] : out;   // a card destroyed that went elsewhere instead of the GY still counts as destroyed
 }
 function replaced(g, c, o) { // "destroy X instead" style effects
   const sc = SC(c); if (sc && sc.self && sc.self.replaceDestroy && faceUp(c) && !negd(g, c) && sc.self.replaceDestroy(g, c, o)) return true;
   for (const [s, ct] of statics(g)) if (ct.replaceDestroy && ct.replaceDestroy(g, s, c, o)) return true;
+  // optional replacements the player chooses ("you can destroy another ... instead"): the answer askReplace got, else the first option
+  for (const [h, r] of replAsks(g, c)) {
+    if (g.replBusy && g.replBusy.length) break;   // the card destroyed instead doesn't use a replacement of its own (no replacement loops)
+    const xs = r.opts(g, h, c, o); if (!xs || !xs.length) continue;
+    const plan = g.replPlan && g.replPlan[h.u + ':' + c.u];
+    if (plan && plan.no) continue;
+    if (!plan && r.unasked === 'no') continue;
+    const x = plan && xs.includes(plan.pick) ? plan.pick : xs[0];
+    (g.replBusy || (g.replBusy = [])).push(h);
+    try { const v = r.apply(g, h, c, o, x); if (v) return v; } finally { g.replBusy.pop(); }
+  }
   return false;
+}
+/* Optional "instead" replacements (2026-11-28 audit, E3b: Six Samurai, Nettles, Clear Vice Dragon, Morphtronic Slingen, Power Tool Dragon,
+ Crystal Beasts). A card describes one as self.replaceAsk (while it is face-up and not negated) or cont.replaceAsk (a static, for any card):
+   { opts(g, h, c, o): the cards it could use instead (or [true] for a plain yes/no), empty when it can't apply to c now; o.batch is every
+     card destroyed together, which can't stand in for each other (Six Samurai ruling 14);
+     text(g, h, c): the question; pickText; who(g, h, c): who answers (default the controller of h);
+     apply(g, h, c, o, x): does it, true when c is no longer destroyed (or went elsewhere instead) }
+ destroy() is synchronous, so the engine asks before the destruction while it still can (askReplace): when a chain link is about to
+ resolve, for the cards it would destroy (wouldDestroy), and in the Damage Step before battle destruction. The answers sit in g.replPlan
+ for that destruction; a destruction the engine couldn't foresee applies the first option (unasked: 'no' leaves it off instead).
+ Rulings: Six Samurai "you choose ... when the destruction occurs", each protected one needs its own substitute (rulings 12 to 14); Crystal
+ Beasts "you choose ... at the time the destroyed monster would be sent to the Graveyard" (ruling 3), no chain (ruling 4). */
+function replAsks(g, c) {
+  const out = []; const sc = SC(c);
+  if (sc && sc.self && sc.self.replaceAsk && onField(c) && faceUp(c) && !negd(g, c)) out.push([c, sc.self.replaceAsk]);
+  for (const [s, ct] of statics(g)) if (ct.replaceAsk) out.push([s, ct.replaceAsk]);
+  return out;
+}
+/* The common shape: "if this card would be destroyed, you can <destroy / discard / send to the GY> <a card from pool> instead". how: 'destroy'
+ (default), 'discard' (from the hand) or 'gy'. A card destroyed in the same destruction can't stand in (o.batch). */
+function replaceOther(pool, text, pickText, how = 'destroy', cond) {
+  return { opts: (g, h, c, o) => h !== c || (cond && !cond(g, c, o)) ? [] : (pool(g, c, o) || []).filter(x => x && x !== c && !(o.batch && o.batch.includes(x)) && (how === 'discard' ? x.zone === 'hand' : onField(x))),
+    text: (g, h, c) => text.replace('%s', name(c)), pickText: () => pickText,
+    apply: (g, h, c, o, x) => {
+      if (how === 'destroy') { if (!destroy(g, [x], { by: c.ctrl, src: c, quietLog: true }).length) return false; }
+      else { move(g, x, 'gy', { reason: how === 'discard' ? 'discard' : 'effect', by: c.ctrl }); if (onField(x) || x.zone === 'hand') return false; }
+      log(g, `${PN(g, c.ctrl)} ${how === 'destroy' ? 'destroyed' : how === 'discard' ? 'discarded' : 'sent'} ${name(x)} instead of ${name(c)}${how === 'gy' ? ' to the GY' : ''}.`); return true; } };
+}
+// A Union Monster equipped by its own effect: "If the equipped monster would be destroyed, destroy this card instead" (cont.replaceDestroy)
+const unionStandIn = (g, src, m, o) => {
+  if (o.rule || src.zone !== 'st' || src.equipTo !== m.u || !src.flags.union || !faceUp(src)) return false;
+  move(g, src, 'gy', { reason: o.battle ? 'battle' : 'effect', destroyed: true, by: o.by }); log(g, `${D(src).n} was destroyed instead of ${name(m)}.`); return true; };
+/* The Crystal Beast rule: "If this face-up card in your possession is destroyed in a Monster Zone, you can place it face-up in your Spell &
+ Trap Zone as a Continuous Spell Card, instead of sending it to the GY" (2026-11-28 audit, edison-16): an optional replacement with no chain
+ (rulings 3 and 4), chosen when it would go to the GY, by its controller then (ruling 7); not while negated (Skill Drain, ruling 11), not
+ when it is banished instead (Bottomless Trap Hole, Dark Magician of Chaos: rulings 9 and 10); Macro Cosmos doesn't stop it (ruling 8).
+ It is still destroyed (destroy() counts it). placed(g, p) tells the card file (Crystal Tree's event). */
+const cbReplace = placed => ({ opts: (g, h, c, o) => h === c && c.zone === 'm' && !o.banish && !(o.battle && o.killer && onField(o.killer) && faceUp(o.killer) && has(g, o.killer, 'battleBanish')) && freeST(g, c.ctrl) >= 0 ? [true] : [],
+  text: (g, h, c) => `Place ${name(c)} face-up in your Spell & Trap Zone instead of sending it to the GY?`,
+  apply: (g, h, c, o) => { const p = c.ctrl; move(g, c, 'st', { ctrl: p, pos: 'up', reason: o.battle ? 'battle' : 'effect', destroyed: true, battle: !!o.battle, killer: o.killer, by: o.by, noLater: true });
+    if (c.zone !== 'st') return false; log(g, `${PN(g, p)} placed ${D(c).n} in the Spell & Trap Zone as a Continuous Spell instead.`); if (placed) placed(g, p); return 'moved'; } });
+function* askReplace(g, cs, o = {}) {
+  const plan = {}, used = new Set(); cs = [...new Set((cs || []).filter(c => c && onField(c)))];
+  for (const c of cs) {
+    if (!o.battle && faceUp(c) && has(g, c, 'noEffectDestroy')) continue;
+    for (const [h, r] of replAsks(g, c)) {
+      const xs = (r.opts(g, h, c, { ...o, batch: o.batch || cs }) || []).filter(x => x === true || !used.has(x)); if (!xs.length) continue;
+      const p = r.who ? r.who(g, h, c) : h.ctrl, key = h.u + ':' + c.u;
+      if (!(yield* yn(g, p, r.text(g, h, c)))) { plan[key] = { no: true }; continue; }
+      let x = xs[0]; if (xs.length > 1) [x] = yield* pick(g, p, r.pickText ? r.pickText(g, h, c) : 'Use which card instead?', xs, 1, 1, 'cost');
+      plan[key] = { pick: x }; if (x !== true) used.add(x); break;
+    }
+  }
+  return plan;
 }
 /* What a chain link would destroy when it resolves (2026-11-27 audit: Starlight Road, My Body as a Shield, Prime Material Dragon and
  Stardust Dragon asked a hand-written list in batch-1.js, so Dark Hole, Raigeki, Fissure and Judgment Dragon read as "destroys nothing",
@@ -799,6 +998,7 @@ const KEEP_FACE_DOWN = ['ctrlUntil', 'ctrlFrom', 'b1mc', 'f19charm', 'f19charmFr
 const canFaceDown = c => faceUp(c) && c.zone === 'm' && D(c).k !== 'token';
 function setFaceDown(g, c) {
   if (D(c).k === 'token') return false;
+  if (isTrapMon(c)) { trapMonBack(g, c, 'set'); return true; }   // Embodiment of Apophis ruling 9
   g.seq++; c.pos = 'set'; c.mods = []; c.ctr = {};
   const keep = {}; for (const k of KEEP_FACE_DOWN) if (c.flags[k] != null) keep[k] = c.flags[k];
   if (c.flags.b1mc != null && c.flags.noTribute) keep.noTribute = true;   // Mind Control: can't be Tributed until the End Phase
@@ -959,7 +1159,7 @@ function tribNeed(g, p, c, set) { // [standard, alternatives...]; set: for a Set
 }
 function tributeCands(g, p) {
   if (forbid(g, { type: 'tribute', p, summon: true })) return [];   // Mask of Restrict: "Monsters can't be Tributed"
-  const own = monsOf(g, p).filter(c => D(c).n !== 'Sheep Token' && !c.flags.noTribute);
+  const own = monsOf(g, p).filter(c => D(c).n !== 'Sheep Token' && !noTribOf(c));
   return [...own, ...soulExOf(g, p)];
 }
 /* Tributes (2026-11-28 audit, findings edison-05/08/12..21, goat-03..11). c.flags.noTribute is true for "can't be Tributed" (Mind Control,
@@ -967,7 +1167,11 @@ function tributeCands(g, p) {
  Rockstone and Thunder Option Tokens, Fox Fire, Nimble Musasabi): those can still pay a Tribute cost (Ojama Trio Netrep Q&A, EDOPro's
  EFFECT_UNRELEASABLE_SUM only). A Tribute forbid ({type: 'tribute'}, Mask of Restrict) empties both lists. Does this effect Tribute,
  read from the card's text (a Tribute that isn't the Tribute Summon rule) and the effect's own script (its prompts say Tribute)? */
-const noTribCost = c => !!c.flags.noTribute && c.flags.noTribute !== 'summon';
+// a script's self.noTribute is a continuous effect read live: face-up and not negated (Summoner Monk site ruling: "① is a continuous
+// effect. It can be negated"; 2026-11-28 audit, edison-09)
+const noTribOf = c => { if (c.flags.noTribute) return c.flags.noTribute; const sc = SC(c), g = c.g;
+  if (!(sc && sc.self && sc.self.noTribute && g && onField(c) && faceUp(c) && !negd(g, c))) return false; const v = sc.self.noTribute; return typeof v === 'function' ? v(g, c) : v; };
+const noTribCost = c => { const v = noTribOf(c); return !!v && v !== 'summon'; };
 const TRIB_TXT = /\bTribut(?:e|ing)\b|\bas (?:a )?Tributes?\b/;
 const tribTxtMemo = new Map();
 function textTributes(c) {
@@ -1013,7 +1217,8 @@ function usable(g, p, c, eff, ei, mode) {
   const holder = onField(c) ? c.ctrl : c.owner;
   if (!eff.anyPlayer && holder !== p) return false;
   // the same effect of the same card can't be activated twice in one chain (2026-11-26: Toon Defense and Winged Kuriboh LV9 could chain to themselves)
-  if (g.chain.some(L => L.c === c && L.eff === eff)) return false;
+  // eff.sameChain: its rulings let it be activated again in the same chain (Dark Paladin ruling 4, Horus LV8 ruling 3, Rainbow Ruins ruling 9)
+  if (!eff.sameChain && g.chain.some(L => L.c === c && L.eff === eff)) return false;
   if (eff.anyPlayer && !(onField(c) && faceUp(c))) return false;
   if (eff.opt && c.used[ei] === g.turnNo) return false;
   if (top) { if (sp < 2 || sp < top.speed) return false; }
@@ -1049,6 +1254,7 @@ function usable(g, p, c, eff, ei, mode) {
   if (g.aw && attackMoment(c, eff) && !(p === g.aw.ctrl ? g.aw.tpOpen : g.aw.open)) return false;
   if (forbid(g, { type: 'activate', c, eff, p })) return false;
   if (gyCostBlocked(g, c, eff)) return false;   // its cost sends cards to the GY that would be banished instead (Dimensional Fissure, Macro Cosmos)
+  if (banCostBlocked(g, p, c, eff)) return false;   // its cost banishes, and banishing is forbidden (Imperial Iron Wall, Kycoo, Necrovalley)
   if (tribBlocked(g, p, c, eff)) return false;   // Mask of Restrict: an effect that Tributes can't be activated (archive)
   if (searchLocked(g, p, c, eff)) return false;   // Rai-Oh: an effect that adds from the Deck can't be activated
   const prevS = g.ssSrc; g.ssSrc = c;
@@ -1167,7 +1373,7 @@ function* resolveChain(g) {
       // (2026-11-28 audit, edison-12: Ultimate Offering and Mausoleum of the Emperor after a chained MST)
       const stillThere = L.eff.type !== 'act' ? !(['st', 'fz'].includes(L.eff.loc) && !onField(L.c) && !L.offAtAct) : onField(L.c) || !['Continuous', 'Equip', 'Field'].includes(d.sub);
       const monGone = isMonD(d) && L.eff.type !== 'trig' && L.eff.needsSelf && !onField(L.c);
-      if (stillThere && !monGone && !(isMonD(d) && onField(L.c) && negd(g, L.c) && L.eff.loc !== 'gy' && L.eff.loc !== 'hand')) { const prevR = g.resolvingL, prevW = g.flipWatch, downs = fieldMons(g).filter(x => x.pos === 'set'), posAt = fieldMons(g).filter(x => x.pos !== 'set').map(x => [x, x.pos, x.moved]), prevP = g.posWatch; g.flipWatch = []; g.posWatch = []; g.resolvingL = L; const prevB = g.ssBatch, bat = g.ssBatch = { L, parts: [], cs: [], group: null }; try { yield* L.eff.res(g, L.c, L.p, L); } finally { g.ssBatch = prevB; } ssBatchFlush(g, bat); g.resolvingL = prevR; if (!prevR && g.hwPend) { const ps = [...new Set(g.hwPend)]; g.hwPend = null; for (const q of ps) handWin(g, q); } if (!prevR && g.drawPend) { const ds = g.drawPend; g.drawPend = null; drawnCheck(g, ds); } const seen = g.flipWatch; g.flipWatch = prevW; flipsByEffect(g, L, downs, seen); const pw = g.posWatch; g.posWatch = prevP; posByEffect(g, posAt, pw); yield* askPositions(g); }
+      if (stillThere && !monGone && !(isMonD(d) && onField(L.c) && negd(g, L.c) && L.eff.loc !== 'gy' && L.eff.loc !== 'hand')) { const prevPlan = g.replPlan, wd = wouldDestroy(g, L); g.replPlan = (wd.length || (wd.maybe && wd.maybe.length)) ? yield* askReplace(g, [...wd, ...(wd.maybe || [])], { by: L.p, src: L.c, batch: [...wd] }) : null; const prevR = g.resolvingL, prevW = g.flipWatch, downs = fieldMons(g).filter(x => x.pos === 'set'), posAt = fieldMons(g).filter(x => x.pos !== 'set').map(x => [x, x.pos, x.moved]), prevP = g.posWatch; g.flipWatch = []; g.posWatch = []; g.resolvingL = L; const prevB = g.ssBatch, bat = g.ssBatch = { L, parts: [], cs: [], group: null }; try { yield* L.eff.res(g, L.c, L.p, L); } finally { g.ssBatch = prevB; } ssBatchFlush(g, bat); g.replPlan = prevPlan; g.resolvingL = prevR; if (!prevR && g.hwPend) { const ps = [...new Set(g.hwPend)]; g.hwPend = null; for (const q of ps) handWin(g, q); } if (!prevR && g.drawPend) { const ds = g.drawPend; g.drawPend = null; drawnCheck(g, ds); } const seen = g.flipWatch; g.flipWatch = prevW; flipsByEffect(g, L, downs, seen); const pw = g.posWatch; g.posWatch = prevP; posByEffect(g, posAt, pw); yield* askPositions(g); }
     }
     // a Spell Card activation has resolved (its effect may have been negated, its activation wasn't): Spell Counter cards and the like read
     // this event (spellCtrEv), Continuous/Equip/Field Spells and Set Spells flipped up included (2026-11-27 audit, Skilled White Magician ruling)
@@ -1232,13 +1438,19 @@ function* processTriggers(g) {
     });
     if (!list.length) continue;
     const tp = g.tp, order = [...list.filter(t => t.eff.mand && t.p === tp), ...list.filter(t => t.eff.mand && t.p !== tp), ...list.filter(t => !t.eff.mand && t.p === tp), ...list.filter(t => !t.eff.mand && t.p !== tp)];
+    let ownDone = false;
     for (const t of order) {
       if (t.eff.noChain) { yield* runNoChain(g, t); continue; }
+      // eff.ownChain: each such effect activates on its own chain (Gladiator Beast end-of-Battle-Phase effects, site ruling): the chain
+      // built so far resolves first, and a later one checks again that it can still activate
+      if (t.eff.ownChain && g.chain.length) { yield* respondLoop(g, 1 - g.chain[g.chain.length - 1].p); yield* resolveChain(g); ownDone = true; }
+      if (t.eff.ownChain && ownDone) { const loc = t.eff.loc || 'm'; if ((loc === 'm' ? t.c.zone !== 'm' : loc !== 'any' && t.c.zone !== loc) || (t.eff.cond && !t.eff.cond(g, t.c, t.p, { ev: t.ev }))) continue; }
       if (!t.eff.mand && !(yield* yn(g, t.p, `Use ${name(t.c)}'s effect?${t.eff.label ? ' (' + t.eff.label + ')' : ''}`))) continue;
       if (t.eff.ok && !t.eff.ok(g, t.c, t.p, { ev: t.ev })) continue;
       if (forbid(g, { type: 'activate', c: t.c, eff: t.eff, p: t.p })) continue;
       if (onePerChain(g, t)) continue;
       const L = yield* activate(g, t.p, t.c, t.eff, t.ei); L.ev = t.ev;
+      if (t.eff.ownChain && g.chain.length) { yield* respondLoop(g, 1 - g.chain[g.chain.length - 1].p); yield* resolveChain(g); ownDone = true; }
     }
     if (g.chain.length) { yield* respondLoop(g, 1 - g.chain[g.chain.length - 1].p); yield* resolveChain(g); }
   }
@@ -1421,13 +1633,13 @@ function idleOpts(g) {
       if (setOk && g.ns[p] < 1 && fits(altsS) && !forbid(g, { type: 'set', c, p })) out.push({ key: 'set:' + c.u, u: c.u, kind: 'set', label: 'Set face-down' });
     }
     const sc = SC(c);
-    if (sc && sc.proc && !sc.proc.extra && freeM(g, p) >= 0 && sc.proc.cond(g, c, p) && !forbid(g, { type: 'ss', c, p, how: 'special', proc: true }) && !(sc.proc.cost && gyCostBlocked(g, c, sc.proc))) out.push({ key: 'sp:' + c.u, u: c.u, kind: 'sp', label: sc.proc.label || 'Special Summon' });
+    if (sc && sc.proc && !sc.proc.extra && freeM(g, p) >= 0 && sc.proc.cond(g, c, p) && !forbid(g, { type: 'ss', c, p, how: 'special', proc: true }) && !(sc.proc.cost && (gyCostBlocked(g, c, sc.proc) || banCostBlocked(g, p, c, sc.proc)))) out.push({ key: 'sp:' + c.u, u: c.u, kind: 'sp', label: sc.proc.label || 'Special Summon' });
   }
   if (!g.noSummon[p] && freeM(g, p) >= 0 || monsOf(g, p).length) {
     for (const x of P.extra) {
       if (g.noSummon[p]) break;
       if (forbid(g, { type: 'ss', c: x, p, how: D(x).k, proc: true })) continue;
-      const xs = SC(x); if (xs && xs.proc && xs.proc.extra && xs.proc.cond(g, x, p) && !(xs.proc.cost && gyCostBlocked(g, x, xs.proc))) out.push({ key: 'sp:' + x.u, u: x.u, kind: 'sp', label: xs.proc.label || 'Special Summon' });
+      const xs = SC(x); if (xs && xs.proc && xs.proc.extra && xs.proc.cond(g, x, p) && !(xs.proc.cost && (gyCostBlocked(g, x, xs.proc) || banCostBlocked(g, p, x, xs.proc)))) out.push({ key: 'sp:' + x.u, u: x.u, kind: 'sp', label: xs.proc.label || 'Special Summon' });
       if (D(x).k === 'synchro' && !(xs && xs.noSynchro) && synCombos(g, p, x).length) out.push({ key: 'syn:' + x.u, u: x.u, kind: 'syn', label: 'Synchro Summon' });
       if (D(x).k === 'fusion' && !gyCostBlocked(g, x, 'cf') && cfCombos(g, p, x).length) out.push({ key: 'cf:' + x.u, u: x.u, kind: 'cf', label: 'Special Summon' });
     }
@@ -1585,7 +1797,7 @@ function* damageStep(g, a, t) {
   const alive = () => onField(a) && a.ctrl === tp && (!t || (onField(t) && t.ctrl === op));
   if (!alive()) { g.inDS = false; g.battle = null; if (g.dsReap) { const r = g.dsReap; g.dsReap = null; reapSpirit(g, r); } return; }
   let flipped = false;
-  if (t && t.pos === 'set') { t.pos = 'def'; flipped = true; g.seq++; log(g, `The face-down monster was ${name(t)}.`); }
+  if (t && t.pos === 'set') { t.pos = 'def'; flipped = true; g.battle.flipped = t; g.seq++; log(g, `The face-down monster was ${name(t)}.`); }
   yield* openWindow(g, op, { text: 'Before damage calculation. Activate a card or effect?' });
   if (!alive()) { g.inDS = false; g.battle = null; if (g.dsReap) { const r = g.dsReap; g.dsReap = null; reapSpirit(g, r); } return; }
   beginOp(g);
@@ -1616,8 +1828,13 @@ function* damageStep(g, a, t) {
   // "A monster destroyed by this monster as a result of battle is removed from play instead of going to the Graveyard" (Goat Dark Magician
   // of Chaos, self.battleBanish): read for every victim before any leaves, so two that destroy each other are both banished (archive)
   const banV = victims.filter(([v, k]) => k && k.ctrl !== v.ctrl && onField(k) && faceUp(k) && has(g, k, 'battleBanish')).map(([v]) => v);
-  for (const [v, k] of victims) if (onField(v) && v.flags.battleDoomed) { v.flags.battleDoomed = false; if (replaced(g, v, { battle: true, killer: k })) continue; if (banV.includes(v)) { move(g, v, 'ban', { reason: 'battle', destroyed: true, battle: true, killer: k, insteadOf: 'gy', group: grp, noLater: true }); log(g, `${D(v).n} was destroyed by battle and banished.`); continue; } move(g, v, 'gy', { reason: 'battle', destroyed: true, battle: true, killer: k, group: grp, noLater: true }); log(g, `${D(v).n} was destroyed by battle.`); }
-  flushLater(g, grp);
+  // optional "instead" replacements are asked now, before any victim leaves (askReplace)
+  const prevPlan = g.replPlan, vs = victims.filter(([v]) => onField(v) && v.flags.battleDoomed && !banV.includes(v)).map(([v]) => v);
+  g.replPlan = vs.length ? yield* askReplace(g, vs, { battle: true }) : null;
+  // the killer's ATK at the battle, for effects that read it after it left (Zoma the Spirit; 2026-11-28 audit, edison-21)
+  const kAtk = new Map(victims.map(([v, k]) => [v, k && onField(k) ? stat(g, k, 'atk') : null]));
+  for (const [v, k] of victims) if (onField(v) && v.flags.battleDoomed) { v.flags.battleDoomed = false; if (replaced(g, v, { battle: true, killer: k, batch: vs })) continue; if (banV.includes(v)) { move(g, v, 'ban', { reason: 'battle', destroyed: true, battle: true, killer: k, killerAtk: kAtk.get(v), insteadOf: 'gy', group: grp, noLater: true }); log(g, `${D(v).n} was destroyed by battle and banished.`); continue; } move(g, v, 'gy', { reason: 'battle', destroyed: true, battle: true, killer: k, killerAtk: kAtk.get(v), group: grp, noLater: true }); log(g, `${D(v).n} was destroyed by battle.`); }
+  g.replPlan = prevPlan; flushLater(g, grp);
   emit(g, { type: 'dsEnd', a, t, attackedMonster: !!t });
   yield* processTriggers(g);
   g.inDS = false; g.battle = null; if (g.dsReap) { const r = g.dsReap; g.dsReap = null; reapSpirit(g, r); }
@@ -1670,7 +1887,7 @@ const canTarget = (g, x, L) => !(x && (onField(x) ? faceUp(x) : ['gy', 'ban'].in
 function* tgt(g, p, L, text, cands, min = 1, max = 1, hint) { cands = cands.filter(x => canTarget(g, x, L)); const t = yield* pick(g, p, text, cands, min, max, hint); L.t = t; return t; }
 const live = (L) => L.t.filter(x => onField(x));
 const oppFaceUp = (g, p) => monsOf(g, opp(p)).filter(faceUp);
-const stOnField = g => [...stOf(g, 0), ...stOf(g, 1)];
+const stOnField = g => [...stOf(g, 0), ...stOf(g, 1), ...fieldMons(g).filter(isTrapMon)];   // Trap Monsters are Trap Cards too
 const lastSummonOk = (g, f) => g.sw && f(g.sw);
 const spellTrapAct = L => L && L.cardAct && isST(L.c);
 
@@ -2096,12 +2313,12 @@ function* ritualSummon(g, p, o) {
   ss(g, p, rm, 'atk', { how: 'ritual', group: grp }); return rm;
 }
 E.lib = {
-  gyBanBy, gyLock, banBlocked, gyCostBlocked, nameOff, nameIs, isUmi, NO_FLIP_RE, negSource, negActAllowed, hardNeg,
+  trapMonster, isTrapMon, replAsks, askReplace, replaceOther, unionStandIn, cbReplace, gyBanBy, gyLock, banBlocked, gyCostBlocked, nameOff, nameIs, isUmi, NO_FLIP_RE, negSource, negActAllowed, hardNeg,
   stopAttack, ask, pick, yn, choose, tgt: null, move, destroy, ss, draw, damage, gain, pay, mill, search, takeControl, setFaceDown, negate, addMod,
   equip, equippedTo, link, addCtr, ctr, negateAttack, endBattle, addRule, token, tokens, fusionSummon, canFusion, fusionRecipe, ritualSummon, canRitual,
   damageMany, stat, atk: (g, c) => stat(g, c, 'atk'), def: (g, c) => stat(g, c, 'def'), name, D, isMon, isMonD, isST, isSpell, isTrap, isExtraD, onField, faceUp, attr, race, lv, baseAtk,
   monsOf, stOf, fieldOf, allField, fieldMons, freeM, freeST, nFreeM, allCards, shuffleDeck, log, PN, has, forbid, negd, num, shown, emit, beginOp,
-  canSS, canFaceDown, lockBP, bpLocked, ssCond, wouldDestroy, destroysSome, attackEach, attackingNow, canTarget, banishesFromGY, winDuel, coin, dice, isBW, isFrog, isHERO, isEHERO, isGemini, evSummoned, fromFieldToGY, battleKill, oppFaceUp, stOnField, spellTrapAct, live, opp, tributeCands, tribPool, cantBattleDestroy, synCombos, swOf, synOk, synReq, matLine, ssable, costTributes, noTribCost,
+  noTribOf, canSS, canFaceDown, lockBP, bpLocked, ssCond, wouldDestroy, destroysSome, attackEach, attackingNow, attackWent, canTarget, banishesFromGY, winDuel, coin, dice, roll, spellLPFree, isBW, isFrog, isHERO, isEHERO, isGemini, evSummoned, fromFieldToGY, battleKill, oppFaceUp, stOnField, spellTrapAct, live, opp, tributeCands, tribPool, cantBattleDestroy, synCombos, swOf, synOk, synReq, matLine, ssable, costTributes, noTribCost,
 };
 E.lib.tgt = tgt;
 /* "Each time a Spell Card is activated" (Spell Counters): the activation resolved (not negated), and the card c was face-up on the field

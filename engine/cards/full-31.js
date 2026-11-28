@@ -66,7 +66,7 @@ const markProper = hows => ({ type: 'trig', loc: 'any', res: noop, on: (g, ev, c
 const eiSelf = { noAttackTarget: true, directAttack: true };
 const eiCont = {
   forbid: (g, src, a) => {
-    if ((a.type === 'ns' || a.type === 'set' || a.type === 'ss') && a.c && a.c !== src && a.c.id && isEI(a.c)) return true;
+    if ((a.type === 'ns' || a.type === 'ss' || a.type === 'flip') && a.c && a.c !== src && a.c.id && isEI(a.c) && faceUp(src)) return true;   // face-up only: a Set one is fine (site ruling)
     if (a.type === 'attack' && a.c.ctrl !== src.ctrl && monsOf(g, src.ctrl).every(x => faceUp(x) && has(g, x, 'noAttackTarget')) && !has(g, a.c, 'directAttack')) return true;
     return false;
   } };

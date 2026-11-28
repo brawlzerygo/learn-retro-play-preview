@@ -29,12 +29,8 @@ function placeCB(g, p, x) {
   return true;
 }
 const cbPlaced = (g, p) => emit(g, { type: 'cbPlace', p });
-/* The Crystal Beast rule: "If this face-up card is destroyed in a Monster Zone, you can place it face-up in your Spell & Trap Zone". */
-// PARTIAL: the engine has no replacement effects, so the card reaches the GY first and is then placed from there (other "sent to the GY" effects can still see it).
-const cbStay = { type: 'trig', loc: 'gy', label: 'Place it as a Continuous Spell',
-  on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.from === 'm' && ev.to === 'gy' && ev.snap && ev.snap.faceUp,
-  cond: (g, c, p) => c.zone === 'gy' && freeST(g, p) >= 0,
-  res: function* (g, c, p) { if (c.zone === 'gy' && placeCB(g, p, c)) cbPlaced(g, p); } };
+/* The Crystal Beast rule: an optional replacement in destroy() (engine cbReplace, 2026-11-28 audit: no chain, not under Skill Drain). */
+const cbStay = L.cbReplace(cbPlaced);
 /* Cloudian rules shared by the four Fog monsters */
 const cloudSelf = { noBattleDestroy: true };
 const cloudDoom = { type: 'trig', mand: true, noChain: true, label: 'Destroyed in face-up Defense Position',   // a self-destroy rule, not a chain link (EDOPro; edison-15)
@@ -155,9 +151,9 @@ E.addScripts({
   'Destiny HERO - Dasher': { effs: [
     { type: 'ign', opt: true, label: 'Tribute a monster: +1000 ATK', cond: (g, c, p) => monsOf(g, p).some(x => x !== c),
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p).filter(x => x !== c), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, end: true }); log(g, `${name(c)} gained 1000 ATK.`); } } },
-    // PARTIAL / ENGINE: there is no "end of the Battle Phase" event, so Dasher changes to Defense Position right after its attack's Damage Step.
-    { type: 'trig', on: (g, ev, c) => { if (ev.type === 'dsEnd' && ev.a === c && onField(c) && faceUp(c) && c.pos === 'atk') { c.pos = 'def'; log(g, `${name(c)} changed to Defense Position.`); } return false; }, res: function* () {} },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, end: true, own: true }); log(g, `${name(c)} gained 1000 ATK.`); } } },
+    // "If this card attacks, change it to Defense Position at the end of the Battle Phase" (bpEnd, 2026-11-28 audit)
+    { type: 'trig', on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'bpEnd' && c.declared && c.attacks > 0 && onField(c) && faceUp(c) && c.pos === 'atk') { c.pos = 'def'; g.seq++; log(g, `${name(c)} changed to Defense Position.`); } return false; }, res: function* () {} },
     { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Reveal the drawn monster: Special Summon Dasher',
       on: (g, ev, c) => ev.type === 'move' && ev.reason === 'draw' && ev.to === 'hand' && ev.c.owner === c.owner && isMon(ev.c) && g.phase === 'draw' && g.tp === c.owner && !(g.dasherUsed && g.dasherUsed[c.u]),
       cond: (g, c, p) => freeM(g, p) >= 0,
@@ -273,19 +269,17 @@ E.addScripts({
     res: function* (g, c, p) { const h = g.p[opp(p)].hand; log(g, `${PN(g, p)} looked at ${PN(g, opp(p))}'s hand.`); if (!h.length) return; const [x] = yield* pick(g, p, 'Send which card from their hand to the GY?', h, 1, 1, 'bad'); if (x) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${D(x).n} was sent to the GY.`); } } }] },
 
   /* ----- Crystal Beast ----- */
-  'Crystal Beast Sapphire Pegasus': { effs: [
+  'Crystal Beast Sapphire Pegasus': { self: { replaceAsk: cbStay }, effs: [
     { type: 'trig', when: true, label: 'Place a Crystal Beast', on: (g, ev, c) => evSummoned(ev, c),
       cond: (g, c, p) => freeST(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].some(isCBMon),
-      res: function* (g, c, p) { const cands = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(isCBMon); const [x] = yield* pick(g, p, 'Place which Crystal Beast as a Continuous Spell?', cands, 1, 1, 'good'); if (x && placeCB(g, p, x)) cbPlaced(g, p); } },
-    cbStay] },
-  'Crystal Beast Topaz Tiger': { self: { atk: (g, c) => g.inDS && g.battle && g.battle.a === c && g.battle.t ? 400 : 0 }, effs: [cbStay] },
+      res: function* (g, c, p) { const cands = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(isCBMon); const [x] = yield* pick(g, p, 'Place which Crystal Beast as a Continuous Spell?', cands, 1, 1, 'good'); if (x && placeCB(g, p, x)) cbPlaced(g, p); } },] },
+  'Crystal Beast Topaz Tiger': { self: { replaceAsk: cbStay, atk: (g, c) => g.inDS && g.battle && g.battle.a === c && g.battle.t ? 400 : 0 }, effs: [] },
   // ENGINE: attack() keeps the attack target in a local variable, so a card can't redirect an attack. Amber Mammoth's first effect is not scripted.
-  'Crystal Beast Amber Mammoth': { effs: [cbStay] },
-  'Crystal Beast Ruby Carbuncle': { effs: [
+  'Crystal Beast Amber Mammoth': { self: { replaceAsk: cbStay }, effs: [] },
+  'Crystal Beast Ruby Carbuncle': { self: { replaceAsk: cbStay }, effs: [
     { type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Crystal Beasts', on: (g, ev, c) => evSummoned(ev, c, ['special']),
       cond: (g, c, p) => freeM(g, p) >= 0 && cbST(g, p).some(isMon),
-      res: function* (g, c, p) { let cands = cbST(g, p).filter(isMon); const n = Math.min(nFreeM(g, p), cands.length); if (!n) return; if (cands.length > n) cands = yield* pick(g, p, `Special Summon which ${n} Crystal Beast(s)?`, cands, n, n, 'good'); for (const x of cands) ss(g, p, x); } },
-    cbStay] },
+      res: function* (g, c, p) { let cands = cbST(g, p).filter(isMon); const n = Math.min(nFreeM(g, p), cands.length); if (!n) return; if (cands.length > n) cands = yield* pick(g, p, `Special Summon which ${n} Crystal Beast(s)?`, cands, n, n, 'good'); for (const x of cands) ss(g, p, x); } },] },
   'Dragon Queen of Tragic Endings': {
     proc: { label: 'Special Summon (3 face-up Continuous Spells)', cond: (g, c, p) => contSpells(g, p).length >= 3 },
     effs: [
@@ -305,7 +299,7 @@ E.addScripts({
     self: { noEffectDestroy: (g, c) => cbST(g, c.ctrl).length >= 1 },
     cont: { dmg: (g, src, p, n, o) => { if (p === src.ctrl && o.battle && cbST(g, p).length >= 2 && src.flags.halved !== g.turnNo) { src.flags.halved = g.turnNo; log(g, 'Ancient City - Rainbow Ruins halved the battle damage.'); return Math.floor(n / 2); } return n; } },
     effs: [{ type: 'act', res: function* () {} },
-      { type: 'quick', loc: 'fz', label: 'Send a Crystal Beast: negate a Spell/Trap',
+      { type: 'quick', loc: 'fz', sameChain: true, label: 'Send a Crystal Beast: negate a Spell/Trap',   // "can be activated multiple times in the same Chain" (ruling 9)
         cond: (g, c, p, x) => cbST(g, p).length >= 3 && spellTrapAct(x.top) && !x.top.negated && monsOf(g, p).some(y => faceUp(y) && isCBMon(y)),
         cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [y] = yield* pick(g, p, 'Send which Crystal Beast monster to the GY?', monsOf(g, p).filter(y => faceUp(y) && isCBMon(y)), 1, 1, 'cost'); move(g, y, 'gy', { reason: 'cost' }); },
         res: function* (g, c, p, L) { if (cbST(g, p).length < 3) return; L.data.L.negBy = p; negate(g, L.data.L, true); } },

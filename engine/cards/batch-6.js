@@ -25,13 +25,13 @@ const rawAtk = x => D(x).atk === '?' ? Infinity : baseAtk(x);
 
 /* Koa'ki Meiru maintenance: during your End Phase, send an Iron Core (or sendPred) from the hand to the GY,
  or reveal a card that matches revealPred, or this card is destroyed.
- PARTIAL: a maintenance cost is not an effect; here it runs as a mandatory trigger on the chain (so it can be
- responded to, and Skill Drain stops it). */
+ A maintenance cost is not an effect: it happens with no chain link and Skill Drain doesn't stop it (noChain, rule: 2026-11-28 audit,
+ edison-18); the "send to the GY" option isn't offered while the card would be banished instead (Macro Cosmos). */
 function maint(revealText, revealPred, sendText, sendPred) {
-  return { type: 'trig', mand: true, label: 'Maintenance cost', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
+  return { type: 'trig', mand: true, noChain: true, rule: true, label: 'Maintenance cost', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
     res: function* (g, c, p) {
       if (!onField(c) || !faceUp(c)) return;
-      const h = g.p[p].hand, send = h.filter(x => isIC(x) || (sendPred && sendPred(x))), rev = revealPred ? h.filter(revealPred) : [];
+      const h = g.p[p].hand, send = L.gyLock(g, 'any') ? [] : h.filter(x => isIC(x) || (sendPred && sendPred(x))), rev = revealPred ? h.filter(revealPred) : [];
       const opts = [], kinds = [];
       if (send.length) { opts.push(sendText); kinds.push('s'); }
       if (rev.length) { opts.push(revealText); kinds.push('r'); }
@@ -49,7 +49,7 @@ const eiSelf = { noAttackTarget: true, directAttack: true };
 const eiCont = {
   // only 1 Earthbound Immortal on the field
   forbid: (g, src, a) => {
-    if ((a.type === 'ns' || a.type === 'set' || a.type === 'ss') && a.c && a.c !== src && a.c.id && isEI(a.c)) return true;
+    if ((a.type === 'ns' || a.type === 'ss' || a.type === 'flip') && a.c && a.c !== src && a.c.id && isEI(a.c) && faceUp(src)) return true;   // face-up only: a Set one is fine (site ruling)
     // ruling: if the opponent's only monsters can't be attack targets, they can't attack (unless they attack directly by an effect)
     if (a.type === 'attack' && a.c.ctrl !== src.ctrl && monsOf(g, src.ctrl).every(x => faceUp(x) && has(g, x, 'noAttackTarget')) && !has(g, a.c, 'directAttack')) return true;
     return false;
@@ -112,7 +112,7 @@ E.addScripts({
     effs: [{ type: 'ign', label: 'Tribute a HERO: gain its ATK',
       cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && /^Elemental HERO/.test(name(x))),
       cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which Elemental HERO?', monsOf(g, p).filter(x => x !== c && faceUp(x) && /^Elemental HERO/.test(name(x))), 1, 1, 'cost'); L2.data.a = atk(g, x); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
-      res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: L2.data.a, end: true }); log(g, `${name(c)} gained ${L2.data.a} ATK.`); } } }] },
+      res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: L2.data.a, end: true, own: true }); log(g, `${name(c)} gained ${L2.data.a} ATK.`); } } }] },
   // PARTIAL: original ATK is set by Dark Calling only, and stays while its effects are negated.
   'Evil HERO Dark Gaia': { mats: [() => false, () => false],
     effs: [{ type: 'trig', when: true, label: 'Change their Defense monsters to Attack', on: (g, ev, c) => ev.type === 'attack' && ev.a === c,
@@ -126,11 +126,12 @@ E.addScripts({
     effs: [{ type: 'trig', mand: true, label: 'Their monsters change to Attack Position',
       on: (g, ev, c) => ev.type === 'attack' && ev.p !== c.ctrl && c.flags.mfTurn !== g.turnNo,
       res: function* (g, c, p) { c.flags.mfTurn = g.turnNo; for (const x of monsOf(g, opp(p))) if (x.pos !== 'atk') { x.pos = 'atk'; log(g, `${name(x)} was changed to Attack Position.`); } } }] },
-  // PARTIAL: ENGINE: no "end of the Battle Phase" event, so it triggers at the end of each Damage Step it was in.
+  // "At the end of the Battle Phase, if this card attacked or was attacked" (bpEnd, 2026-11-28 audit, edison-16)
   'Multiple Piece Golem': { mats: [x => D(x).n === 'Big Piece Golem', x => D(x).n === 'Medium Piece Golem'],
     effs: [
       { type: 'trig', mand: true, on: (g, ev, c) => { if (evSummoned(ev, c, ['fusion'])) c.flags.mats = g.events.filter(e => e.type === 'move' && e.reason === 'fusion' && e.group === ev.group).map(e => e.c); return false; }, res: function* () {} },
-      { type: 'trig', label: 'Return to the Extra Deck', tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'dsEnd' && (ev.a === c || ev.t === c),
+      { type: 'trig', loc: 'any', on: (g, ev, c) => { if (ev.type === 'dsStart' && c.zone === 'm' && (ev.a === c || ev.t === c)) c.flags.mpgBattled = g.turnNo; return false; }, res: function* () {} },
+      { type: 'trig', label: 'Return to the Extra Deck', tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'bpEnd' && c.flags.mpgBattled === g.turnNo,
         res: function* (g, c, p) {
           if (!onField(c)) return; const mats = c.flags.mats || [];
           move(g, c, 'extra', { reason: 'effect' }); log(g, `${D(c).n} returned to the Extra Deck.`);
@@ -141,7 +142,7 @@ E.addScripts({
   /* ===== Earthbound Immortal ===== */
   'Earthbound Immortal Aslla piscu': { self: eiSelf, cont: eiCont, effs: [eiSelfDestroy,
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, label: 'Destroy their face-up monsters',
-      on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.snap && ev.snap.faceUp && !(ev.snap.flags && ev.snap.flags.selfDestroy),
+      on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.snap && ev.snap.faceUp && !(ev.snap.flags && ev.snap.flags.selfDestroy) && !['deck', 'deckTop', 'extra'].includes(ev.to),   // not when returned to the Deck (site ruling 8)
       res: function* (g, c, p) { const out = destroy(g, oppFaceUp(g, p), { by: p, src: c }); if (out.length) damage(g, opp(p), 800 * out.length, { src: c, srcP: p }); } }] },
   // PARTIAL: it doesn't trigger when destroyed in the hand or Deck.
   'Earthbound Immortal Ccarayhua': { self: eiSelf, cont: eiCont, effs: [eiSelfDestroy,
@@ -356,7 +357,7 @@ E.addScripts({
   // ENGINE: Field Zone (fz) triggers are not collected by the engine yet (see Future Visions), so its maintenance and
   // search only work once fz is scanned. PARTIAL: the search is offered to this card's controller only.
   'Iron Core Specimen Lab': { effs: [{ type: 'act', res: function* () {} },
-    { type: 'trig', loc: 'fz', mand: true, label: 'Maintenance cost', on: (g, ev, c) => faceUp(c) && ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
+    { type: 'trig', loc: 'fz', mand: true, noChain: true, rule: true, label: 'Maintenance cost', on: (g, ev, c) => faceUp(c) && ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,   // "not an effect, does not activate, and can't be negated"
       res: function* (g, c, p) { if (!onField(c)) return; const ic = g.p[p].hand.filter(isIC);
         if (ic.length && (yield* yn(g, p, 'Reveal an Iron Core to keep Iron Core Specimen Lab?'))) { log(g, `${PN(g, p)} revealed Iron Core of Koa'ki Meiru.`); return; }
         destroy(g, [c], { by: p, rule: true }); } },

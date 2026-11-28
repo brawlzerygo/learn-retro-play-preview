@@ -514,5 +514,5 @@ function* blockerMill(g, p) {
   const out = []; for (let k = 0; k < n && g.p[p].deck.length; k++) { const x = g.p[p].deck[g.p[p].deck.length - 1]; move(g, x, 'gy', { reason: 'cost' }); out.push(x); }
   log(g, `${PN(g, p)} sent ${out.map(name).join(', ')} from the Deck to the GY.`); return out.length;
 }
-function* blockerDef(g, c, p) { const n = yield* blockerMill(g, p); if (n && onField(c) && faceUp(c)) { addMod(g, c, { def: 500 * n, end: true }); log(g, `Card Blocker gained ${500 * n} DEF.`); } }
+function* blockerDef(g, c, p) { const n = yield* blockerMill(g, p); if (n && onField(c) && faceUp(c)) { addMod(g, c, { def: 500 * n, end: true, own: true }); log(g, `Card Blocker gained ${500 * n} DEF.`); } }
 })();

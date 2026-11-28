@@ -506,7 +506,7 @@ E.addScripts({
   'Dangerous Machine Type-6': { effs: [actNoop,
     { type: 'trig', loc: 'st', mand: true, label: 'Roll a die',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; const n = dice(g, p), o = opp(p);
+      res: function* (g, c, p) { if (!onField(c)) return; const n = (yield* L.roll(g, p)), o = opp(p);
         if (n === 1) yield* discard1(g, p);
         else if (n === 2) yield* discard1(g, o);
         else if (n === 3) draw(g, p, 1);

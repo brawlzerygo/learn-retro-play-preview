@@ -16,6 +16,7 @@ const morphMon = c => isMon(c) && isMorph(c);
 const isOjama = c => /Ojama/.test(name(c));
 const sixSam = c => isMon(c) && /Six Samurai/.test(name(c));
 const xSaber = c => isMon(c) && /X-Saber/.test(name(c));
+const samRepl = L.replaceOther((g, c) => monsOf(g, c.ctrl).filter(x => faceUp(x) && /Six Samurai/.test(name(x))), 'Destroy another face-up Six Samurai monster instead of %s?', 'Destroy which Six Samurai instead?');
 const otherSam = (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && sixSam(x) && name(x) !== name(c));
 const lightMach = c => isMon(c) && attr(c) === 'LIGHT' && race(c) === 'Machine';
 const isEquipSpell = c => isSpell(c) && D(c).sub === 'Equip';
@@ -32,13 +33,8 @@ function synProc(nonOk) {
     cost: function* (g, c, p, grp) { const cs = combos(g, p, c); let mats = cs[0]; if (cs.length > 1) { const i = yield* choose(g, p, `Synchro Summon ${name(c)} with which monsters?`, cs.map(m => m.map(name).join(' + '))); mats = cs[i]; }
       for (const m of mats) move(g, m, 'gy', { reason: 'synchro', by: p, group: grp }); log(g, `${PN(g, p)} sent ${mats.map(m => D(m).n).join(' + ')} to the GY for a Synchro Summon.`); } };
 }
-// Trap Monsters: the card moves to a Monster Zone and gets its monster stats
-function trapMonster(g, c, p, st) {
-  if (!onField(c) || freeM(g, p) < 0) return false;
-  if (!ss(g, p, c, 'def')) return false;
-  c.flags.baseAtk = st.atk; c.flags.lv = st.lv; c.flags.trapMon = true; addMod(g, c, { set: st.def, which: 'def' });
-  return true;
-}
+// Trap Monsters: the engine's notion (L.trapMonster, 2026-11-28 audit): a monster and a Trap Card, Type/Attribute from the text, its S/T Zone kept
+const trapMonster = L.trapMonster;
 // would this monster lose the battle now? (used before the destruction is applied)
 function losesBattle(g, c, a, t) {
   if (!t) return false;
@@ -57,7 +53,7 @@ const GY_TARGET = ['Monster Reborn', 'Call of the Haunted', 'Premature Burial', 
 
 const relEq = (g, c) => onField(c) ? g.p[c.ctrl].st.find(x => x && x.equipTo === c.u && isMon(x)) || null : null;
 const birPool = (g, p) => [...g.p[p].hand.filter(x => isMon(x) && D(x).n !== 'Relinquished' && lv(x) >= 1), ...monsOf(g, p).filter(x => lv(x) >= 1),
-  ...g.p[p].gy.filter(x => D(x).n === 'Djinn Releaser of Rituals')];
+  ...g.p[p].gy.filter(x => D(x).n === 'Djinn Releaser of Rituals' && !L.forbid(g, { type: 'banish', c: x, from: 'gy', p, inCond: true }))];   // not while it can't be banished (Iron Wall, Kycoo, Necrovalley)
 const poleTop = g => { const ms = fieldMons(g).filter(faceUp); if (!ms.length) return []; const hi = Math.max(...ms.map(x => atk(g, x))); return ms.filter(x => atk(g, x) === hi); };
 const areaB = g => { const ch = fieldMons(g).filter(x => x.pos === 'atk' && lv(x) >= 4); for (const x of ch) x.pos = 'def'; return ch; };
 
@@ -104,12 +100,12 @@ E.addScripts({
   'Morphtronic Celfon': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Roll a die: summon a Morphtronic',
       cond: (g, c, p) => c.pos === 'atk' && freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => morphMon(x) && lv(x) <= 4),
-      res: function* (g, c, p) { const n = 1 + Math.floor(g.rnd() * 6); log(g, `${PN(g, p)} rolled a ${n}.`);
+      res: function* (g, c, p) { const n = yield* L.roll(g, p);
         const top = g.p[p].deck.slice(-n), cands = top.filter(x => morphMon(x) && lv(x) <= 4);
         if (cands.length && freeM(g, p) >= 0) { const [x] = yield* pick(g, p, 'Special Summon which Morphtronic?', cands, 1, 1, 'good'); if (x) ss(g, p, x); }
         shuffleDeck(g, p); } },
     { type: 'ign', opt: true, label: 'Roll a die: look at the top cards', cond: (g, c, p) => c.pos === 'def' && g.p[p].deck.length > 0,
-      res: function* (g, c, p) { const n = 1 + Math.floor(g.rnd() * 6); log(g, `${PN(g, p)} rolled a ${n} and looked at the top ${Math.min(n, g.p[p].deck.length)} card(s) of the Deck.`); } }] },
+      res: function* (g, c, p) { const n = yield* L.roll(g, p); log(g, `${PN(g, p)} looked at the top ${Math.min(n, g.p[p].deck.length)} card(s) of the Deck.`); } }] },
   'Morphtronic Radion': { effs: [], cont: {
     atk: (g, src, c) => src.pos === 'atk' && c.ctrl === src.ctrl && morphMon(c) ? 800 : 0,
     def: (g, src, c) => src.pos === 'def' && c.ctrl === src.ctrl && morphMon(c) ? 1000 : 0 } },
@@ -133,7 +129,8 @@ E.addScripts({
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.scopenBy === c.u && x.flags.scopenT === g.turnNo),
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.flags.scopenBy === c.u && x.flags.scopenT === g.turnNo), { by: p }); } } ],
     self: { lv: (g, c) => c.pos === 'def' ? 4 : 0 } },
-  'Morphtronic Slingen': { // ENGINE: the Defense Position "destroy another Morphtronic instead" needs a destruction replacement hook
+  'Morphtronic Slingen': { // ● Defense Position: "you can destroy another Morphtronic monster you control instead" (replaceOther, 2026-11-28 audit)
+    self: { replaceAsk: L.replaceOther((g, c) => monsOf(g, c.ctrl).filter(morphMon), 'Destroy another Morphtronic monster instead of %s?', 'Destroy which Morphtronic instead?', 'destroy', (g, c) => c.pos === 'def') },
     effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Tribute a Morphtronic: destroy a card',
       cond: (g, c, p) => c.pos === 'atk' && monsOf(g, p).some(x => morphMon(x) && D(x).n !== 'Morphtronic Slingen') && allField(g).length > 1,
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Morphtronic monster', monsOf(g, p).filter(x => morphMon(x) && D(x).n !== 'Morphtronic Slingen'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
@@ -185,7 +182,9 @@ E.addScripts({
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send a Normal Monster you control to the GY', monsOf(g, p).filter(x => D(x).k === 'normal'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
     target: function* (g, c, p, L) { const cs = allCards(g, 'gy').filter(isMon); if (cs.length) yield* tgt(g, p, L, 'Special Summon which monster from either GY?', cs, 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (!t || t.zone !== 'gy' || !onField(c)) return; if (ss(g, p, t) && equip(g, c, t)) link(g, c, t); } }] },
-  'Power Tool Dragon': { // ENGINE: "send an equipped Equip Spell instead" needs a destruction replacement hook
+  'Power Tool Dragon': { // ②: "you can send 1 Equip Spell Card equipped to it to the GY instead" (replaceOther; rulings 8 to 10: the opponent's
+    // Equip Spell too, banished under Macro Cosmos, not one destroyed at the same time)
+    self: { replaceAsk: L.replaceOther((g, c) => stOf(g, 0).concat(stOf(g, 1)).filter(x => faceUp(x) && isEquipSpell(x) && x.equipTo === c.u), 'Send an Equip Spell equipped to %s to the GY instead?', 'Send which Equip Spell to the GY?', 'gy') },
     effs: [{ type: 'ign', opt: true, label: 'Reveal 3 Equip Spells',
       cond: (g, c, p) => g.p[p].deck.filter(isEquipSpell).length >= 3 && !L.forbid(g, { type: 'search', p }),
       res: function* (g, c, p) { const cs = g.p[p].deck.filter(isEquipSpell); if (cs.length < 3) return;
@@ -226,7 +225,7 @@ E.addScripts({
         res: function* (g, c, p) { if (!onField(c)) return; g.ns[p] = 0; c.flags.psy = (c.flags.psy || 0) + 1; const t = g.turnNo;
           addRule(g, (g2, a) => (a.type === 'ns' && a.p === p && race(a.c) !== 'Psychic') || (a.type === 'set' && a.p === p), { end: t });
           log(g, `${PN(g, p)} can Normal Summon a Psychic monster once more this turn. Brain Research Lab has ${c.flags.psy} Psychic Counter(s).`); } },
-      { type: 'trig', loc: 'any', mand: true, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.snap && ev.snap.flags && ev.snap.flags.psy > 0,
+      { type: 'trig', loc: 'any', mand: true, noChain: true, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.snap && ev.snap.flags && ev.snap.flags.psy > 0,   // site ruling 1: none of its effects start a chain
         res: function* (g, c, p, L) { damage(g, L.ev.prevCtrl, 1000 * L.ev.snap.flags.psy, { src: c, srcP: L.ev.prevCtrl }); } }] },
   'Psychic Lifetrancer': { effs: [{ type: 'ign', opt: true, label: 'Banish a Psychic: gain 1200 LP',
     cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && race(x) === 'Psychic'),
@@ -275,7 +274,7 @@ E.addScripts({
     res: function* (g, c, p) { const x = yield* search(g, p, x => D(x).k === 'ritual' && lv(x) <= 7, 'Add a Level 7 or lower Ritual Monster'); if (!x) return;
       const rs = g.p[p].gy.filter(isRitualSpell); if (rs.length && (yield* yn(g, p, 'Add a Ritual Spell from your GY?'))) { const [y] = yield* pick(g, p, 'Add which Ritual Spell?', rs, 1, 1, 'good'); move(g, y, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(y)} to the hand.`); } } }] },
 
-  /* ----- Six Samurai ----- ENGINE (Irou, Zanji, Yaichi, Kamon): "destroy another Six Samurai instead" needs a destruction replacement hook */
+  /* ----- Six Samurai ----- (Irou, Zanji, Yaichi, Kamon: "destroy another face-up Six Samurai instead" is samRepl, 2026-11-28 audit) */
   'Grandmaster of the Six Samurai': {
     proc: { cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && sixSam(x)) && !monsOf(g, p).some(x => faceUp(x) && D(x).n === 'Grandmaster of the Six Samurai'), label: 'Special Summon (you control a Six Samurai)' },
     cont: { forbid: (g, src, a) => (a.type === 'ns' || a.type === 'ss') && a.p === src.ctrl && a.c !== src && a.c.id && D(a.c) && D(a.c).n === 'Grandmaster of the Six Samurai' },
@@ -288,21 +287,21 @@ E.addScripts({
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Six Samurai monster', monsOf(g, p).filter(x => sixSam(x)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     target: function* (g, c, p, L) { const cs = fieldMons(g); if (cs.length) yield* tgt(g, p, L, 'Destroy which monster?', cs, 1, 1, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
-  'The Six Samurai - Irou': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos === 'set',
+  'The Six Samurai - Irou': { self: { replaceAsk: samRepl }, effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'dsStart' && ev.a === c && ev.t && ev.t.pos === 'set',
     cond: (g, c, p) => otherSam(g, c, p),
     res: function* (g, c, p, L) { const t = L.ev.t; if (t && onField(t) && otherSam(g, c, p)) destroy(g, [t], { by: p }); } }] },
-  'The Six Samurai - Zanji': { effs: [{ type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'dsEnd' && ev.a === c && ev.t && onField(ev.t),
+  'The Six Samurai - Zanji': { self: { replaceAsk: samRepl }, effs: [{ type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'dsEnd' && ev.a === c && ev.t && onField(ev.t),
     cond: (g, c, p) => otherSam(g, c, p),
     res: function* (g, c, p, L) { const t = L.ev.t; if (t && onField(t) && otherSam(g, c, p)) destroy(g, [t], { by: p }); } }] },
-  'The Six Samurai - Yaichi': { self: { cantAttack: (g, c) => c.flags.yaichi === g.turnNo },
+  'The Six Samurai - Yaichi': { self: { replaceAsk: samRepl, cantAttack: (g, c) => c.flags.yaichi === g.turnNo, lasting: ['cantAttack'] },
     effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Destroy a Set Spell/Trap',
-      cond: (g, c, p) => otherSam(g, c, p) && stOnField(g).some(x => x.pos === 'set'),
+      cond: (g, c, p) => otherSam(g, c, p) && !c.declared && stOnField(g).some(x => x.pos === 'set'),   // not after it attacked this turn (ruling 7)
       cost: function* (g, c) { c.flags.yaichi = g.turnNo; },
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which Set card?', stOnField(g).filter(x => x.pos === 'set'), 1, 1, 'bad'); },
       res: function* (g, c, p, L) { if (otherSam(g, c, p)) destroy(g, live(L).filter(x => x.pos === 'set'), { by: p }); } }] },
-  'The Six Samurai - Kamon': { self: { cantAttack: (g, c) => c.flags.kamon === g.turnNo },
+  'The Six Samurai - Kamon': { self: { replaceAsk: samRepl, cantAttack: (g, c) => c.flags.kamon === g.turnNo, lasting: ['cantAttack'] },
     effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Destroy a face-up Spell/Trap',
-      cond: (g, c, p) => otherSam(g, c, p) && stOnField(g).some(faceUp),
+      cond: (g, c, p) => otherSam(g, c, p) && !c.declared && stOnField(g).some(faceUp),   // not after it attacked this turn (ruling 7)
       cost: function* (g, c) { c.flags.kamon = g.turnNo; },
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which face-up Spell/Trap?', stOnField(g).filter(faceUp), 1, 1, 'bad'); },
       res: function* (g, c, p, L) { if (otherSam(g, c, p)) destroy(g, live(L).filter(faceUp), { by: p }); } }] },
@@ -397,20 +396,21 @@ E.addScripts({
     effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, opp(p)).length > 0,
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Target which monster?', monsOf(g, opp(p)), 1, 1, 'bad'); },
       res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !onField(c)) return; c.flags.wheel = t.u; log(g, `Nightmare Wheel holds ${t.pos === 'set' ? 'a face-down monster' : name(t)}.`); if (g.aw && g.aw.a === t) negateAttack(g); } },
-    { type: 'trig', loc: 'st', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => faceUp(c) && c.flags.wheel && ev.type === 'move' && ev.c.u === c.flags.wheel && ev.wasField && ev.to !== 'm',
+    { type: 'trig', loc: 'st', mand: true, noChain: true, tags: { destroy: 1 }, on: (g, ev, c) => faceUp(c) && c.flags.wheel && ev.type === 'move' && ev.c.u === c.flags.wheel && ev.wasField && ev.to !== 'm',
       res: function* (g, c, p) { if (onField(c)) destroy(g, [c], { by: p }); } },
     { type: 'trig', loc: 'st', mand: true, opt: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c) && c.flags.wheel && fieldMons(g).some(x => x.u === c.flags.wheel),
       res: function* (g, c, p) { if (onField(c) && fieldMons(g).some(x => x.u === c.flags.wheel)) damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
   'Pole Position': { // PARTIAL: the highest-ATK monster ignores Spell destruction only; Spell ATK changes still apply
       cont: { grant: (g, src, c, flag) => flag === 'unaffectedSpells' && c.zone === 'm' && faceUp(c) && poleTop(g).includes(c) },
       effs: [{ type: 'act', res: function* () {} },
-        { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.snap && ev.snap.faceUp,
+        // ②: no chain, the monster is destroyed with Pole Position leaving (ruling 88); not when it left before its activation resolved
+        { type: 'trig', loc: 'any', mand: true, noChain: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.snap && ev.snap.faceUp && !g.chain.some(L => L.c === c && L.cardAct),
           res: function* (g, c, p) { destroy(g, poleTop(g), { by: p }); } }] },
-  'Zoma the Spirit': { // PARTIAL: as a monster it has no Type/Attribute and its Spell/Trap Zone is freed
+  'Zoma the Spirit': { // a Trap Monster (L.trapMonster): DARK Zombie, its S/T Zone kept
     effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0,
       res: function* (g, c, p) { trapMonster(g, c, p, { atk: 1800, def: 500, lv: 4 }); } },
     { type: 'trig', loc: 'any', mand: true, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.snap && ev.snap.flags && ev.snap.flags.trapMon && ev.killer,
-      res: function* (g, c, p, L) { const k = L.ev.killer; const n = onField(k) ? atk(g, k) : baseAtk(k); damage(g, opp(L.ev.prevCtrl), n, { src: c, srcP: L.ev.prevCtrl }); } }] },
+      res: function* (g, c, p, L) { const k = L.ev.killer; const n = onField(k) ? atk(g, k) : L.ev.killerAtk != null ? L.ev.killerAtk : baseAtk(k); damage(g, opp(L.ev.prevCtrl), n, { src: c, srcP: L.ev.prevCtrl }); } }] },   // its ATK at the battle once it left (edison-21)
   'Double Snare': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: g => allField(g).some(x => faceUp(x) && NEG_TRAP.includes(D(x).n)),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which card?', allField(g).filter(x => faceUp(x) && NEG_TRAP.includes(D(x).n)), 1, 1, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L).filter(faceUp), { by: p }); } }] },

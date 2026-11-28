@@ -219,7 +219,7 @@ const ARC_EFFS = [
   // End Phase; tails, the opponent gains 500 LP. Continuous effects, no chain.
   { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => {
     if (spellResolvedBy(ev) < 0) return false;
-    if (arcIs(g, c, AF.mag, 'H')) { addMod(g, c, { set: 2 * baseAtk(c), which: 'atk', end: true }); log(g, `${name(c)}'s ATK became ${2 * baseAtk(c)}.`); }
+    if (arcIs(g, c, AF.mag, 'H')) { addMod(g, c, { set: 2 * baseAtk(c), which: 'atk', end: true, own: true }); log(g, `${name(c)}'s ATK became ${2 * baseAtk(c)}.`); }
     else if (arcIs(g, c, AF.mag, 'T')) gain(g, opp(c.ctrl), 500);
     return false; } },
   // The Empress: each time the opponent Normal Summons or Sets: heads, you can Special Summon 1 Arcana Force from your hand;
@@ -281,7 +281,7 @@ const ARC_EFFS = [
   { type: 'quick', speed: 3, ds: true, tags: { destroy: 1 }, label: 'Lose 1000 ATK: negate and destroy',
     cond: (g, c, p, x) => arcIs(g, c, AF.light, 'T') && targetsMe(x.top, c) && !(x.top.f29lr || []).includes(c.u),
     target: function* (g, c, p, L2) { const T = g.chain[g.chain.length - 1]; (T.f29lr || (T.f29lr = [])).push(c.u); L2.data.T = T; },
-    res: function* (g, c, p, L2) { const T = L2.data.T; if (onField(c) && faceUp(c)) { addMod(g, c, { atk: -1000 }); log(g, `${name(c)} lost 1000 ATK.`); }
+    res: function* (g, c, p, L2) { const T = L2.data.T; if (onField(c) && faceUp(c)) { addMod(g, c, { atk: -1000, own: true }); log(g, `${name(c)} lost 1000 ATK.`); }
       if (T && !T.negated) { T.negBy = p; negate(g, T, true); } } },
 ];
 const ARC_SELF = {

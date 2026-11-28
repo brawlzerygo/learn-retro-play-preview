@@ -92,12 +92,8 @@ function cloudTokenLock(g, t) {
 
 /* ----- Crystal Beasts ----- */
 // "If this face-up card is destroyed while in a Monster Zone, you can place it face-up in your Spell & Trap Zone instead."
-// Same as batch-5.js's Crystal Beasts (cbStay), so they all play alike and Crystal Pair still sees the card reach the GY.
-// PARTIAL: the engine's replacement hook can't ask, so the card reaches the GY first and is then placed from there.
-const cbStay = { type: 'trig', loc: 'gy', label: 'Place it as a Continuous Spell',
-  on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.from === 'm' && ev.to === 'gy' && ev.snap && ev.snap.faceUp,
-  cond: (g, c, p) => c.zone === 'gy' && freeST(g, p) >= 0,
-  res: function* (g, c, p) { if (c.zone === 'gy' && placeCB(g, p, c)) emit(g, { type: 'cbPlace', p }); } };
+// Same as batch-5.js's Crystal Beasts: the engine's optional replacement in destroy() (cbReplace, 2026-11-28 audit).
+const cbStay = L.cbReplace((g, p) => emit(g, { type: 'cbPlace', p }));
 function placeCB(g, p, x) {
   if (freeST(g, p) < 0) return false;
   const from = x.zone; move(g, x, 'st', { ctrl: p, pos: 'up', reason: 'effect' }); if (from === 'deck') shuffleDeck(g, p);
@@ -335,16 +331,16 @@ E.addScripts({
       for (const x of ps) ss(g, p, x, 'atk'); } }] },
   // The Battle Damage of a direct attack made with its own effect is halved (its ATK first, then halved: ruling).
   'Crystal Beast Amethyst Cat': {
-    self: { directAttack: true },
+    self: { directAttack: true, replaceAsk: cbStay },
     cont: { dmg: (g, src, p, n, o) => o.battle && o.src === src && o.direct && src.flags.f30cat === g.turnNo && p !== src.ctrl ? Math.floor(n / 2) : undefined },
-    effs: [cbStay, { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'attack' && ev.a === c) c.flags.f30cat = ev.direct && monsOf(g, opp(c.ctrl)).length > 0 ? g.turnNo : null; return false; } }] },
-  'Crystal Beast Cobalt Eagle': {
-    effs: [cbStay, { type: 'ign', opt: true, label: 'Return a Crystal Beast card to the top of the Deck',
+    effs: [{ type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'attack' && ev.a === c) c.flags.f30cat = ev.direct && monsOf(g, opp(c.ctrl)).length > 0 ? g.turnNo : null; return false; } }] },
+  'Crystal Beast Cobalt Eagle': { self: { replaceAsk: cbStay },
+    effs: [{ type: 'ign', opt: true, label: 'Return a Crystal Beast card to the top of the Deck',
       cond: (g, c, p) => fieldOf(g, p).some(x => faceUp(x) && isCB(x) && x.zone !== 'fz'),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which face-up Crystal Beast card to the top of the Deck?', fieldOf(g, p).filter(x => faceUp(x) && isCB(x) && x.zone !== 'fz'), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { move(g, t, 'deckTop', { reason: 'effect', by: p }); log(g, `${D(t).n} was returned to the top of the Deck.`); } } }] },
-  'Crystal Beast Emerald Tortoise': {
-    effs: [cbStay, { type: 'ign', opt: true, label: 'Change a monster that attacked to Defense',
+  'Crystal Beast Emerald Tortoise': { self: { replaceAsk: cbStay },
+    effs: [{ type: 'ign', opt: true, label: 'Change a monster that attacked to Defense',
       cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && x.pos === 'atk' && x.attacks > 0),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Change which monster that attacked this turn to Defense Position?', monsOf(g, p).filter(x => faceUp(x) && x.pos === 'atk' && x.attacks > 0), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) toDef(g, t); } }] },

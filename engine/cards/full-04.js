@@ -80,12 +80,8 @@ const steinTargets = (g, p) => g.p[p].extra.filter(f => D(f).k === 'fusion' && !
 const actedThisTurn = (g, p) => everyCard(g).some(c => ownOrCtrl(c) === p && c.used && Object.values(c.used).includes(g.turnNo));
 // Trap Monsters (same as batch-7.js): the card moves to a Monster Zone and gets its monster stats.
 // PARTIAL: its Attribute and Type stay blank (ENGINE: attr()/race() can't be set by a script), and its Spell & Trap Zone isn't held.
-function trapMonster(g, c, p, st) {
-  if (!onField(c) || freeM(g, p) < 0) return false;
-  if (!ss(g, p, c, 'def')) return false;
-  c.flags.baseAtk = st.atk; c.flags.lv = st.lv; c.flags.trapMon = true; addMod(g, c, { set: st.def, which: 'def' });
-  return true;
-}
+// Trap Monsters: the engine's notion (L.trapMonster, 2026-11-28 audit): a monster and a Trap Card, Type/Attribute from the text, its S/T Zone kept
+const trapMonster = L.trapMonster;
 function toBottom(g, x) { move(g, x, 'deckTop', { reason: 'effect' }); const d = g.p[x.owner].deck; const i = d.indexOf(x); if (i >= 0) { d.splice(i, 1); d.unshift(x); } }
 
 E.addScripts({
@@ -363,7 +359,7 @@ E.addScripts({
     { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.tp !== p && ['main1', 'main2'].includes(g.phase) && freeM(g, p) >= 0 && !g.inDS,
       res: function* (g, c, p) { if (trapMonster(g, c, p, { atk: 0, def: 0, lv: 4 })) log(g, 'Cyber Shadow Gardna became a monster.'); } },
     // the copy can't be chained to: applied as the attack is declared
-    { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'attack' && ev.t === c && ev.a.ctrl !== c.ctrl && c.flags.trapMon && onField(ev.a)) { addMod(g, c, { set: atk(g, ev.a), which: 'atk' }); addMod(g, c, { set: def(g, ev.a), which: 'def' }); g.seq++; log(g, `Cyber Shadow Gardna became ${atk(g, c)} ATK and ${def(g, c)} DEF.`); } return false; } },
+    { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'attack' && ev.t === c && ev.a.ctrl !== c.ctrl && c.flags.trapMon && onField(ev.a)) { addMod(g, c, { set: atk(g, ev.a), which: 'atk', own: true }); addMod(g, c, { set: def(g, ev.a), which: 'def', own: true }); g.seq++; log(g, `Cyber Shadow Gardna became ${atk(g, c)} ATK and ${def(g, c)} DEF.`); } return false; } },
     { type: 'trig', mand: true, opt: true, label: 'Set this card again', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp !== c.ctrl && c.flags.trapMon,
       res: function* (g, c, p) { if (c.zone !== 'm' || freeST(g, p) < 0) return; move(g, c, 'st', { ctrl: p, pos: 'set', reason: 'set' }); log(g, 'Cyber Shadow Gardna was Set in the Spell & Trap Zone.'); } }] },
   'Cyber Shark': { self: { tributes: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && attr(x) === 'WATER') ? [0] : [] }, effs: [] },

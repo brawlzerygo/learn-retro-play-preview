@@ -313,7 +313,7 @@ E.addScripts({
     { type: 'quick', speed: 3, ds: true, label: 'Roll a die',
       cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && t.p !== p && t.c !== c && (t.t || []).includes(c) && faceUp(c) && !(t.data && t.data.f14die)); },
       target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; L2.data.L.data.f14die = true; },
-      res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; const n = dice(g, p); if ([1, 3, 6].includes(n)) negLink(g, L2.data.L, p, true); } }] },
+      res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; const n = (yield* L.roll(g, p)); if ([1, 3, 6].includes(n)) negLink(g, L2.data.L, p, true); } }] },
   // The self-destruction also happens in the opponent's Battle Phase (ruling).
   'Skull Conductor': { effs: [
     { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'bpEnd' && faceUp(c),
@@ -326,7 +326,7 @@ E.addScripts({
         for (const x of sets[i]) if (x.zone === 'hand') ss(g, p, x, 'atk'); } }] },
   // Port of classic-5.js
   'Skull Dice': { effs: [{ type: 'act', ds: true, cond: (g, c, p) => oppFaceUp(g, p).length > 0,
-    res: function* (g, c, p) { const n = dice(g, p) * 100; for (const m of oppFaceUp(g, p)) addMod(g, m, { atk: -n, def: -n, end: true }); log(g, `${PN(g, opp(p))}'s monsters lost ${n} ATK and DEF.`); } }] },
+    res: function* (g, c, p) { const n = (yield* L.roll(g, p)) * 100; for (const m of oppFaceUp(g, p)) addMod(g, m, { atk: -n, def: -n, end: true }); log(g, `${PN(g, opp(p))}'s monsters lost ${n} ATK and DEF.`); } }] },
   // PARTIAL: "instead of a normal draw" is done after the draw: the drawn card goes back on top of the Deck and
   // Burning Skull Head comes from the GY (ENGINE: no draw replacement hook).
   'Skull Flame': { effs: [

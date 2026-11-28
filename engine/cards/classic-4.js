@@ -242,7 +242,7 @@ E.addScripts({
       if (!(yield* L.yn(g, p, `Special Summon ${mats.map(name).join(' and ')} from your GY?`))) return;
       for (const m of mats) ss(g, p, m); } }] },
   'Graceful Dice': { effs: [{ type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).length > 0,
-    res: function* (g, c, p) { const n = dice(g, p) * 100; for (const m of monsOf(g, p)) addMod(g, m, { atk: n, def: n, end: true }); if (monsOf(g, p).length) log(g, `${PN(g, p)}'s monsters gained ${n} ATK and DEF.`); } }] },
+    res: function* (g, c, p) { const n = (yield* L.roll(g, p)) * 100; for (const m of monsOf(g, p)) addMod(g, m, { atk: n, def: n, end: true }); if (monsOf(g, p).length) log(g, `${PN(g, p)}'s monsters gained ${n} ATK and DEF.`); } }] },
 
   /* ----- Continuous Spells ----- */
   'Burning Land': { effs: [{ type: 'act',

@@ -55,12 +55,8 @@ const trapTrig = o => ({ type: 'trig', loc: 'any', label: o.label,
   target: o.target,
   res: function* (g, c, p, L2) { if (onField(c)) yield* o.res(g, c, p, L2); if (onField(c) && c.zone === 'st') move(g, c, 'gy', { reason: 'rule' }); } });
 // Trap Monsters (same as batch-7.js). ENGINE: the card keeps the Trap's data, so race()/attr() don't see its Type and Attribute.
-function trapMonster(g, c, p, st) {
-  if (!onField(c) || freeM(g, p) < 0) return false;
-  if (!ss(g, p, c, 'def')) return false;
-  c.flags.baseAtk = st.atk; c.flags.lv = st.lv; c.flags.trapMon = true; addMod(g, c, { set: st.def, which: 'def' });
-  return true;
-}
+// Trap Monsters: the engine's notion (L.trapMonster, 2026-11-28 audit): a monster and a Trap Card, Type/Attribute from the text, its S/T Zone kept
+const trapMonster = L.trapMonster;
 // a monster's position changed by a card effect: the 'pos' event that Morphtronic Map and Cord watch
 function setPos(g, c, pos) { if (!onField(c) || c.pos === pos) return; c.pos = pos; g.seq++; log(g, `${name(c)} changed to ${pos === 'atk' ? 'Attack' : 'Defense'} Position.`); emit(g, { type: 'pos', c, p: c.ctrl }); }
 const posChangeEv = ev => ev.type === 'pos' || (ev.type === 'flip' && !ev.battle);
@@ -75,13 +71,12 @@ function* effNormal(g, p, x, set) {
   log(g, `${PN(g, p)} ${n ? 'Tribute' : 'Normal'} Summoned ${name(x)}.`);
   const ev = emit(g, { type: 'summon', cs: [x], how: x.summonType, p, byEffect: true }, grp); g.sw = { cs: [x], p, how: x.summonType, group: ev.group };
 }
-/* Koa'ki Meiru maintenance (same as batch-6.js). PARTIAL: a maintenance cost is not an effect; here it runs as a mandatory
- trigger on the chain. */
+/* Koa'ki Meiru maintenance (same as batch-6.js): no chain link, not stopped by Skill Drain, no "send" option under Macro Cosmos. */
 function maint(revealText, revealPred) {
-  return { type: 'trig', mand: true, label: 'Maintenance cost', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
+  return { type: 'trig', mand: true, noChain: true, rule: true, label: 'Maintenance cost', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
     res: function* (g, c, p) {
       if (!onField(c) || !faceUp(c)) return;
-      const h = g.p[p].hand, send = h.filter(isIC), rev = revealPred ? h.filter(revealPred) : [];
+      const h = g.p[p].hand, send = L.gyLock(g, 'any') ? [] : h.filter(isIC), rev = revealPred ? h.filter(revealPred) : [];
       const opts = [], kinds = [];
       if (send.length) { opts.push("Send an Iron Core of Koa'ki Meiru to the GY"); kinds.push('s'); }
       if (rev.length) { opts.push(revealText); kinds.push('r'); }
@@ -99,7 +94,7 @@ const heliosRevive = bonus => [
   { type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon it again',
     on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.hRev === g.turnNo,
     cond: (g, c, p) => freeM(g, p) >= 0,
-    res: function* (g, c, p) { if (c.zone === 'gy' && ss(g, p, c)) { addMod(g, c, { atk: bonus, def: bonus }); log(g, `${name(c)} gained ${bonus} ATK and DEF.`); } } }];
+    res: function* (g, c, p) { if (c.zone === 'gy' && ss(g, p, c)) { addMod(g, c, { atk: bonus, def: bonus, own: true }); log(g, `${name(c)} gained ${bonus} ATK and DEF.`); } } }];
 const heliosProc = need => ({ label: `Special Summon (Tribute ${need})`,
   cond: (g, c, p) => monsOf(g, p).some(x => named(x, need)),
   cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, `Tribute which ${need}?`, monsOf(g, p).filter(x => named(x, need)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${need}.`); } });
@@ -337,7 +332,7 @@ E.addScripts({
     on: (g, ev, c) => evSummoned(ev, c, ['normal']) && monsOf(g, c.ctrl).every(x => x === c),
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMachina(x) && !named(x, 'Machina Soldier')),
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMachina(x) && !named(x, 'Machina Soldier')); const [x] = yield* pick(g, p, 'Special Summon which Machina monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x); } }] },
-  // ENGINE: as a monster it keeps the Trap's data, so other cards don't see it as a Machine or EARTH monster
+  // A Trap Monster (L.trapMonster): an EARTH Machine as a monster, read from its text
   'Machine King - 3000 B.C.': { effs: [
     { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => !g.summoned[p] && (freeM(g, p) >= 0),
       res: function* (g, c, p) { if (!trapMonster(g, c, p, { atk: 1000, def: 1000, lv: 4 })) return;
@@ -345,7 +340,7 @@ E.addScripts({
     { type: 'ign', opt: true, label: 'Tribute a Machine: gain its ATK',
       cond: (g, c, p) => c.zone === 'm' && monsOf(g, p).some(x => x !== c && race(x) === 'Machine'),
       cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which Machine monster?', monsOf(g, p).filter(x => x !== c && race(x) === 'Machine'), 1, 1, 'cost'); L2.data.a = atk(g, x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
-      res: function* (g, c, p, L2) { if (onField(c) && faceUp(c) && c.zone === 'm') { addMod(g, c, { atk: L2.data.a, end: true }); log(g, `${name(c)} gained ${L2.data.a} ATK.`); } } }] },
+      res: function* (g, c, p, L2) { if (onField(c) && faceUp(c) && c.zone === 'm') { addMod(g, c, { atk: L2.data.a, end: true, own: true }); log(g, `${name(c)} gained ${L2.data.a} ATK.`); } } }] },
 
   /* ===== Majestic ===== */
   // PARTIAL: a Synchro Summon of another monster is blocked only when every material set needs Majestic Dragon

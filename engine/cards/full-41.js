@@ -123,7 +123,7 @@ E.addScripts({
     cost: function* (g, c, p, L2) { const cs = g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK');
       const xs = yield* pick(g, p, 'Banish which DARK monsters from your GY?', cs, 1, cs.length, 'cost');
       for (const x of xs) move(g, x, 'ban', { reason: 'cost', by: p }); L2.data.n = xs.length; log(g, `${PN(g, p)} banished ${xs.length} DARK monster${xs.length > 1 ? 's' : ''}.`); },
-    res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { def: 500 * L2.data.n, end: true }); log(g, `Maniacal Servant gained ${500 * L2.data.n} DEF.`); } }] },
+    res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { def: 500 * L2.data.n, end: true, own: true }); log(g, `Maniacal Servant gained ${500 * L2.data.n} DEF.`); } }] },
 
   'Marshmallon': { self: { noBattleDestroy: true },
     effs: [{ type: 'trig', mand: true, label: '1000 damage to the attacker',
@@ -158,7 +158,7 @@ E.addScripts({
 
   'Maximum Six': { effs: [{ type: 'trig', mand: true, label: 'Roll a die: gain ATK',
     on: (g, ev, c) => evSummoned(ev, c, ['tribute']),
-    res: function* (g, c, p) { const n = L.dice(g, p); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200 * n, own: true }); log(g, `Maximum Six gained ${200 * n} ATK.`); } } }] },
+    res: function* (g, c, p) { const n = yield* L.roll(g, p); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200 * n, own: true }); log(g, `Maximum Six gained ${200 * n} ATK.`); } } }] },
 
   'Mecha Bunny': { effs: [flip('500 damage to a card\'s controller', {
     cond: g => allField(g).length > 0,
