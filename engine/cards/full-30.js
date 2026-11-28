@@ -71,7 +71,7 @@ const chrysalis = ns => ({ effs: [{ type: 'ign', tags: { ss: 1 }, label: `Tribut
 /* ----- Cloudians ----- */
 // "If this card is in face-up Defense Position, destroy it." (as batch-5.js: a mandatory trigger after the next event that shows it,
 // which includes the position-change, flip and summon events). PARTIAL: it uses a chain link.
-const cloudDoom = { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroyed in face-up Defense Position',
+const cloudDoom = { type: 'trig', mand: true, noChain: true, label: 'Destroyed in face-up Defense Position',   // a self-destroy rule, not a chain link (EDOPro; edison-15)
   on: (g, ev, c) => c.zone === 'm' && faceUp(c) && c.pos === 'def' && ev.type !== 'damage',
   cond: (g, c) => onField(c) && faceUp(c) && c.pos === 'def',
   res: function* (g, c, p) { if (onField(c) && faceUp(c) && c.pos === 'def') destroy(g, [c], { by: p }); } };
@@ -205,7 +205,7 @@ E.addScripts({
       const n = Math.floor(a / 2); if (n > 0) { damage(g, p, n, { src: c, srcP: p }); damage(g, opp(p), n, { src: c, srcP: p }); } } })] },
   'Chthonian Emperor Dragon': { self: { maxAttacks: (g, c) => c.flags.gemini ? 2 : 1 }, effs: [] },
   'Chthonian Polymer': { effs: [{ type: 'act',
-    cond: (g, c, p) => !!g.sw && g.sw.p !== p && g.sw.how === 'fusion' && g.sw.cs.some(x => onField(x) && x.ctrl !== p) && monsOf(g, p).length > 0,
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && g.sw.how === 'fusion' && g.sw.cs.some(x => onField(x) && x.ctrl !== p) && monsOf(g, p).length > 0,
     cost: function* (g, c, p, L2) { L2.data.cs = g.sw.cs.slice(); const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     target: function* (g, c, p, L2) { L2.t = L2.data.cs.filter(x => onField(x) && x.ctrl !== p); },
     res: function* (g, c, p, L2) { const t = live(L2).find(x => x.ctrl !== p); if (t) takeControl(g, p, t, false); } }] },
@@ -402,7 +402,7 @@ E.addScripts({
   'Cybernetic Cyclopean': { self: { atk: (g, c) => g.p[c.ctrl].hand.length === 0 ? 1000 : 0 }, effs: [] },
   'Cybernetic Hidden Technology': { effs: [actNoop,
     { type: 'quick', loc: 'st', tags: { destroy: 1 }, label: 'Send a Cyber Dragon: destroy the attacker',
-      cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && onField(g.aw.a) && monsOf(g, p).some(x => faceUp(x) && listsCyber(x)),
+      cond: (g, c, p) => (!!g.aw && g.aw.a.ctrl !== p && onField(g.aw.a)) && !!g.aw && E.lib.canTarget(g, g.aw.a, { c, p }) && monsOf(g, p).some(x => faceUp(x) && listsCyber(x)),
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which Cyber Dragon or Cyber Dragon Fusion to the GY?', monsOf(g, p).filter(x => faceUp(x) && listsCyber(x)), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
       target: function* (g, c, p, L2) { L2.t = g.aw && onField(g.aw.a) ? [g.aw.a] : []; },
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
@@ -440,7 +440,7 @@ E.addScripts({
         on: (g, ev, c) => !!c.equipTo && ev.type === 'move' && ev.battle && ev.destroyed && ev.to === 'gy' && !!ev.killer && ev.killer.u === c.equipTo && ev.prevCtrl !== c.ctrl,
         res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
   'D - Counter': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => !!g.aw && !!g.aw.t && g.aw.a.ctrl !== p && g.aw.t.ctrl === p && faceUp(g.aw.t) && isDHERO(g.aw.t),
+    cond: (g, c, p) => (!!g.aw && !!g.aw.t && g.aw.a.ctrl !== p && g.aw.t.ctrl === p && faceUp(g.aw.t) && isDHERO(g.aw.t)) && !!g.aw && E.lib.canTarget(g, g.aw.a, { c, p }),
     target: function* (g, c, p, L2) { L2.t = [g.aw.a]; },
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
   'D - Formation': { effs: [actNoop,
@@ -463,7 +463,7 @@ E.addScripts({
   'D - Shield': {
     cont: { grant: (g, src, m, flag) => flag === 'noBattleDestroy' && src.equipTo === m.u },
     effs: [{ type: 'act',
-      cond: (g, c, p) => !!g.aw && !!g.aw.t && g.aw.a.ctrl !== p && g.aw.t.ctrl === p && faceUp(g.aw.t) && g.aw.t.pos === 'atk' && isDHERO(g.aw.t),
+      cond: (g, c, p) => (!!g.aw && !!g.aw.t && g.aw.a.ctrl !== p && g.aw.t.ctrl === p && faceUp(g.aw.t) && g.aw.t.pos === 'atk' && isDHERO(g.aw.t)) && !!g.aw && E.lib.canTarget(g, g.aw.t, { c, p }),
       target: function* (g, c, p, L2) { L2.t = [g.aw.t]; },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; toDef(g, t); if (onField(c) && equip(g, c, t)) L2.keep = true; } }] },
   'D - Spirit': { effs: [{ type: 'act', tags: { ss: 1 },

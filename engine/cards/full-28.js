@@ -66,7 +66,7 @@ const lockInstall = { type: 'trig', loc: 'any', res: noop,
 const isArchfiend = c => isMon(c) && /Archfiend/.test(name(c));
 const archCost = n => ({ type: 'trig', mand: true, label: `Pay ${n} LP`, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
   // the card is destroyed when its controller can't pay; Pandemonium removes the cost
-  res: function* (g, c, p) { if (!onField(c) || allField(g).some(x => faceUp(x) && named(x, 'Pandemonium'))) return; if (g.p[p].lp > n) pay(g, p, n); else destroy(g, [c], { by: p }); } });
+  res: function* (g, c, p) { if (!onField(c) || allField(g).some(x => faceUp(x) && named(x, 'Pandemonium'))) return; if (g.p[p].lp > n) pay(g, p, n); else destroy(g, [c], { by: p, rule: true }); } });
 // ENGINE: no "as a targeting effect resolves" hook, so the roll is an optional Spell Speed 3 response to the targeting link.
 const archDice = (hits, label) => ({ type: 'quick', speed: 3, ds: true, label,
   cond: (g, c, p, x) => { const T = x.top; return !!T && !T.negated && T.p !== p && !(T.f28dice || []).includes(c.u) && T.t.includes(c); },
@@ -77,14 +77,14 @@ const archDice = (hits, label) => ({ type: 'quick', speed: 3, ds: true, label,
 // the 0 lasts until damage calculation is done (removed at afterCalc).
 const guardian = [
   { type: 'quick', ds: true, label: 'Make the attacker’s ATK 0',
-    cond: (g, c, p) => g.inDS && g.battle && g.battle.t === c && g.tp !== c.ctrl && !c.flags.guardUsed && g.battle.a && onField(g.battle.a) && !g.battle.a.mods.some(m => m.guardZero),
+    cond: (g, c, p) => (g.inDS && g.battle && g.battle.t === c && g.tp !== c.ctrl && !c.flags.guardUsed && g.battle.a && onField(g.battle.a) && !g.battle.a.mods.some(m => m.guardZero)) && !!g.battle && E.lib.canTarget(g, g.battle.a, { c, p }),
     target: function* (g, c, p, L2) { L2.t = [g.battle.a]; },
     after: (g, c) => { c.flags.guardUsed = true; },
     res: function* (g, c, p, L2) { const a = live(L2)[0]; if (!a || a.zone !== 'm' || !g.battle) return; addMod(g, a, { set: 0, which: 'atk', end: true, guardZero: true }); g.seq++; log(g, `${name(a)}'s ATK became 0 for damage calculation.`); } },
   { type: 'trig', on: (g, ev) => { if ((ev.type === 'afterCalc' || ev.type === 'dsEnd') && ev.a && ev.a.mods.some(m => m.guardZero)) { ev.a.mods = ev.a.mods.filter(m => !m.guardZero); g.seq++; } return false; }, res: noop },
 ];
 const UMIS = ['Umi', 'A Legendary Ocean'];
-const umiUp = g => allField(g).some(x => faceUp(x) && UMIS.includes(D(x).n));
+const umiUp = g => allField(g).some(x => faceUp(x) && L.isUmi(x));
 const umiMod = c => { const r = race(c); return ['Fish', 'Sea Serpent', 'Thunder', 'Aqua'].includes(r) ? 200 : ['Machine', 'Pyro'].includes(r) ? -200 : 0; };
 const MAGNETS = ['Alpha The Magnet Warrior', 'Beta The Magnet Warrior', 'Gamma the Magnet Warrior'];
 const nomiGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src && !src.nomiOk };
@@ -344,7 +344,7 @@ E.addScripts({
   'Torpedo Fish': { self: { unaffectedSpells: g => umiUp(g) } },
   'Troop Dragon': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon a Troop Dragon',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => named(x, 'Troop Dragon')),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Troop Dragon')),
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => named(x, 'Troop Dragon')); if (!cs.length || freeM(g, p) < 0) return; const x = cs[0]; ss(g, p, x, yield* pos2(g, p, x)); shuffleDeck(g, p); } }] },
   // Mandatory: target 1 face-up monster (itself allowed), change it to face-down Defense Position. Spirit: returns to the hand.
   'Tsukuyomi': { effs: [lockInstall,
@@ -403,7 +403,7 @@ E.addScripts({
       } },
     cont: nomiGY,
     effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Tribute: summon Alpha, Beta and Gamma',
-      cond: (g, c, p) => nFreeM(g, p) >= 2 && MAGNETS.every(n => g.p[p].gy.some(x => named(x, n))),
+      cond: (g, c, p) => nFreeM(g, p) >= 2 && MAGNETS.every(n => g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, n))),
       cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Valkyrion the Magna Warrior.`); },
       target: function* (g, c, p, L2) { const ts = []; for (const n of MAGNETS) { const [x] = yield* pick(g, p, `Target ${n} in your GY`, g.p[p].gy.filter(x => named(x, n)), 1, 1, 'good'); if (x) ts.push(x); } L2.t = ts; },
       res: function* (g, c, p, L2) { const xs = L2.t.filter(x => x.zone === 'gy'); if (xs.length > nFreeM(g, p)) return; for (const x of xs) ss(g, p, x, 'atk'); } }] },

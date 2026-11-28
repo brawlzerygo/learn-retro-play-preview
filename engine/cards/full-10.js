@@ -83,7 +83,7 @@ E.addScripts({
         res: function* (g, c, p) { const r = g.f10hpb; g.f10hpb = null; if (!r) return; if (r.d > 0) damage(g, opp(p), r.d, { src: c, srcP: p }); gain(g, p, r.a); } },
       { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon Hyper Psychic Blaster',
         on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.from === 'm',
-        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Hyper Psychic Blaster')),
+        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Hyper Psychic Blaster')),
         res: function* (g, c, p) { const cs = g.p[p].gy.filter(x => named(x, 'Hyper Psychic Blaster')); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon Hyper Psychic Blaster from your GY', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   // The Synchro Monster is found through the summon that used this card. The banish during the End Phase rides on a flag
   // that leaves with the monster (flipped face-down or off the field: no banish, as the rulings say).
@@ -173,7 +173,7 @@ E.addScripts({
   /* ----- Insect ----- */
   'Insect Barrier': { cont: { forbid: (g, src, a) => a.type === 'attack' && a.c && a.c.ctrl !== src.ctrl && faceUp(a.c) && race(a.c) === 'Insect' }, effs: [{ type: 'act', res: noop }] },
   'Insect Imitation': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(m => g.p[p].deck.some(x => isMon(x) && race(x) === 'Insect' && lv(x) === lv(m) + 1)),
+    cond: (g, c, p) => monsOf(g, p).some(m => g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Insect' && lv(x) === lv(m) + 1)),
     cost: function* (g, c, p, L2) { const [m] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p).filter(m => g.p[p].deck.some(x => isMon(x) && race(x) === 'Insect' && lv(x) === lv(m) + 1)), 1, 1, 'cost');
       if (m) { L2.data.lv = lv(m); const nm = m.pos === 'set' ? 'a face-down monster' : name(m); move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
     res: function* (g, c, p, L2) { const cs = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Insect' && lv(x) === L2.data.lv + 1); if (!cs.length || freeM(g, p) < 0) { shuffleDeck(g, p); return; }
@@ -220,7 +220,7 @@ E.addScripts({
     effs: [
       { type: 'trig', mand: true, label: '300 damage', on: (g, ev, c) => battleKill(ev, c), res: function* (g, c, p) { damage(g, opp(p), 300, { src: c, srcP: p }); } },
       { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Special Summon an Iron Chain monster from your GY',
-        cond: (g, c, p) => !c.attacks && !c.declared && freeM(g, p) >= 0 && g.p[p].gy.some(x => isIronChain(x) && lv(x) <= 4 && !named(x, 'Iron Chain Repairman')),
+        cond: (g, c, p) => !c.attacks && !c.declared && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isIronChain(x) && lv(x) <= 4 && !named(x, 'Iron Chain Repairman')),
         cost: function* (g, c) { c.flags.f10noatk = g.turnNo; },
         target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Iron Chain monster from your GY?', g.p[p].gy.filter(x => isIronChain(x) && lv(x) <= 4 && !named(x, 'Iron Chain Repairman')), 1, 1, 'good'); },
         res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, t, yield* pos2(g, p, t)); } }] },
@@ -258,7 +258,7 @@ E.addScripts({
   'Jinzo - Returner': { self: { directAttack: true }, effs: [
     { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon Jinzo from your GY',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'gy',
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Jinzo')),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Jinzo')),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Jinzo from your GY?', g.p[p].gy.filter(x => named(x, 'Jinzo')), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t, 'atk')) t.flags.f10ret = p + 1; } },
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, label: 'Destroy the Special Summoned Jinzo',
@@ -298,7 +298,7 @@ E.addScripts({
         if (k === 0) { addRule(g, (g2, a) => a.p === o && (['ns', 'set', 'ss'].includes(a.type) || (a.type === 'activate' && a.c && isMon(a.c))), { end: g.turnNo }); log(g, `${PN(g, o)} can't summon or use monster effects this turn.`); }
         else { addRule(g, (g2, a) => a.p === o && ((a.type === 'activate' && a.c && isST(a.c)) || a.type === 'setST'), { end: g.turnNo }); log(g, `${PN(g, o)}'s Spells and Traps are negated this turn.`); } } }] },
   'Judgment of Thunder': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => !!g.sw && g.sw.p === p && g.sw.cs.some(x => onField(x) && faceUp(x) && race(x) === 'Thunder') && fieldOf(g, opp(p)).length > 0,
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, p).length > 0 && g.sw.cs.some(x => onField(x) && faceUp(x) && race(x) === 'Thunder') && fieldOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which card your opponent controls?', fieldOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
 
@@ -423,7 +423,7 @@ E.addScripts({
   // Port of goat-7.js. PARTIAL: the Special Summon happens when it resolves, not at a later moment of your choice.
   'Last Will': { effs: [
     { type: 'trig', loc: 'any', on: (g, ev) => { if (ev.type === 'move' && ev.wasField && ev.to === 'gy' && ev.snap && ev.snap.mon && ev.prevCtrl === ev.c.owner) (g.lastWill || (g.lastWill = {}))[ev.c.owner] = g.turnNo; return false; }, res: noop },
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.lastWill && g.lastWill[p] === g.turnNo && freeM(g, p) >= 0 && g.p[p].deck.some(lwFrom),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.lastWill && g.lastWill[p] === g.turnNo && freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(lwFrom),
       res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => lwFrom(x) && !forbid(g, { type: 'ss', c: x, p, how: 'special' }));
         if (cs.length && freeM(g, p) >= 0) { const [x] = yield* pick(g, p, 'Special Summon a monster with 1500 or less ATK from your Deck', cs, 1, 1, 'good');
           if (x) ss(g, p, x, yield* pos2(g, p, x)); }
@@ -489,7 +489,7 @@ E.addScripts({
   // The summoned monster can't attack and its effects are negated this turn (this card's GY static; a face-down flip ends it).
   'Level Modulation': {
     cont: { loc: 'gy', negates: (g, src, c) => c.flags.f10mod === g.turnNo, forbid: (g, src, a) => a.type === 'attack' && a.c && a.c.flags.f10mod === g.turnNo },
-    effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[opp(p)].deck.length >= 2 && freeM(g, p) >= 0 && g.p[p].gy.some(isLV),
+    effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[opp(p)].deck.length >= 2 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isLV),
       res: function* (g, c, p) { draw(g, opp(p), 2); const cs = g.p[p].gy.filter(isLV); if (!cs.length || freeM(g, p) < 0) return;
         const [x] = yield* pick(g, p, 'Special Summon which LV monster from your GY?', cs, 1, 1, 'good'); if (x && ss(g, p, x, 'atk')) { x.flags.f10mod = g.turnNo; g.seq++; } } }] },
   'Level Retuner': { effs: [{ type: 'act',
@@ -501,7 +501,7 @@ E.addScripts({
   'Level Tuning': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(faceUp),
     res: function* (g, c, p) { const ms = monsOf(g, p).filter(x => faceUp(x) && lv(x) > 0); for (const m of ms) { m.flags.lv = Math.max(1, lv(m) - 1); m.flags.lvUntil = true; } if (ms.length) log(g, `${PN(g, p)}'s face-up monsters lost 1 Level until the End Phase.`); } }] },
   'Level Up!': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && isLV(m) && [...g.p[p].hand, ...g.p[p].deck].some(x => isMon(x) && x !== m && D(x).n !== D(m).n && tx(m).includes(`"${D(x).n}"`))),
+    cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && isLV(m) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && x !== m && D(x).n !== D(m).n && tx(m).includes(`"${D(x).n}"`))),
     cost: function* (g, c, p, L2) {
       const ms = monsOf(g, p).filter(m => faceUp(m) && isLV(m) && [...g.p[p].hand, ...g.p[p].deck].some(x => isMon(x) && D(x).n !== D(m).n && tx(m).includes(`"${D(x).n}"`)));
       const [m] = yield* pick(g, p, 'Send which face-up LV monster to the GY?', ms, 1, 1, 'cost'); if (!m) return;

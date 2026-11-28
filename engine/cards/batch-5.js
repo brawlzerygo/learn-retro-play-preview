@@ -16,7 +16,7 @@ const isCB = c => /^Crystal Beast/.test(D(c).n);
 const isCBMon = c => isCB(c) && isMon(c);
 const cbST = (g, p) => g.p[p].st.filter(x => x && faceUp(x) && isCB(x)); // "Crystal Beast" cards in your Spell & Trap Zone
 const UMI = ['Umi', 'A Legendary Ocean', 'Forgotten Temple of the Deep'];
-const isUmi = c => faceUp(c) && UMI.includes(D(c).n);
+const isUmi = c => faceUp(c) && L.isUmi(c);   // the engine's Umi (Forgotten Temple of the Deep counts unless negated, 2026-11-28 audit)
 // face-up Continuous Spells, counting Crystal Beast monsters placed as Continuous Spells
 const contSpells = (g, p) => stOf(g, p).filter(x => faceUp(x) && ((isSpell(x) && D(x).sub === 'Continuous') || isMon(x)));
 const fog = c => ctr(c, 'fog');
@@ -37,8 +37,8 @@ const cbStay = { type: 'trig', loc: 'gy', label: 'Place it as a Continuous Spell
   res: function* (g, c, p) { if (c.zone === 'gy' && placeCB(g, p, c)) cbPlaced(g, p); } };
 /* Cloudian rules shared by the four Fog monsters */
 const cloudSelf = { noBattleDestroy: true };
-const cloudDoom = { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroyed in face-up Defense Position',
-  // PARTIAL: "destroy it" is a rule-like effect; here it runs as a chain link after the next event (position changes emit no event).
+const cloudDoom = { type: 'trig', mand: true, noChain: true, label: 'Destroyed in face-up Defense Position',   // a self-destroy rule, not a chain link (EDOPro; edison-15)
+  // "destroy it" is a rule-like effect: it happens at the next event, with no chain link (noChain; effect position changes emit pos).
   on: (g, ev, c) => c.zone === 'm' && faceUp(c) && c.pos === 'def' && ev.type !== 'damage',
   cond: (g, c) => onField(c) && faceUp(c) && c.pos === 'def',
   res: function* (g, c, p) { if (onField(c) && faceUp(c) && c.pos === 'def') destroy(g, [c], { by: p }); } };
@@ -58,8 +58,8 @@ E.addScripts({
         target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which Spell/Trap?', stOnField(g), 1, 1, 'bad'); },
         res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'King Tiger Wanghu': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy monsters with 1400 or less ATK',
-    on: (g, ev, c) => ev.type === 'summon' && ev.how !== 'flip' && ev.cs.some(x => x !== c && onField(x) && faceUp(x) && atk(g, x) <= 1400),
-    res: function* (g, c, p, L) { if (!onField(c) || !faceUp(c)) return; destroy(g, L.ev.cs.filter(x => onField(x) && faceUp(x) && atk(g, x) <= 1400), { by: p }); } }] },
+    on: (g, ev, c) => ev.type === 'summon' && ev.how !== 'flip' && ev.cs.some(x => onField(x) && faceUp(x) && atk(g, x) <= 1400)   /* itself too (Goat archive: its own ATK lowered below 1400 by a pre-existing effect destroys it) */,
+    res: function* (g, c, p, L) { if (!onField(c) || !faceUp(c)) return; destroy(g, (L.ev.all || L.ev.cs).filter(x => onField(x) && faceUp(x) && atk(g, x) <= 1400), { by: p }); } }] },
 
   /* ----- Assault Mode ----- */
   'Assault Beast': { effs: [{ type: 'ign', loc: 'hand', label: 'Discard: add Assault Mode Activate',
@@ -84,11 +84,11 @@ E.addScripts({
         cond: (g, c, p) => freeM(g, p) >= 0, res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c); } },
       { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon Stardust Dragon',
         on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.from === 'm',
-        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => D(x).n === 'Stardust Dragon'),
+        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => D(x).n === 'Stardust Dragon'),
         target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon Stardust Dragon from your GY', g.p[p].gy.filter(x => D(x).n === 'Stardust Dragon'), 1, 1, 'good'); },
         res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   'Assault Mode Activate': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(s => D(s).k === 'synchro' && g.p[p].deck.some(x => / Assault Mode$/.test(D(x).n) && D(x).n.includes(D(s).n))),
+    cond: (g, c, p) => monsOf(g, p).some(s => D(s).k === 'synchro' && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => / Assault Mode$/.test(D(x).n) && D(x).n.includes(D(s).n))),
     cost: function* (g, c, p, L) { const [s] = yield* pick(g, p, 'Tribute which Synchro Monster?', monsOf(g, p).filter(s => D(s).k === 'synchro' && g.p[p].deck.some(x => / Assault Mode$/.test(D(x).n) && D(x).n.includes(D(s).n))), 1, 1, 'cost'); L.data.n = D(s).n; move(g, s, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(s).n}.`); },
     res: function* (g, c, p, L) { const cands = g.p[p].deck.filter(x => / Assault Mode$/.test(D(x).n) && D(x).n.includes(L.data.n)); if (!cands.length || freeM(g, p) < 0) { shuffleDeck(g, p); return; } const [x] = yield* pick(g, p, 'Special Summon which Assault Mode monster?', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
 
@@ -104,26 +104,26 @@ E.addScripts({
       res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'Batteryman Charger': { self: { atk: (g, c) => 300 * monsOf(g, c.ctrl).filter(x => faceUp(x) && race(x) === 'Thunder').length, def: (g, c) => 300 * monsOf(g, c.ctrl).filter(x => faceUp(x) && race(x) === 'Thunder').length },
     effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon a Batteryman', on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute']),
-      cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].some(x => isMon(x) && isBatt(x) && D(x).n !== 'Batteryman Charger' && D(x).n !== 'Batteryman Industrial Strength'),
+      cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && isBatt(x) && D(x).n !== 'Batteryman Charger' && D(x).n !== 'Batteryman Industrial Strength'),
       res: function* (g, c, p) { const cands = [...g.p[p].hand, ...g.p[p].deck].filter(x => isMon(x) && isBatt(x) && D(x).n !== 'Batteryman Charger' && D(x).n !== 'Batteryman Industrial Strength'); const [x] = yield* pick(g, p, 'Special Summon a Batteryman from your hand or Deck', cands, 1, 1, 'good'); if (x) { const fromDeck = x.zone === 'deck'; ss(g, p, x); if (fromDeck) shuffleDeck(g, p); } } }] },
   'Batteryman Micro-Cell': { effs: [
     { type: 'trig', tags: { ss: 1 }, faceDownOk: true, mand: true, label: 'Special Summon a Batteryman',
       on: (g, ev, c) => { if (ev.type === 'flip' && ev.c === c) { c.flags.mcFlipped = true; return true; } return false; },
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && isBatt(x) && lv(x) <= 4 && D(x).n !== 'Batteryman Micro-Cell'),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && isBatt(x) && lv(x) <= 4 && D(x).n !== 'Batteryman Micro-Cell'),
       res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && isBatt(x) && lv(x) <= 4 && D(x).n !== 'Batteryman Micro-Cell'); const [x] = yield* pick(g, p, 'Special Summon a Level 4 or lower Batteryman from your Deck', cands, 1, 1, 'good'); if (x) ss(g, p, x); shuffleDeck(g, p); } },
     { type: 'trig', loc: 'gy', mand: true, label: 'Draw 1 card',
-      on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy' && ev.snap && ev.snap.flags && ev.snap.flags.mcFlipped,
+      on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy' && ev.snap && ev.snap.flags && (ev.snap.flags.mcFlipped || ev.snap.flags.flippedUp),   // flipped by anything (Ceasefire: site ruling)
       res: function* (g, c, p) { draw(g, p, 1); } }] },
   'Batteryman AA': { self: {
     atk: (g, c) => { const aa = monsOf(g, c.ctrl).filter(x => faceUp(x) && D(x).n === 'Batteryman AA'); return aa.every(x => x.pos === 'atk') ? 1000 * aa.length : 0; },
     def: (g, c) => { const aa = monsOf(g, c.ctrl).filter(x => faceUp(x) && D(x).n === 'Batteryman AA'); return aa.every(x => x.pos === 'def') ? 1000 * aa.length : 0; } } },
-  'Battery Charger': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && isBatt(x) && D(x).n !== 'Batteryman Industrial Strength'),
+  'Battery Charger': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && isBatt(x) && D(x).n !== 'Batteryman Industrial Strength'),
     cost: function* (g, c, p) { pay(g, p, 500); },
     res: function* (g, c, p) { const cands = g.p[p].gy.filter(x => isMon(x) && isBatt(x)); const [x] = yield* pick(g, p, 'Special Summon a Batteryman from your GY', cands, 1, 1, 'good'); if (x) ss(g, p, x); } }] },
 
   /* ----- Black Salvo ----- */
   'Black Salvo': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Revive a Level 4 DARK Machine', on: (g, ev, c) => evSummoned(ev, c, ['normal']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && lv(x) === 4 && attr(x) === 'DARK' && race(x) === 'Machine'),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && lv(x) === 4 && attr(x) === 'DARK' && race(x) === 'Machine'),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon a Level 4 DARK Machine from your GY', g.p[p].gy.filter(x => isMon(x) && lv(x) === 4 && attr(x) === 'DARK' && race(x) === 'Machine'), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'def', { negate: true }); } }] },
   'Dekoichi the Battlechanted Locomotive': { effs: [{ type: 'trig', mand: true, label: 'Draw', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
@@ -198,7 +198,7 @@ E.addScripts({
     cont: { forbid: (g, src, a) => a.type === 'attack' && a.c.ctrl !== src.ctrl && atk(g, a.c) <= (src.flags.wall || 0) },
     effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000,
       cost: function* (g, c, p) { const k = Math.min(8, Math.floor((g.p[p].lp - 1) / 1000)); const i = yield* choose(g, p, 'Pay how many LP?', [...Array(k).keys()].map(i => String(1000 * (i + 1)))); const n = 1000 * (i + 1); pay(g, p, n); c.flags.wall = n; },
-      res: function* (g, c, p) { if (g.aw && g.aw.a && g.aw.a.ctrl !== p && onField(c) && atk(g, g.aw.a) <= (c.flags.wall || 0)) negateAttack(g); } }] },
+      res: function* (g, c, p) { if (g.aw && g.aw.a && g.aw.a.ctrl !== p && onField(c) && atk(g, g.aw.a) <= (c.flags.wall || 0)) L.stopAttack(g); } }] },
   // PARTIAL: Field Spells can't be Set in this engine, so under Anti-Spell Fragrance they can't be activated at all.
   'Anti-Spell Fragrance': { cont: { forbid: (g, src, a) => a.type === 'activate' && a.eff && a.eff.type === 'act' && isSpell(a.c) && (a.c.zone === 'hand' || a.c.turnIn === g.turnNo || (g.tp !== a.p && a.c.turnIn === g.turnNo - 1)) },
     effs: [{ type: 'act', res: function* () {} }] },
@@ -254,7 +254,7 @@ E.addScripts({
     res: function* (g, c, p) { yield* search(g, p, x => D(x).n === 'A Legendary Ocean', 'Add A Legendary Ocean'); } }] },
   'Mother Grizzly': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, ds: true, label: 'Special Summon a WATER',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && attr(x) === 'WATER' && baseAtk(x) <= 1500),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'WATER' && baseAtk(x) <= 1500),
     res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'WATER' && baseAtk(x) <= 1500); const [x] = yield* pick(g, p, 'Special Summon a WATER with 1500 or less ATK from your Deck', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   'A Legendary Ocean': { cont: { atk: (g, src, c) => attr(c) === 'WATER' ? 200 : 0, def: (g, src, c) => attr(c) === 'WATER' ? 200 : 0,
     lv: (g, src, c) => attr(c) === 'WATER' ? -1 : 0, lvHand: true },
@@ -297,7 +297,7 @@ E.addScripts({
         cond: (g, c, p) => freeM(g, p) >= 0 && contSpells(g, p).length > 0,
         cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which face-up Continuous Spell to the GY?', contSpells(g, p), 1, 1, 'cost'); if (!x) return; move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); },
         res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c); } }] },
-  'Crystal Beacon': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => cbST(g, p).length >= 2 && freeM(g, p) >= 0 && g.p[p].deck.some(isCBMon),
+  'Crystal Beacon': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => cbST(g, p).length >= 2 && freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(isCBMon),
     res: function* (g, c, p) { if (cbST(g, p).length < 2 || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon a Crystal Beast from your Deck', g.p[p].deck.filter(isCBMon), 1, 1, 'good'); if (x) ss(g, p, x); shuffleDeck(g, p); } }] },
   // ENGINE: activatable() and emit() never look at the Field Zone, so the 3+, 4+ and 5 effects below can't be activated yet. The 1+ and 2+ effects work.
   // PARTIAL: the 2+ halving is applied automatically to the first battle damage each turn (it is optional on the card).

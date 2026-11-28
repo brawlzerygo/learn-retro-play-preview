@@ -30,7 +30,7 @@ const eqOf = (g, c) => c.equipTo ? fieldMons(g).find(m => m.u === c.equipTo) || 
 // attack at all then (unless it can attack directly). Twilight Rose Knight adds that check while it applies (as full-26.js).
 const noTargetLeft = (g, q) => monsOf(g, q).length > 0 && monsOf(g, q).every(m => faceUp(m) && has(g, m, 'noAttackTarget'));
 const attackLock = (g, src, a) => a.type === 'attack' && a.c && a.c.ctrl !== src.ctrl && noTargetLeft(g, src.ctrl) && !has(g, a.c, 'directAttack');
-const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's by (engine move: the resolving link's controller), never the turn player
 // Monsters that can be Normal Summoned (Valhalla can't Special Summon a "Special Summon Monster")
 const nsMonster = x => isMon(x) && !['ritual', 'fusion', 'synchro', 'token'].includes(D(x).k) && !/Cannot be Normal Summoned|must (?:first )?be Special Summoned|can only be Special Summoned/i.test(D(x).tx || '');
 const isSix = x => isMon(x) && /Six Samurai/.test(D(x).n);
@@ -314,7 +314,7 @@ E.addScripts({
       watch((g, ev, c) => { if (ev.type === 'move' && ev.battle && ev.destroyed && ev.killer && c.equipTo && ev.killer.u === c.equipTo && ev.snap && ev.snap.lv >= 5) ev.killer.flags.f45trial = g.turnNo; }),
       { type: 'ign', loc: 'st', tags: { ss: 1 }, label: 'Tribute both: Special Summon a Princess',
         cond: (g, c, p) => { const m = eqOf(g, c); if (!m || m.ctrl !== p || m.flags.f45trial !== g.turnNo) return false; const pn = named(m, 'White Magician Pikeru') ? 'Princess Pikeru' : 'Princess Curran';
-          return [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, pn)); },
+          return [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, pn)); },
         cost: function* (g, c, p, L2) { const m = eqOf(g, c); L2.data.pn = named(m, 'White Magician Pikeru') ? 'Princess Pikeru' : 'Princess Curran';
           move(g, c, 'gy', { reason: 'cost', by: p }); if (onField(m)) move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n} and Trial of the Princesses.`); },
         res: function* (g, c, p, L2) { if (freeM(g, p) < 0) return; const xs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, L2.data.pn)); if (!xs.length) return;
@@ -380,7 +380,7 @@ E.addScripts({
           destroy(g, fieldMons(g).filter(x => faceUp(x) && attr(x) === a), { by: p }); } }] },
   // Targets a Tuner sent to the opponent's GY for that Synchro Summon.
   'Tuner Capture': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => !!g.sw && g.sw.how === 'synchro' && g.sw.p !== p && freeM(g, p) >= 0 && tunerMats(g, p).length > 0,
+    cond: (g, c, p) => !!g.sw && g.sw.how === 'synchro' && E.lib.swOf(g, 1 - p).length > 0 && freeM(g, p) >= 0 && tunerMats(g, p).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Tuner?', tunerMats(g, p), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, t, 'atk'); } }] },
   // The monster is chosen at resolution; its protection lasts through the End Phase of the next turn (flags, so it ends if it
@@ -410,8 +410,8 @@ E.addScripts({
   // Tributing a Warrior (face-down or a Token too) Special Summons it with the Warrior's original ATK added.
   'Turret Warrior': {
     self: { atk: (g, c) => c.flags.f45tur || 0 },
-    proc: { label: 'Special Summon (Tribute a Warrior)', cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Warrior' && !x.flags.noTribute),
-      cost: function* (g, c, p, grp) { const [t] = yield* pick(g, p, 'Tribute which Warrior?', monsOf(g, p).filter(x => race(x) === 'Warrior' && !x.flags.noTribute), 1, 1, 'cost'); if (!t) return;
+    proc: { label: 'Special Summon (Tribute a Warrior)', cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Warrior' && !E.lib.noTribCost(x)),
+      cost: function* (g, c, p, grp) { const [t] = yield* pick(g, p, 'Tribute which Warrior?', monsOf(g, p).filter(x => race(x) === 'Warrior' && !E.lib.noTribCost(x)), 1, 1, 'cost'); if (!t) return;
         const a = t.flags.tokAtk != null ? t.flags.tokAtk : num(D(t).atk); move(g, t, 'gy', { reason: 'tribute', by: p, group: grp }); log(g, `${PN(g, p)} Tributed ${D(t).n}.`); c.flags.f45tur = a; } } },
   'Twilight Rose Knight': {
     cont: { grant: (g, src, m, flag) => flag === 'noAttackTarget' && m.zone === 'm' && m.ctrl === src.ctrl && faceUp(m) && race(m) === 'Plant' && !negd(g, src),
@@ -454,7 +454,7 @@ E.addScripts({
       g.p[opp(p)].noBattleDamage = T;
       addRule(g, (g2, a) => a.type === 'attack' && a.c && a.c.ctrl === p && a.c !== t && g2.turnNo === T, { end: T });
       log(g, `${name(t)} gains ${n} ATK during this Battle Phase. Other monsters can't attack.`); } }] },
-  'Unity': { effs: [{ type: 'act',
+  'Unity': { effs: [{ type: 'act', ds: true,
     cond: (g, c, p) => monsOf(g, p).length > 0,
     res: function* (g, c, p) { const xs = monsOf(g, p).filter(faceUp); if (!xs.length) return;
       const [t] = yield* pick(g, p, 'Which monster?', xs, 1, 1, 'good'); if (!t) return;
@@ -477,7 +477,7 @@ E.addScripts({
       g.seq++; log(g, `${n} Fog Counter${n === 1 ? ' was' : 's were'} removed.`); if (n) damage(g, opp(p), 300 * n, { src: c, srcP: p }); } }] },
   // Returning Iron Core is the cost (so not while Transmigration Break is face-up, ruling); the summon doesn't target.
   'Urgent Synthesis': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, "Iron Core of Koa'ki Meiru")) && [...g.p[p].hand, ...g.p[p].gy].some(x => isKoaki(x) && lv(x) <= 4 && canSS(g, p, x))
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, "Iron Core of Koa'ki Meiru")) && [...g.p[p].hand, ...g.p[p].gy].some(x => isKoaki(x) && lv(x) <= 4 && canSS(g, p, x))
       && !allField(g).some(x => faceUp(x) && named(x, 'Transmigration Break') && !negd(g, x)),
     cost: function* (g, c, p) { const x = g.p[p].gy.find(y => named(y, "Iron Core of Koa'ki Meiru")); if (x) { move(g, x, 'deck', { reason: 'cost', by: p }); log(g, `${PN(g, p)} returned Iron Core of Koa'ki Meiru to the Deck.`); } },
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const xs = [...g.p[p].hand, ...g.p[p].gy].filter(x => isKoaki(x) && lv(x) <= 4 && canSS(g, p, x)); if (!xs.length) return;

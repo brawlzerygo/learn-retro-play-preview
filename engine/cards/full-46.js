@@ -166,7 +166,7 @@ E.addScripts({
       res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300, own: true }); log(g, `${name(c)} gained 300 ATK.`); } } },
     { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon a Dragon Normal Monster',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to === 'gy' && ev.prevCtrl === c.owner && !ev.battle && ev.reason !== 'cost' && ev.by != null && ev.by !== c.owner,
-      cond: (g, c, p) => freeM(g, p) >= 0 && allCards(g, 'gy').some(x => D(x).k === 'normal' && race(x) === 'Dragon'),
+      cond: (g, c, p) => freeM(g, p) >= 0 && allCards(g, 'gy').filter(x => E.lib.ssable(g, p, x)).some(x => D(x).k === 'normal' && race(x) === 'Dragon'),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Dragon Normal Monster from either GY?', allCards(g, 'gy').filter(x => D(x).k === 'normal' && race(x) === 'Dragon'), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   // PARTIAL: every other link is negated, even one whose activation can't be negated (Stumbling style rulings).
@@ -254,7 +254,7 @@ E.addScripts({
   'Victoria': {
     cont: { grant: (g, src, m, flag) => flag === 'noAttackTarget' && m !== src && m.ctrl === src.ctrl && m.zone === 'm' && faceUp(m) && race(m) === 'Fairy' },
     effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Special Summon a Dragon from their GY',
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[opp(p)].gy.some(x => isMon(x) && race(x) === 'Dragon'),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[opp(p)].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Dragon'),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Dragon from your opponent\'s GY?', g.p[opp(p)].gy.filter(x => isMon(x) && race(x) === 'Dragon'), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   // Tribute Summon only with 3 Dragons: offered only while you control 3 or more Dragon monsters.
@@ -284,7 +284,7 @@ E.addScripts({
     on: (g, ev, c) => battleToGY(ev, c),
     res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && race(x) === 'Plant' && L.num(D(x).def) <= 1500, 'Add a Plant monster with 1500 or less DEF'); } }] },
   'Viper\'s Rebirth': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(isMon) && g.p[p].gy.filter(isMon).every(x => race(x) === 'Reptile') && g.p[p].gy.some(x => isMon(x) && !isTuner(x)),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isMon) && g.p[p].gy.filter(isMon).every(x => race(x) === 'Reptile') && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && !isTuner(x)),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which non-Tuner monster from your GY?', g.p[p].gy.filter(x => isMon(x) && !isTuner(x)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t, 'atk')) { c.f46vr = { u: t.u, turnIn: t.turnIn, turn: g.turnNo }; log(g, `${name(t)} will be destroyed in the End Phase.`); } } },
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, label: 'Destroy the revived monster',
@@ -360,12 +360,12 @@ E.addScripts({
     effs: [lockInstall,
       { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon 2 Hydrogeddon and 1 Oxygeddon',
         on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.to === 'gy',
-        cond: (g, c, p) => nFreeM(g, p) >= 3 && g.p[p].gy.filter(x => named(x, 'Hydrogeddon')).length >= 2 && g.p[p].gy.some(x => named(x, 'Oxygeddon')),
+        cond: (g, c, p) => nFreeM(g, p) >= 3 && g.p[p].gy.filter(x => named(x, 'Hydrogeddon')).length >= 2 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Oxygeddon')),
         target: function* (g, c, p, L2) { const hs = yield* pick(g, p, 'Target 2 Hydrogeddon', g.p[p].gy.filter(x => named(x, 'Hydrogeddon')), 2, 2, 'good'); const os = yield* pick(g, p, 'Target 1 Oxygeddon', g.p[p].gy.filter(x => named(x, 'Oxygeddon')), 1, 1, 'good'); L2.t = [...hs, ...os]; },
         res: function* (g, c, p, L2) { for (const t of L2.t) if (t.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, t, 'atk'); } }] },
   'Water Hazard': { effs: [actNoop,
     { type: 'ign', loc: 'st', opt: true, tags: { ss: 1 }, label: 'Special Summon a Level 4 or lower WATER',
-      cond: (g, c, p) => monsOf(g, p).length === 0 && freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && attr(x) === 'WATER' && lv(x) <= 4),
+      cond: (g, c, p) => monsOf(g, p).length === 0 && freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'WATER' && lv(x) <= 4),
       res: function* (g, c, p) { if (monsOf(g, p).length) return; const cs = g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WATER' && lv(x) <= 4); if (!cs.length) return;
         const [x] = yield* pick(g, p, 'Special Summon which Level 4 or lower WATER monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   'Weed Out': { effs: [{ type: 'act', tags: { destroy: 1 },
@@ -382,7 +382,7 @@ E.addScripts({
     res: function* (g, c, p) { const o = opp(p); addRule(g, (g2, a) => a.type === 'activate' && a.p === o && a.c && isST(a.c) && a.eff && a.eff.type === 'act', { end: g.turnNo }); log(g, `${PN(g, o)} can't activate Spell or Trap Cards this turn.`); } }] },
   // PARTIAL: its tie works both ways through link() (either one leaving the field destroys the other).
   'Wicked Rebirth': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => g.p[p].lp > 800 && freeM(g, p) >= 0 && g.p[p].gy.some(x => D(x).k === 'synchro'),
+    cond: (g, c, p) => g.p[p].lp > 800 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => D(x).k === 'synchro'),
     cost: function* (g, c, p) { pay(g, p, 800); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Synchro Monster from your GY?', g.p[p].gy.filter(x => D(x).k === 'synchro'), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0];
@@ -423,7 +423,7 @@ E.addScripts({
   // Only the trigger from the GY: the card has no effect when activated.
   'Wonder Garage': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon a "roid" monster',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.to === 'gy' && ev.snap && !ev.snap.faceUp,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && race(x) === 'Machine' && lv(x) <= 4 && /roid/.test(D(x).n)),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Machine' && lv(x) <= 4 && /roid/.test(D(x).n)),
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && race(x) === 'Machine' && lv(x) <= 4 && /roid/.test(D(x).n)); if (!cs.length) return;
       const [x] = yield* pick(g, p, 'Special Summon which "roid" monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   'Woodland Archer': { proc: { label: 'Special Summon (2+ Normal Monsters in your GY)', cond: (g, c, p) => g.p[p].gy.filter(x => D(x).k === 'normal').length >= 2 },

@@ -50,7 +50,7 @@ function randomDiscard(g, p) {
 const burns = c => !['Wave-Motion Cannon', 'Thestalos the Firestorm Monarch'].includes(D(c).n) && /inflicts? [^.]*damage|damage to your opponent|takes? \d+ damage/i.test(txt(c).replace(/battle damage/gi, ''));
 const ruleDiscard = (g, ev) => g.phase === 'end' && !g.chain.length && !g.resolvingL && ev.c.owner === g.tp && g.p[g.tp].hand.length >= 6;
 // "by an opponent's card effect": the move's own `by` when given, else the turn player (as full-26.js)
-const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's by (engine move: the resolving link's controller), never the turn player
 // Spirit return (as full-09.js): during the End Phase of the turn it was Normal Summoned or flipped face-up
 const spiritReturn = { type: 'trig', mand: true, label: 'Return to the hand',
   on: (g, ev, c) => {
@@ -158,7 +158,7 @@ E.addScripts({
       cond: (g, c, p, x) => c.f40dead !== (x.ev && x.ev.group) && freeM(g, p) >= 0 && ['hand', 'deck', 'gy'].some(z => g.p[p][z].some(y => named(y, 'Elemental HERO Neos'))),
       res: function* (g, c, p) { yield* ssFrom(g, p, x => named(x, 'Elemental HERO Neos'), 'Special Summon Elemental HERO Neos', ['hand', 'deck', 'gy']); } }] },
   'Intercept': { effs: [{ type: 'act',
-    cond: (g, c, p) => !!g.sw && g.sw.p !== p && g.sw.how === 'tribute' && g.sw.cs.some(x => onField(x) && (x.tributes || []).length === 1),
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && g.sw.how === 'tribute' && g.sw.cs.some(x => onField(x) && (x.tributes || []).length === 1),
     target: function* (g, c, p, L2) { L2.t = g.sw.cs.filter(x => onField(x)); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && t.ctrl !== p) takeControl(g, p, t, false); } }] },
   // Swap control of the two targets. PARTIAL: with all 10 Monster Zones full the swap can't be done.
@@ -282,13 +282,13 @@ E.addScripts({
     cond: g => fieldMons(g).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which monster?', fieldMons(g), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
-  'Karma Cut': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.some(x => x !== c) && oppFaceUp(g, p).length > 0,
+  'Karma Cut': { effs: [{ type: 'act', kycooOk: true, cond: (g, c, p) => g.p[p].hand.some(x => x !== c) && oppFaceUp(g, p).length > 0,
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard which card?', g.p[p].hand.filter(x => x !== c), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, p)} discarded ${D(x).n}.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish which face-up monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) {
-      const t = live(L2)[0]; if (!t || !faceUp(t) || t.ctrl === p) return; const n = name(t);
+      const t = live(L2)[0]; if (!t || !faceUp(t) || t.ctrl === p) return; const n = L.nameOff(t);   // the name off the field (ruling 7: Proto-Cyber Dragon), Harpie Ladies share one (ruling 8)
       move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${n} was banished.`);
-      const xs = g.p[opp(p)].gy.filter(x => D(x).n === n); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p });
+      const xs = g.p[opp(p)].gy.filter(x => L.nameIs(x, n) || L.nameOff(x) === n); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p });
       if (xs.length) log(g, `${xs.length} more ${n} in the GY ${xs.length > 1 ? 'were' : 'was'} banished.`); } }] },
   'Kasha': {
     proc: { label: 'Special Summon (you control 2 Zombies)', cond: (g, c, p) => monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Zombie').length >= 2 },
@@ -381,7 +381,7 @@ E.addScripts({
   'Lightsworn Barrier': { effs: [actNoop,
     { type: 'quick', loc: 'st', label: 'Send the top 2 cards: negate the attack',
       // once per attack: it answers the attack being targeted, so it can't be chained to itself again and again
-      cond: (g, c, p) => !!g.aw && !!g.aw.t && g.aw.t.ctrl === p && isLS(g.aw.t) && g.aw.a.ctrl !== p && g.p[p].deck.length >= 2 && !(g.aw.f40lb || []).includes(c.u),
+      cond: (g, c, p) => (!!g.aw && !!g.aw.t && g.aw.t.ctrl === p && isLS(g.aw.t) && g.aw.a.ctrl !== p && g.p[p].deck.length >= 2 && !(g.aw.f40lb || []).includes(c.u)) && !!g.aw && E.lib.canTarget(g, g.aw.a, { c, p }),
       cost: function* (g, c, p) { g.aw.f40lb = (g.aw.f40lb || []).concat(c.u); const xs = g.p[p].deck.slice(-2).reverse(); for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${xs.map(x => D(x).n).join(', ')} from the Deck to the GY.`); },
       target: function* (g, c, p, L2) { L2.t = [g.aw.a]; },
       res: function* (g, c, p, L2) { const a = L2.t[0]; if (g.aw && g.aw.a === a && onField(a)) negateAttack(g); } }] },

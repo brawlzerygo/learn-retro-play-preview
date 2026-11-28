@@ -29,7 +29,7 @@ const toDef = (g, c) => { if (!onField(c) || c.zone !== 'm' || c.pos !== 'atk') 
 const toAtk = (g, c) => { if (!onField(c) || c.zone !== 'm' || c.pos !== 'def') return; c.pos = 'atk'; g.seq++; log(g, `${name(c)} was changed to Attack Position.`); emit(g, { type: 'pos', c, p: c.ctrl, from: 'def' }); };
 // "by an effect of a card controlled by your opponent" (classic-2.js): the move's own `by` when given, else the turn player.
 // PARTIAL: an opponent's Quick Effect on your own turn without `by` is missed.
-const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's by (engine move: the resolving link's controller), never the turn player
 // "Cannot be Special Summoned". ENGINE: only enforced from the GY (no generic flag; build/ENGINE_TODO.md).
 const noSSFromGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src };
 // Spirit return: during the End Phase of the turn it was Normal Summoned or flipped face-up (as full-09.js)
@@ -153,7 +153,7 @@ E.addScripts({
   'Multiplication of Ants': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => { const ins = monsOf(g, p).filter(x => race(x) === 'Insect'); return ins.length > 0 && nFreeM(g, p) + 1 >= 2; },
     cost: function* (g, c, p) { yield* tributeCost(g, p, monsOf(g, p).filter(x => race(x) === 'Insect'), 'Tribute 1 Insect monster'); },
-    res: function* (g, c, p) { if (nFreeM(g, p) < 2) return; tokens(g, p, { n: 'Army Ant Token', a: 'EARTH', r: 'Insect', lv: 4, atk: 500, def: 1200 }, 2, 'def', { noTribute: true }); } }] },
+    res: function* (g, c, p) { if (nFreeM(g, p) < 2) return; tokens(g, p, { n: 'Army Ant Token', a: 'EARTH', r: 'Insect', lv: 4, atk: 500, def: 1200 }, 2, 'def', { noTribute: 'summon' }); } }] },
   // Any number of differently named "Dark Scorpion" monsters from the hand (it resolves even if Don Zaloog is gone).
   'Mustering of the Dark Scorpions': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && named(x, 'Don Zaloog')) && freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && /Dark Scorpion/.test(D(x).n) && canSS(g, p, x)),
@@ -221,7 +221,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && onField(c)) { t.flags.f25decoy = c.u; g.seq++; log(g, `${name(t)} can't be destroyed by battle.`); } } }] },
   // Tribute a face-up Ninja (cost); its Level on the field +3 is the limit. When this card leaves the field, the monster is destroyed.
   'Ninjitsu Art of Transformation': { effs: [{ type: 'act', tags: { ss: 1 },
-      cond: (g, c, p) => monsOf(g, p).some(n => faceUp(n) && isNinja(n) && [...g.p[p].hand, ...g.p[p].deck].some(x => isMon(x) && ['Beast', 'Winged Beast', 'Insect'].includes(race(x)) && D(x).k !== 'ritual' && lv(x) <= lv(n) + 3)),
+      cond: (g, c, p) => monsOf(g, p).some(n => faceUp(n) && isNinja(n) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && ['Beast', 'Winged Beast', 'Insect'].includes(race(x)) && D(x).k !== 'ritual' && lv(x) <= lv(n) + 3)),
       cost: function* (g, c, p, L2) { const s = yield* tributeCost(g, p, monsOf(g, p).filter(n => faceUp(n) && isNinja(n)), 'Tribute 1 face-up Ninja monster'); L2.data.lv = s ? s.lv : 0; },
       res: function* (g, c, p, L2) {
         if (!onField(c) || freeM(g, p) < 0) return;
@@ -350,7 +350,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'dsStart' && ev.a === c && !!ev.t && ev.t.pos === 'set',
       res: function* (g, c, p, L2) { const t = L2.ev.t; if (t && onField(t) && t.pos === 'set') killFoe(g, c, p, t); } },
     { type: 'ign', tags: { ss: 1 }, label: 'Tribute: Special Summon Blue-Eyes White Dragon',
-      cond: (g, c, p) => [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Blue-Eyes White Dragon')),
+      cond: (g, c, p) => [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Blue-Eyes White Dragon')),
       cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Paladin of White Dragon.`); },
       res: function* (g, c, p) { const T = g.turnNo;
         addRule(g, (g2, a) => a.type === 'attack' && a.c && a.c.ctrl === p && named(a.c, 'Blue-Eyes White Dragon') && g2.turnNo === T, { end: T });

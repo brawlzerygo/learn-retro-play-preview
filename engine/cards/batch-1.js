@@ -16,10 +16,10 @@ const isZombie = c => isMon(c) && race(c) === 'Zombie';
 const isDragon = c => isMon(c) && race(c) === 'Dragon';
 const named = (c, n) => D(c).n === n;
 const upNamed = (g, n) => allField(g).filter(x => faceUp(x) && D(x).n === n);
-// Royal Decree on the field (other than src) negates Trap effects.
-const decreeOn = (g, src) => allField(g).some(x => x !== src && faceUp(x) && D(x).n === 'Royal Decree' && !decreeBlocked(g, x));
-const decreeBlocked = (g, x) => allField(g).some(y => y !== x && faceUp(y) && D(y).n === 'Royal Decree' && y.u < x.u); // two Decrees: the older one applies
-const trapLive = (g, c) => faceUp(c) && !decreeOn(g, c);
+// a face-up Trap applies unless its effects are negated (Royal Decree, Jinzo, Trap Stun: the engine's negd, 2026-11-28 audit: Mask of Restrict
+// and Light-Imprisoning Mirror kept applying under Jinzo; two Royal Decrees: the one face-up first applies, engine negLive)
+const decreeOn = (g, src) => L.negd(g, src);
+const trapLive = (g, c) => faceUp(c) && !L.negd(g, c);
 const maskOn = g => allField(g).some(x => D(x).n === 'Mask of Restrict' && trapLive(g, x));
 // a "?" ATK isn't "1500 or less" outside the field, so Sangan can't add Gren Maju Da Eiza or Maju Garzett (Goat Sangan ruling)
 const atkLE = (x, n) => /^\d+$/.test(String(D(x).atk)) && baseAtk(x) <= n;
@@ -48,29 +48,13 @@ function allAssign(preds, pool, limit = 8) {
 const destroyList = (g, Lk) => L.wouldDestroy(g, Lk);
 const wouldDestroyMine = (g, Lk, p) => destroyList(g, Lk).filter(x => x.ctrl === p);
 
-/* Synchro material rules the engine's synCombos doesn't read (checked as a Summon rule). */
-const SYNREQ = {
-  'Doomkaiser Dragon': (t, non) => named(t, 'Plaguespreader Zombie') && non.every(isZombie),
-  'Revived King Ha Des': (t, non) => named(t, 'Plaguespreader Zombie') && non.every(isZombie),
-  'Sea Dragon Lord Gishilnodon': (t, non) => non.length === 1 && lv(non[0]) === 3,
-  'Exploder Dragonwing': (t, non) => non.every(isDragon),
-  'Tempest Magician': (t, non) => non.every(x => race(x) === 'Spellcaster'),
-  'Trident Dragion': (t, non) => isDragon(t) && non.every(isDragon),
-};
-function synLegal(g, sx, mats) {
-  const t = mats.find(x => D(x).tu), non = mats.filter(x => x !== t);
-  const req = SYNREQ[D(sx).n]; if (req && !req(t, non)) return false;
-  const deb = mats.find(x => D(x).n === 'Debris Dragon');
-  if (deb && (race(sx) !== 'Dragon' || mats.some(x => x !== deb && lv(x) === 4))) return false;
-  return true;
-}
-
+/* Synchro material rules (Doomkaiser, Ha Des, Gishilnodon, Exploder Dragonwing, Tempest Magician, Trident Dragion, Debris Dragon) are read
+ from each card's text by the engine's synCombos (synReq, matRules: 2026-11-28 audit), so the material menu offers legal sets only. */
 /* The hub: rules and bookkeeping for this batch, run on every event by the HOOK effect below (no prompts here). */
 function blockedTrig(g, t) {
   const c = t.c; if (!c || !c.flags) return false;
   if (c.flags.b1hades && (c.zone === 'gy' || onField(c))) return true; // Revived King Ha Des
   if (isMon(c) && attr(c) === 'LIGHT' && (c.zone === 'gy' || c.zone === 'm') && mirrorOn(g)) return true; // Light-Imprisoning Mirror
-  if (isTrap(c) && (t.eff.loc === 'st' || onField(c)) && allField(g).some(x => x !== c && D(x).n === 'Royal Decree' && faceUp(x))) return true; // Royal Decree
   return false;
 }
 function hubInit(g) {
@@ -86,7 +70,6 @@ function hubInit(g) {
       if (n === "Vanity's Fiend") return true;
       if ((n === 'Five-Headed Dragon' || n === 'Elemental HERO Mariner') && a.how !== 'fusion') return true;
       if (n === 'Trident Dragion' && a.how !== 'synchro') return true;
-      if (a.how === 'synchro' && a.c.zone === 'extra') { const cs = synCombos(g, a.p, a.c); if (cs.length && !cs.some(m => synLegal(g, a.c, m))) return true; }
     }
     if (a.type === 'activate' && a.c.flags && a.c.flags.b1hades && a.c.zone === 'gy') return true;
     return false;
@@ -164,8 +147,9 @@ const S = {
   'Starlight Road': { effs: [{ type: 'act', tags: { ss: 1, ssOpt: 1 },   // Royal Oppression can negate it (Starlight ruling 11); the summon is optional, so Vanity's Fiend doesn't stop it
     cond: (g, c, p, x) => wouldDestroyMine(g, x.top, p).length >= 2,
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
-    res: function* (g, c, p, L2) { const Lk = L2.data.L, was = onField(Lk.c); Lk.negBy = p; negate(g, Lk, true);
-      if (!(was && !onField(Lk.c))) return;
+    // "and if you do, destroy it": the card is destroyed wherever it is, the Extra Deck included (Absolute Zero archive), then Stardust
+    res: function* (g, c, p, L2) { const Lk = L2.data.L, z0 = Lk.c.zone, mv0 = Lk.c.moved; Lk.negBy = p; negate(g, Lk, true);
+      if (!(['m', 'st', 'fz', 'hand', 'extra', 'deck'].includes(z0) && Lk.c.moved !== mv0)) return;
       const sd = g.p[p].extra.filter(x => D(x).n === 'Stardust Dragon');
       if (sd.length && freeM(g, p) >= 0 && (yield* yn(g, p, 'Special Summon Stardust Dragon from your Extra Deck?'))) ss(g, p, sd[0]); } }] },
   'Lightning Vortex': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => g.p[p].hand.some(x => x !== c) && oppFaceUp(g, p).length > 0,
@@ -194,7 +178,7 @@ const S = {
     res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
   /* ----- Diva Zombie ----- */
   'Deep Sea Diva': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, on: (g, ev, c) => evSummoned(ev, c, ['normal']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && race(x) === 'Sea Serpent' && lv(x) <= 3),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Sea Serpent' && lv(x) <= 3),
     res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Sea Serpent' && lv(x) <= 3); const [x] = yield* pick(g, p, 'Special Summon a Level 3 or lower Sea Serpent from your Deck', cands, 1, 1, 'good'); if (x) ss(g, p, x); shuffleDeck(g, p); } }] },
   'Goblin Zombie': { effs: [
     { type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl,
@@ -202,29 +186,29 @@ const S = {
     { type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => fromFieldToGY(ev, c),
       res: function* (g, c, p) { yield* search(g, p, x => isZombie(x) && L.num(D(x).def) <= 1200, 'Add a Zombie with 1200 or less DEF'); } }] },
   'Mezuki': { effs: [{ type: 'ign', loc: 'gy', tags: { ss: 1 }, label: 'Banish: revive a Zombie',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => x !== c && isZombie(x)),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => x !== c && isZombie(x)),
     cost: function* (g, c, p) { move(g, c, 'ban', { reason: 'cost' }); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Zombie from your GY?', g.p[p].gy.filter(isZombie), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && isZombie(t)) ss(g, p, t); } }] },
   'Mystic Tomato': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && attr(x) === 'DARK' && atkLE(x, 1500)),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'DARK' && atkLE(x, 1500)),
     res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'DARK' && atkLE(x, 1500)); const [x] = yield* pick(g, p, 'Special Summon a DARK with 1500 or less ATK', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   'Pyramid Turtle': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isZombie(x) && L.num(D(x).def) <= 2000),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isZombie(x) && L.num(D(x).def) <= 2000),
     res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isZombie(x) && L.num(D(x).def) <= 2000); const [x] = yield* pick(g, p, 'Special Summon a Zombie with 2000 or less DEF', cands, 1, 1, 'good');
       if (x) { const i = yield* choose(g, p, `${name(x)}: which position?`, ['Attack Position', 'Defense Position']); ss(g, p, x, i ? 'def' : 'atk'); } shuffleDeck(g, p); } }] },
   'Sangan': { effs: [{ type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => fromFieldToGY(ev, c),
     res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && atkLE(x, 1500), 'Add a monster with 1500 or less ATK'); } }] },
   'Zombie Master': { effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Send a monster: revive a Zombie',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(isMon) && (allCards(g, 'gy').some(x => isZombie(x) && lv(x) <= 4) || g.p[p].hand.some(x => isZombie(x) && lv(x) <= 4)),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(isMon) && (allCards(g, 'gy').filter(x => E.lib.ssable(g, p, x)).some(x => isZombie(x) && lv(x) <= 4) || g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isZombie(x) && lv(x) <= 4)),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send a monster from your hand to the GY', g.p[p].hand.filter(isMon), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Level 4 or lower Zombie?', allCards(g, 'gy').filter(x => isZombie(x) && lv(x) <= 4), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && isZombie(t) && onField(c) && faceUp(c)) ss(g, p, t); } }] },
   'Book of Life': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(isZombie) && g.p[opp(p)].gy.some(isMon),
-    target: function* (g, c, p, L2) { const [a] = yield* pick(g, p, 'Special Summon which Zombie from your GY?', g.p[p].gy.filter(isZombie), 1, 1, 'good'); const [b] = yield* pick(g, p, 'Banish which monster from their GY?', g.p[opp(p)].gy.filter(isMon), 1, 1, 'bad'); L2.t = [a, b].filter(Boolean); L2.data.a = a; L2.data.b = b; },
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isZombie(x) && E.lib.ssable(g, p, x) && L.canTarget(g, x, { c, p })) && g.p[opp(p)].gy.some(x => isMon(x) && L.canTarget(g, x, { c, p })),
+    target: function* (g, c, p, L2) { const [a] = yield* pick(g, p, 'Special Summon which Zombie from your GY?', g.p[p].gy.filter(x => isZombie(x) && L.canTarget(g, x, L2)), 1, 1, 'good'); const [b] = yield* pick(g, p, 'Banish which monster from their GY?', g.p[opp(p)].gy.filter(x => isMon(x) && L.canTarget(g, x, L2)), 1, 1, 'bad'); L2.t = [a, b].filter(Boolean); L2.data.a = a; L2.data.b = b; },
     res: function* (g, c, p, L2) { const { a, b } = L2.data; if (a && a.zone === 'gy' && isZombie(a)) ss(g, p, a); if (b && b.zone === 'gy') { move(g, b, 'ban', { reason: 'effect', by: p }); log(g, `${name(b)} was banished.`); } } }] },
   'Foolish Burial': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.some(isMon),
     res: function* (g, c, p) { yield* search(g, p, isMon, 'Send a monster from your Deck to the GY', 'gy'); } }] },
@@ -237,7 +221,7 @@ const S = {
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Put which card on top of the Deck?', fieldOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t) { move(g, t, 'deckTop', { reason: 'effect', by: p }); log(g, `${D(t).n} was put on top of the Deck.`); } } }] },
   'Doomkaiser Dragon': { hook: true, effs: [{ type: 'trig', when: true, tags: { ss: 1 }, on: (g, ev, c) => evSummoned(ev, c, ['special', 'synchro', 'fusion', 'ritual']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[opp(p)].gy.some(isZombie),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[opp(p)].gy.filter(x => E.lib.ssable(g, p, x)).some(isZombie),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Zombie from their GY?', g.p[opp(p)].gy.filter(isZombie), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (!t || t.zone !== 'gy' || !isZombie(t)) return; if (ss(g, p, t, 'atk') && onField(c)) t.flags.b1doom = c.u; else if (!onField(c) && onField(t)) destroy(g, [t], { by: p }); } }] },
   // PARTIAL: effects activated by a negated monster are stopped before they reach the chain instead of being negated on it.
@@ -246,7 +230,7 @@ const S = {
   'Light-Imprisoning Mirror': { hook: true, cont: { forbid: (g, src, a) => a.type === 'activate' && !decreeOn(g, src) && isMon(a.c) && attr(a.c) === 'LIGHT' && ['m', 'gy'].includes(a.c.zone) },
     effs: [{ type: 'act', res: function* () {} }] },
   'Return from the Different Dimension': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].ban.some(isMon),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].ban.filter(x => E.lib.ssable(g, p, x)).some(isMon),
       cost: function* (g, c, p) { pay(g, p, Math.floor(g.p[p].lp / 2)); },
       res: function* (g, c, p) { const cands = g.p[p].ban.filter(x => isMon(x) && !L.forbid(g, { type: 'ss', c: x, p, how: 'special' })); const n = Math.min(nFreeM(g, p), cands.length); if (!n) return;
         const xs = yield* pick(g, p, `Special Summon ${n} banished monster${n > 1 ? 's' : ''}`, cands, n, n, 'good'); const grp = g.group, out = [];
@@ -256,14 +240,14 @@ const S = {
       res: function* (g, c, p) { const xs = fieldMons(g).filter(x => x.flags.b1rfdd === c.u); for (const x of xs) move(g, x, 'ban', { reason: 'effect' }); if (xs.length) log(g, `${xs.map(x => D(x).n).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished.`); } }] },
   /* ----- Diva Hero ----- */
   'Destiny HERO - Malicious': { effs: [{ type: 'ign', loc: 'gy', tags: { ss: 1 }, label: 'Banish: summon a Malicious',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => D(x).n === 'Destiny HERO - Malicious'),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => D(x).n === 'Destiny HERO - Malicious'),
     cost: function* (g, c, p) { move(g, c, 'ban', { reason: 'cost' }); },
     res: function* (g, c, p) { const x = g.p[p].deck.find(x => D(x).n === 'Destiny HERO - Malicious'); if (x) ss(g, p, x, 'def'); shuffleDeck(g, p); } }] },
   'Spined Gillman': { cont: { atk: (g, src, c) => c.ctrl === src.ctrl && ['Fish', 'Sea Serpent', 'Aqua'].includes(race(c)) ? 400 : 0 }, effs: [] },
   'Future Fusion': { effs: [
     { type: 'act', tags: { ss: 1 },
       cond: (g, c, p) => g.p[p].extra.some(fx => D(fx).k === 'fusion' && fusionRecipe(fx) && assign(fusionRecipe(fx), g.p[p].deck) && !L.forbid(g, { type: 'ss', c: fx, p, how: 'fusion' })),
-      res: function* (g, c, p) { const fs = g.p[p].extra.filter(fx => D(fx).k === 'fusion' && fusionRecipe(fx) && assign(fusionRecipe(fx), g.p[p].deck)); if (!fs.length) return;
+      res: function* (g, c, p) { const fs = g.p[p].extra.filter(fx => D(fx).k === 'fusion' && fusionRecipe(fx) && assign(fusionRecipe(fx), g.p[p].deck) && !L.forbid(g, { type: 'ss', c: fx, p, how: 'fusion' })); if (!fs.length) return;
         const [fx] = yield* pick(g, p, 'Reveal which Fusion Monster?', fs, 1, 1, 'good'); if (!fx) return; log(g, `${PN(g, p)} revealed ${D(fx).n}.`);
         const cs = allAssign(fusionRecipe(fx), g.p[p].deck); let mats = cs[0];
         if (cs.length > 1) { const i = yield* choose(g, p, 'Send which Fusion Materials from your Deck?', cs.map(m => m.map(x => D(x).n).join(' + '))); mats = cs[i]; }
@@ -281,15 +265,18 @@ const S = {
   'Soul Release': { effs: [{ type: 'act', cond: g => allCards(g, 'gy').length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish up to 5 cards from the GYs', allCards(g, 'gy'), 1, 5, 'bad'); },
     res: function* (g, c, p, L2) { const xs = L2.t.filter(x => x.zone === 'gy'); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.map(x => D(x).n).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished.`); } }] },
-  // PARTIAL: Tribute costs are blocked for this batch's cards and the engine's Icarus Attack, Substitoad and Soul Exchange; Enemy Controller's Tribute option is not.
+  // "Monsters can't be Tributed": no Tribute Summons, no Ritual Summons, and no card or effect that Tributes, as a cost or as part of
+  // its effect (archive), through the engine's Tribute forbid (type 'tribute': tribPool, tributeCands, costTributes; 2026-11-28 audit)
   'Mask of Restrict': { cont: { forbid: (g, src, a) => { if (decreeOn(g, src)) return false;
+      if (a.type === 'tribute') return true;
       if ((a.type === 'ns' || a.type === 'set') && lv(a.c) >= 5) return !(D(a.c).n === 'Blackwing - Sirocco the Dawn' && !monsOf(g, a.p).length && monsOf(g, opp(a.p)).length);
       if (a.type === 'ss' && a.how === 'ritual') return true;
-      if (a.type === 'activate' && ['Icarus Attack', 'Substitoad', 'Soul Exchange'].includes(D(a.c).n)) return true;
+      if (a.type === 'activate' && D(a.c).n === 'Soul Exchange') return true;   // its whole use is the Tribute it allows
       return false; } },
     effs: [{ type: 'act', res: function* () {} }] },
-  // PARTIAL: other Traps can't be activated (and Trap triggers don't start) instead of being negated when they resolve.
-  'Royal Decree': { hook: true, cont: { forbid: (g, src, a) => a.type === 'activate' && isTrap(a.c) && a.c !== src && !decreeBlocked(g, src) },
+  // "Negate all other Trap effects on the field": Traps can still be activated and resolve negated on the field, a Trap sent off the field
+  // by a chained card is still negated, Trap effects in the GY aren't (Edison rulings; engine negd, resolveChain)
+  'Royal Decree': { hook: true, cont: { negates: (g, src, c) => c !== src && isTrap(c) && onField(c) },
     effs: [{ type: 'act', res: function* () {} }] },
   /* ----- Diva Hero Beat ----- */
   'D.D. Warrior Lady': { effs: [{ type: 'trig', label: 'Banish both monsters',
@@ -309,10 +296,12 @@ const S = {
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which card?', allField(g).filter(x => x !== c), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { if (destroy(g, live(L2), { by: p, src: c }).length) draw(g, p, 1); } }] },
   // The link (engine move): Call of the Haunted is destroyed only when its monster is destroyed, and a negated one (Jinzo) leaves its monster.
-  'Call of the Haunted': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(isMon),
+  'Call of the Haunted': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isMon),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which monster from your GY?', g.p[p].gy.filter(isMon), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'atk')) link(g, c, t); } }] },
-  'Hero Blast': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].gy.some(x => D(x).k === 'normal' && /^Elemental HERO/.test(D(x).n)),
+  // tags.destroy + destroys: "destroy 1 of them" is certain when one would be there (site: Stardust "only if there is a monster on the field
+  // that would be destroyed"); which one is chosen at resolution, so it is a maybe of 1 (engine wouldDestroy)
+  'Hero Blast': { effs: [{ type: 'act', tags: { destroy: 1 }, destroys: (g, c, p, L2) => { const t = L2.t[0]; if (!t || t.zone !== 'gy') return []; const cs = oppFaceUp(g, p).filter(x => atk(g, x) <= baseAtk(t)); return Object.assign([], cs.length ? { maybe: cs, n: 1 } : {}); }, cond: (g, c, p) => g.p[p].gy.some(x => D(x).k === 'normal' && /^Elemental HERO/.test(D(x).n)),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which Elemental HERO Normal Monster?', g.p[p].gy.filter(x => D(x).k === 'normal' && /^Elemental HERO/.test(D(x).n)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (!t || t.zone !== 'gy') return; move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`);
       const A = baseAtk(t), cs = oppFaceUp(g, p).filter(x => atk(g, x) <= A); if (!cs.length) return; const [x] = yield* pick(g, p, 'Destroy which monster?', cs, 1, 1, 'bad'); if (x) destroy(g, [x], { by: p, src: c }); } }] },
@@ -331,10 +320,9 @@ const S = {
   // ENGINE: destroy() has no replacement hook, so "discard 1 card instead" of being destroyed by an opponent's effect is missing.
   // PARTIAL: the doubled ATK applies through the whole Damage Step, not only during damage calculation.
   'Clear Vice Dragon': { self: { atk: (g, c) => { const b = g.battle; if (!g.inDS || !b || b.a !== c || !b.t || D(b.t).n === 'Clear Vice Dragon') return 0; return 2 * atk(g, b.t) - baseAtk(c); } }, effs: [] },
-  // PARTIAL: the material limits are checked when the Synchro Summon is offered; the combination menu can still list an illegal set beside a legal one.
   'Debris Dragon': { hook: true, effs: [{ type: 'trig', when: true, tags: { ss: 1 }, on: (g, ev, c) => evSummoned(ev, c, ['normal']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && baseAtk(x) <= 500),
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon a monster with 500 or less ATK from your GY', g.p[p].gy.filter(x => isMon(x) && baseAtk(x) <= 500), 1, 1, 'good'); },
+    cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && baseAtk(x) <= 500 && L.canSS(g, p, x)),
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon a monster with 500 or less ATK from your GY', g.p[p].gy.filter(x => isMon(x) && baseAtk(x) <= 500 && L.canSS(g, p, x)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk', { negate: true }); } }] },
   // PARTIAL: the End Phase upkeep is a trigger on the chain (it should not start a chain).
   "Koa'ki Meiru Drago": { cont: { forbid: (g, src, a) => a.type === 'ss' && ['LIGHT', 'DARK'].includes(attr(a.c)) },
@@ -401,7 +389,7 @@ const S = {
   'Musician King': { mats: [c => D(c).n === 'Witch of the Black Forest', c => D(c).n === 'Lady of Faith'], effs: [] },
   'Ancient Fairy Dragon': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Special Summon a Level 4 or lower monster',
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && lv(x) <= 4 && !isExtraD(D(x))),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && lv(x) <= 4 && !isExtraD(D(x))),
       after: (g, c, p) => { E.lib.lockBP(g, p); },   // the Battle Phase lock belongs to the activation (lifted if it is negated)
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && lv(x) <= 4 && !isExtraD(D(x))); const [x] = yield* pick(g, p, 'Special Summon a Level 4 or lower monster from your hand', cs, 1, 1, 'good'); if (x) ss(g, p, x); } },
     { type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Destroy a Field Spell',
@@ -430,7 +418,7 @@ const S = {
     res: function* (g, c, p, L2) { const n = destroy(g, live(L2), { by: p }).length; if (n && onField(c)) { c.flags.extraAttack = g.turnNo; log(g, `Trident Dragion can attack ${n + 1} times this turn.`); } } }] },
   'Red-Eyes Wyvern': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Banish: revive a Red-Eyes',
     on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.owner,
-    cond: (g, c, p) => g.ns[p] === 0 && freeM(g, p) >= 0 && g.p[p].gy.some(x => x !== c && isMon(x) && /Red-Eyes/.test(D(x).n)),
+    cond: (g, c, p) => g.ns[p] === 0 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => x !== c && isMon(x) && /Red-Eyes/.test(D(x).n)),
     cost: function* (g, c, p) { move(g, c, 'ban', { reason: 'cost' }); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Red-Eyes monster?', g.p[p].gy.filter(x => isMon(x) && /Red-Eyes/.test(D(x).n)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { g.noSummon[p] = true; const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },

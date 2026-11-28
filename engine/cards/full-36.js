@@ -39,7 +39,7 @@ const trapTrig = o => ({ type: 'trig', loc: 'any', label: o.label,
   res: function* (g, c, p, L2) { if (onField(c)) yield* o.res(g, c, p, L2); if (onField(c) && c.zone === 'st') move(g, c, 'gy', { reason: 'rule' }); } });
 const battleDeath = (ev, q) => ev.type === 'move' && ev.battle && ev.destroyed && ev.to === 'gy' && ev.wasField && ev.from === 'm' && isMon(ev.c) && ev.prevCtrl === q;
 // "by an effect of a card controlled by your opponent" (same as full-26.js): the move's own `by` when given, else the turn player
-const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's by (engine move: the resolving link's controller), never the turn player
 // Normal Monsters: Normal cards, and Gemini monsters that are not Gemini Summoned (in the GY or face-up on the field)
 const isNormal = x => isMon(x) && (D(x).k === 'normal' || (isGemini(x) && !(onField(x) && x.flags.gemini)));
 // a monster with ? ATK: the card data stores it as 0, so it is read from the text.
@@ -244,13 +244,13 @@ E.addScripts({
       // the counters are read from the card as it left the field. A Field Spell you replace yourself counts too (ruling).
       { type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon Destiny HERO - Dreadmaster',
         on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to === 'gy' && (ev.destroyed || ev.from === 'fz') && ev.snap && Math.max(ev.snap.flags.clock || 0, (ev.snap.ctr && ev.snap.ctr.clock) || 0, (ev.c.ctr && ev.c.ctr.clock) || 0) >= 4,
-        cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Destiny HERO - Dreadmaster')),
+        cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Destiny HERO - Dreadmaster')),
         res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, 'Destiny HERO - Dreadmaster')); if (!cs.length || freeM(g, p) < 0) return;
           const [x] = yield* pick(g, p, 'Special Summon Destiny HERO - Dreadmaster from your hand or Deck', cs, 1, 1, 'good'); if (x) { const fd = x.zone === 'deck'; ss(g, p, x, 'atk'); if (fd) shuffleDeck(g, p); } } }] },
   // ENGINE: a token's Attribute and Type come from the first Clone Token made in the duel (no attr()/race() override);
   // its Level, ATK and DEF are set per token.
   'Cloning': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => !!g.sw && g.sw.p !== p && ['normal', 'tribute', 'flip'].includes(g.sw.how) && g.sw.cs.some(x => onField(x) && faceUp(x) && x.ctrl !== p && lv(x) > 0) && freeM(g, p) >= 0,
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && ['normal', 'tribute', 'flip'].includes(g.sw.how) && g.sw.cs.some(x => onField(x) && faceUp(x) && x.ctrl !== p && lv(x) > 0) && freeM(g, p) >= 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target the summoned monster', g.sw.cs.filter(x => onField(x) && faceUp(x) && x.ctrl !== p), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) {
       const t = live(L2)[0]; if (!t || !faceUp(t)) return;
@@ -291,7 +291,7 @@ E.addScripts({
       forbid: (g, src, a) => a.type === 'attack' && a.c && a.c.ctrl !== src.ctrl && noTargetLeft(g, src.ctrl) && !has(g, a.c, 'directAttack') },
     effs: [] },
   'Commander Covington': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Send the 3 Machina: Special Summon Machina Force',
-    cond: (g, c, p) => ['Machina Soldier', 'Machina Sniper', 'Machina Defender'].every(n => monsOf(g, p).some(x => faceUp(x) && named(x, n))) && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Machina Force')),
+    cond: (g, c, p) => ['Machina Soldier', 'Machina Sniper', 'Machina Defender'].every(n => monsOf(g, p).some(x => faceUp(x) && named(x, n))) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Machina Force')),
     cost: function* (g, c, p) { const grp = g.group; const xs = [];
       for (const n of ['Machina Soldier', 'Machina Sniper', 'Machina Defender']) { const [x] = yield* pick(g, p, `Send which ${n} to the GY?`, monsOf(g, p).filter(x => faceUp(x) && named(x, n)), 1, 1, 'cost'); if (x) xs.push(x); }
       for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} sent ${xs.map(x => D(x).n).join(', ')} to the GY.`); },
@@ -308,7 +308,7 @@ E.addScripts({
   'Common Soul': {
     cont: { atk: (g, src, m) => src.flags.f36cs && src.flags.f36cs.m === m.u ? src.flags.f36cs.n : 0 },
     effs: [{ type: 'act', tags: { ss: 1 },
-      cond: (g, c, p) => fieldMons(g).some(m => faceUp(m) && freeM(g, m.ctrl) >= 0) && g.p[p].hand.some(x => isMon(x) && /^Neo-Spacian/.test(D(x).n)),
+      cond: (g, c, p) => fieldMons(g).some(m => faceUp(m) && freeM(g, m.ctrl) >= 0) && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && /^Neo-Spacian/.test(D(x).n)),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Select 1 face-up monster', fieldMons(g).filter(m => faceUp(m) && freeM(g, m.ctrl) >= 0), 1, 1, 'good'); },
       res: function* (g, c, p, L2) {
         const t = live(L2)[0]; if (!t || !faceUp(t) || !onField(c)) return; const side = t.ctrl;
@@ -349,7 +349,7 @@ E.addScripts({
       if (freeM(g, p) >= 0) ss(g, p, x, 'atk');
       else { move(g, x, 'gy', { reason: 'effect', destroyed: true, by: p }); log(g, `${D(x).n} was destroyed and sent to the GY.`); } } }] },
   'Contact': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => { const ch = monsOf(g, p).filter(x => faceUp(x) && isChrysalis(x)); const ns = new Set(ch.flatMap(quoted)); return ch.length > 0 && [...g.p[p].hand, ...g.p[p].deck].some(x => isMon(x) && ns.has(D(x).n)); },
+    cond: (g, c, p) => { const ch = monsOf(g, p).filter(x => faceUp(x) && isChrysalis(x)); const ns = new Set(ch.flatMap(quoted)); return ch.length > 0 && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && ns.has(D(x).n)); },
     res: function* (g, c, p) {
       const ch = monsOf(g, p).filter(x => faceUp(x) && isChrysalis(x)); if (!ch.length) return; const ns = new Set(ch.flatMap(quoted));
       const grp = g.group; for (const x of ch) move(g, x, 'gy', { reason: 'effect', by: p, group: grp }); log(g, `${PN(g, p)} sent ${ch.map(x => D(x).n).join(', ')} to the GY.`);
@@ -430,6 +430,8 @@ E.addScripts({
   // the next turn, destroy up to 3 from the Deck) came later. If it is activated in the opponent's turn, that turn counts.
   // PARTIAL: the draw check runs as the card is drawn, without a chain link.
   'Crush Card Virus': { effs: [{ type: 'act', tags: { destroy: 1 },
+      // what it would destroy: the opponent's face-up monsters with 1500 or more ATK (Stardust ruling 7; Starlight Road ruling 9: face-down ones don't count)
+      destroys: (g, c, p) => monsOf(g, opp(p)).filter(m => faceUp(m) && stat(g, m, 'atk') >= 1500),
       cond: (g, c, p) => monsOf(g, p).some(m => attr(m) === 'DARK' && stat(g, m, 'atk') <= 1000),
       cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute a DARK monster with 1000 or less ATK', monsOf(g, p).filter(m => attr(m) === 'DARK' && stat(g, m, 'atk') <= 1000), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
       res: function* (g, c, p) {
@@ -466,7 +468,7 @@ E.addScripts({
     { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && c.mods.some(m => m.f36cu && m.turn < g.turnNo)) { c.mods = c.mods.filter(m => !(m.f36cu && m.turn < g.turnNo)); g.seq++; } return false; } }] },
   // The sent monster is a cost; the target is a "Six Samurai" monster in either GY (it can be the one just sent).
   'Cunning of the Six Samurai': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isSixSam(x)) && allCards(g, 'gy').some(isSixSam),
+    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isSixSam(x)) && allCards(g, 'gy').filter(x => E.lib.ssable(g, p, x)).some(isSixSam),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which Six Samurai monster to the GY?', monsOf(g, p).filter(x => faceUp(x) && isSixSam(x)), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Six Samurai monster from either GY?', allCards(g, 'gy').filter(x => isSixSam(x) && canSS(g, p, x)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, t, 'atk'); } }] },

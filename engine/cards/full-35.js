@@ -109,7 +109,7 @@ E.addScripts({
       const [x] = yield* pick(g, p, 'Place a Spell Counter on which card?', xs, 1, 1, 'good'); if (x && onField(x)) { addCtr(g, x, 'spell', 1); log(g, `${name(x)} got a Spell Counter.`); } } }] },
   // PARTIAL: "original ATK becomes 0" is a -original ATK modifier until the End Phase, so it stacks the same way with other changes.
   'Alchemy Cycle': { effs: [
-    { type: 'act', cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && baseAtk(m) > 0),
+    { type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && baseAtk(m) > 0),
       res: function* (g, c, p) { const ms = monsOf(g, p).filter(m => faceUp(m) && baseAtk(m) > 0); for (const m of ms) addMod(g, m, { atk: -baseAtk(m), end: true });
         c.f35cyc = { turn: g.turnNo, us: ms.map(m => m.u) }; if (ms.length) log(g, `The original ATK of ${PN(g, p)}'s face-up monsters became 0 until the End Phase.`); } },
     { type: 'trig', loc: 'any', mand: true, label: 'Draw 1 card',
@@ -173,7 +173,7 @@ E.addScripts({
     effs: [
     { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon Oracle of the Sun',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && ev.to === 'gy',
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Oracle of the Sun')),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Oracle of the Sun')),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Oracle of the Sun?', g.p[p].gy.filter(x => named(x, 'Oracle of the Sun')), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   // The card comes back in the End Phase of the opponent's next turn (not this one, even on their turn); a card that left
@@ -217,7 +217,7 @@ E.addScripts({
         res: function* (g, c, p) { destroy(g, fieldOf(g, opp(p)), { by: p }); } },
       { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon Arcanite Magician',
         on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && ev.to === 'gy',
-        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Arcanite Magician')),
+        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Arcanite Magician')),
         res: function* (g, c, p) { const xs = g.p[p].gy.filter(x => named(x, 'Arcanite Magician')); if (!xs.length || freeM(g, p) < 0) return;
           const [x] = yield* pick(g, p, 'Special Summon which Arcanite Magician?', xs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   // Its own summon rule only (the empty recipe keeps Polymerization from summoning it).
@@ -253,7 +253,7 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Fairy from your GY?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Fairy' && !named(x, 'Athena') && canSS(g, p, x)), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   'Automatic Laser': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => !!g.sw && g.sw.p !== p && ['normal', 'tribute', 'gemini', ...SPECIAL].includes(g.sw.how) && g.sw.cs.some(x => onField(x) && faceUp(x) && atk(g, x) >= 1000) && g.p[p].hand.some(x => named(x, "Iron Core of Koa'ki Meiru")),
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && ['normal', 'tribute', 'gemini', ...SPECIAL].includes(g.sw.how) && g.sw.cs.some(x => onField(x) && faceUp(x) && atk(g, x) >= 1000) && g.p[p].hand.some(x => named(x, "Iron Core of Koa'ki Meiru")),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, "Reveal Iron Core of Koa'ki Meiru", g.p[p].hand.filter(x => named(x, "Iron Core of Koa'ki Meiru")), 1, 1, 'cost'); if (x) log(g, `${PN(g, p)} revealed ${D(x).n}.`); },
     target: function* (g, c, p, L2) { L2.data.cs = g.sw.cs.slice(); },
     res: function* (g, c, p, L2) { destroy(g, L2.data.cs.filter(x => onField(x) && faceUp(x) && atk(g, x) >= 1000), { by: p, src: c }); } }] },
@@ -273,7 +273,7 @@ E.addScripts({
       const [x] = yield* pick(g, p, 'Special Summon which Level 4 or lower Dinosaur from your Deck?', xs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   // One of each name, none with a name you already control; with too few zones you pick which.
   'Backs to the Wall': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => g.p[p].lp > 100 && freeM(g, p) >= 0 && g.p[p].gy.some(isSixSam),
+    cond: (g, c, p) => g.p[p].lp > 100 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isSixSam),
     cost: function* (g, c, p) { pay(g, p, g.p[p].lp - 100); },
     res: function* (g, c, p) {
       const have = new Set(monsOf(g, p).filter(faceUp).map(name)); const reps = new Map();
@@ -332,7 +332,7 @@ E.addScripts({
         addMod(g, lo, { atk: -h, end: true }); addMod(g, hi, { atk: h, end: true }); log(g, `${name(lo)} lost ${h} ATK and ${name(hi)} gained ${h} ATK.`); } }] },
   'Bicular': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon Unicycular',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Unicycular')),
+    cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Unicycular')),
     res: function* (g, c, p) { const xs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, 'Unicycular')); if (!xs.length || freeM(g, p) < 0) return;
       const [x] = yield* pick(g, p, 'Special Summon which Unicycular (hand or Deck)?', xs, 1, 1, 'good'); if (!x) return; const fromDeck = x.zone === 'deck'; ss(g, p, x, 'atk'); if (fromDeck) shuffleDeck(g, p); } }] },
   'Birthright': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => normalNow(x) && canSS(g, p, x)),

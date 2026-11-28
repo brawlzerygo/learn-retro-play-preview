@@ -25,7 +25,7 @@ const killFoe = (g, c, p, t) => { if (t && onField(t) && t.zone === 'm') destroy
 function halve(g, wall, m) {
   if (!onField(m) || !faceUp(m) || m.mods.some(x => x.mw === wall.u)) return;
   const a = stat(g, m, 'atk'), cut = a - Math.floor(a / 2); if (!cut) return;
-  m.mods.push({ atk: -cut, mw: wall.u, turn: g.turnNo }); log(g, `${name(m)}'s ATK was halved by Mirror Wall.`);
+  m.mods.push({ set: a - cut, which: 'atk', mw: wall.u, turn: g.turnNo }); log(g, `${name(m)}'s ATK was halved by Mirror Wall.`);
 }
 // Ojama King: up to 3 of the opponent's unused Monster Zones (Edison: unused ones only), chosen automatically, lowest first
 function kingZones(g, c) {
@@ -124,7 +124,7 @@ E.addScripts({
   'Miracle Fertilizer': { effs: [
     { type: 'act', res: noop },
     { type: 'ign', loc: 'st', opt: true, tags: { ss: 1 }, label: 'Special Summon a Plant from your GY',
-      cond: (g, c, p) => g.ns[p] === 0 && freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && race(x) === 'Plant'),
+      cond: (g, c, p) => g.ns[p] === 0 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Plant'),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Plant from your GY?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Plant'), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (!t || t.zone !== 'gy' || !ss(g, p, t, 'atk')) return; t.flags.fert = c.u;
         const turn = g.turnNo; addRule(g, (g2, a) => (a.type === 'ns' || a.type === 'set') && a.p === p && g2.turnNo === turn, { end: turn }); log(g, `${PN(g, p)} can't Normal Summon or Set this turn.`); } },
@@ -154,7 +154,7 @@ E.addScripts({
   'Miracle Jurassic Egg': { effs: [
     { type: 'trig', on: (g, ev, c) => { if (ev.type === 'move' && ev.to === 'gy' && ev.c !== c && ev.c.owner === c.ctrl && isMon(ev.c) && race(ev.c) === 'Dinosaur' && c.flags.eggGrp !== ev.group) { c.flags.eggGrp = ev.group; addCtr(g, c, 'egg', 2); log(g, `Miracle Jurassic Egg got 2 counters (${ctr(c, 'egg')}).`); } return false; }, res: noop },
     { type: 'ign', tags: { ss: 1 }, label: 'Tribute: summon a Dinosaur',
-      cond: (g, c, p) => g.p[p].deck.some(x => isMon(x) && race(x) === 'Dinosaur' && lv(x) <= ctr(c, 'egg')),
+      cond: (g, c, p) => g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Dinosaur' && lv(x) <= ctr(c, 'egg')),
       cost: function* (g, c, p, L2) { L2.data.n = ctr(c, 'egg'); move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Miracle Jurassic Egg (${L2.data.n} counters).`); },
       res: function* (g, c, p, L2) { const cs = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Dinosaur' && lv(x) <= L2.data.n); if (!cs.length || freeM(g, p) < 0) { shuffleDeck(g, p); return; }
         const [x] = yield* pick(g, p, `Special Summon a Dinosaur of Level ${L2.data.n} or lower from your Deck`, cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
@@ -178,7 +178,7 @@ E.addScripts({
       { type: 'trig', loc: 'any', on: (g, ev) => { if (ev.type === 'attack' && ev.direct && ev.a.flags.locus === g.turnNo) ev.a.flags.locusDirect = g.turnNo; return false; }, res: noop }] },
 
   'Miracle Restoring': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => ownCtrs(g, p) >= 2 && freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Dark Magician') || named(x, 'Buster Blader')),
+    cond: (g, c, p) => ownCtrs(g, p) >= 2 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Dark Magician') || named(x, 'Buster Blader')),
     cost: function* (g, c, p) { yield* removeSpellCtrs(g, p, 2); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which monster?', g.p[p].gy.filter(x => named(x, 'Dark Magician') || named(x, 'Buster Blader')), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
@@ -228,7 +228,7 @@ E.addScripts({
 
   // Only monsters Special Summoned from the opponent's Main Deck (seen in the same event group as the summon).
   'Mirror of Oaths': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => !!g.sw && g.sw.p !== p && fromDeckSS(g).some(x => onField(x)),
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && fromDeckSS(g).some(x => onField(x)),
     target: function* (g, c, p, L2) { L2.data.cs = fromDeckSS(g); },
     res: function* (g, c, p, L2) { const n = destroy(g, L2.data.cs.filter(x => onField(x) && x.zone === 'm'), { by: p, src: c }).length; if (n) draw(g, p, 1); } }] },
 
@@ -241,12 +241,12 @@ E.addScripts({
 
   'Mirror Wall': { effs: [
     { type: 'act', res: function* (g, c, p) { const b = g.aw || g.battle; if (b && b.a && b.a.ctrl !== p) halve(g, c, b.a); } },
-    { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'attack' && ev.a.ctrl !== c.ctrl && faceUp(c)) halve(g, c, ev.a); return false; }, res: noop },
+    { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'attack' && ev.a.ctrl !== c.ctrl && faceUp(c) && !L.negd(g, c)) halve(g, c, ev.a); return false; }, res: noop },   // a lasting effect: not while negated (Jinzo, goat-10)
     { type: 'trig', loc: 'any', on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.wasField) for (const m of fieldMons(g)) m.mods = m.mods.filter(x => x.mw !== c.u); return false; }, res: noop },
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 2000 LP or destroy it', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 2000 && (yield* yn(g, p, 'Pay 2000 LP to keep Mirror Wall?'))) pay(g, p, 2000); else destroy(g, [c], { rule: true }); } }] },
 
-  'Monster Gate': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).length > 0 && g.p[p].deck.some(canNS),
+  'Monster Gate': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).length > 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(canNS),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${x.pos === 'set' ? 'a face-down monster' : name(x)}.`); },
     res: function* (g, c, p) { const [m, rest] = excavate(g, p); log(g, `${PN(g, p)} excavated ${rest.length + (m ? 1 : 0)} card${rest.length + (m ? 1 : 0) === 1 ? '' : 's'}.`);
       sendAll(g, rest); if (m && !ss(g, p, m, 'atk') && m.zone === 'deck') move(g, m, 'gy', { reason: 'effect' }); } }] },
@@ -420,12 +420,12 @@ E.addScripts({
 
   'Ojama Red': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Ojamas from your hand',
     on: (g, ev, c) => evSummoned(ev, c, ['normal']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && /Ojama/.test(D(x).n)),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && /Ojama/.test(D(x).n)),
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && /Ojama/.test(D(x).n)); const n = Math.min(4, nFreeM(g, p), cs.length); if (!n) return;
       const xs = yield* pick(g, p, `Special Summon up to ${n} Ojama monsters`, cs, 1, n, 'good'); for (const x of xs) if (x.zone === 'hand') ss(g, p, x, 'atk'); } }] },
 
   'Ojama Trio': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => nFreeM(g, opp(p)) >= 3,
-    res: function* (g, c, p) { const ts = tokens(g, opp(p), { n: 'Ojama Token', a: 'LIGHT', r: 'Beast', lv: 2, atk: 0, def: 1000 }, 3, 'def', { noTribute: true }); for (const t of ts) t.flags.ojama = c.u; } },
+    res: function* (g, c, p) { const ts = tokens(g, opp(p), { n: 'Ojama Token', a: 'LIGHT', r: 'Beast', lv: 2, atk: 0, def: 1000 }, 3, 'def', { noTribute: 'summon' }); for (const t of ts) t.flags.ojama = c.u; } },
     { type: 'trig', loc: 'gy', mand: true, label: '300 damage', on: (g, ev, c) => ev.type === 'move' && ev.destroyed && ev.wasField && ev.snap && ev.snap.flags && ev.snap.flags.ojama === c.u,
       res: function* (g, c, p, L2) { damage(g, L2.ev.prevCtrl, 300, { src: c, srcP: p }); } }] },
 
@@ -492,7 +492,7 @@ E.addScripts({
 E.addScripts({ 'Mystical Sheep #1': { effs: [] } }, 'goat'); // ENGINE: substitute Fusion Materials
 
 function fromDeckSS(g) { if (!g.sw) return []; const grp = g.sw.group; return g.sw.cs.filter(x => g.events.some(e => e.type === 'move' && e.c === x && e.group === grp && e.from === 'deck' && e.to === 'm')); }
-function umiOf(g, p) { const f = g.p[p].fz; return f && faceUp(f) && (named(f, 'Umi') || named(f, 'A Legendary Ocean')) ? f : null; }
+function umiOf(g, p) { const f = g.p[p].fz; return f && faceUp(f) && L.isUmi(f) ? f : null; }
 function ctrTargets(g, c) { return allField(g).filter(x => x !== c && faceUp(x) && /Spell Counter/i.test(D(x).tx || '')); }
 function chains(g, p) { return monsOf(g, p).filter(x => faceUp(x) && /^Iron Chain/.test(name(x))).length; }
 })();

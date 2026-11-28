@@ -16,7 +16,7 @@ const nomiLock = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === 
 const nomiMark = { type: 'trig', on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.to === 'm' && ['hand', 'deck'].includes(ev.from)) c.nomi = true; return false; }, res: function* () {} };
 // "by an effect of a card controlled by your opponent": the move's own `by` when the effect gave one, else the turn player.
 // PARTIAL: most discard and mill helpers don't pass `by`, so an effect without it counts as the turn player's.
-const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's by (engine move: the resolving link's controller), never the turn player
 // Flip effect shape
 const flip = (label, more) => ({ type: 'trig', mand: true, faceDownOk: true, label, on: (g, ev, c) => ev.type === 'flip' && ev.c === c, ...more });
 // Kazejin, Sanga, Suijin: the attacker's ATK becomes 0 for this damage calculation, once while face-up.
@@ -24,7 +24,7 @@ const flip = (label, more) => ({ type: 'trig', mand: true, faceDownOk: true, lab
 // the 0 lasts until damage calculation is done (removed at afterCalc).
 const guardian = [
   { type: 'quick', ds: true, label: 'Make the attacker’s ATK 0',
-    cond: (g, c, p) => g.inDS && g.battle && g.battle.t === c && g.tp !== c.ctrl && !c.flags.guardUsed && g.battle.a && onField(g.battle.a) && !g.battle.a.mods.some(m => m.guardZero),
+    cond: (g, c, p) => (g.inDS && g.battle && g.battle.t === c && g.tp !== c.ctrl && !c.flags.guardUsed && g.battle.a && onField(g.battle.a) && !g.battle.a.mods.some(m => m.guardZero)) && !!g.battle && E.lib.canTarget(g, g.battle.a, { c, p }),
     target: function* (g, c, p, L2) { L2.t = [g.battle.a]; },
     after: (g, c) => { c.flags.guardUsed = true; },
     res: function* (g, c, p, L2) { const a = live(L2)[0]; if (!a || a.zone !== 'm' || !g.battle) return; addMod(g, a, { set: 0, which: 'atk', end: true, guardZero: true }); g.seq++; log(g, `${name(a)}'s ATK became 0 for damage calculation.`); } },

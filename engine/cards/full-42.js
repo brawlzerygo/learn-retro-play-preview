@@ -20,7 +20,7 @@ const origAtk = c => c.flags && c.flags.tokAtk != null ? c.flags.tokAtk : baseAt
 const printedAtk = c => Math.max(0, num(D(c).atk));
 const toPos = (g, m, pos, p) => { if (!onField(m) || m.zone !== 'm' || m.pos === pos) return; const from = m.pos; m.pos = pos; g.seq++; log(g, `${name(m)} was changed to ${pos === 'atk' ? 'Attack' : 'Defense'} Position.`); emit(g, { type: 'pos', c: m, p, from }); };
 function* tributeN(g, p, n, text, not) {
-  const cs = monsOf(g, p).filter(x => x !== not && !x.flags.noTribute);
+  const cs = E.lib.tribPool(g, p).filter(x => x !== not);   // tribPool: Soul Exchange targets, no "can't be Tributed", none under Mask of Restrict
   const xs = yield* pick(g, p, text, cs, n, n, 'cost');
   for (const x of xs) { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); }
   return xs;
@@ -121,7 +121,7 @@ const godLock = {
  PARTIAL: the engine has no attack cost that can prompt, so the Tribute is a mandatory trigger at the attack declaration
  (it uses a chain link); the monster can't attack while you control no other monster to Tribute. */
 const tributeToAttack = {
-  self: { cantAttack: (g, c) => !monsOf(g, c.ctrl).some(x => x !== c && !x.flags.noTribute) },
+  self: { cantAttack: (g, c) => !monsOf(g, c.ctrl).some(x => x !== c && !E.lib.noTribCost(x)) },
   eff: { type: 'trig', mand: true, label: 'Tribute 1 monster to attack', on: (g, ev, c) => ev.type === 'attack' && ev.a === c,
     cost: function* (g, c, p) { yield* tributeN(g, p, 1, `Tribute 1 monster to attack with ${name(c)}`, c); },
     res: noop },
@@ -184,7 +184,7 @@ E.addScripts({
         on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && !!c.summonType && !['normal', 'tribute'].includes(c.summonType),
         res: function* (g, c) { if (onField(c)) { move(g, c, 'gy', { reason: 'effect' }); log(g, `${name(c)} was sent to the GY.`); } } },
       { type: 'ign', tags: { destroy: 1 }, label: 'Tribute 2: destroy their monsters',
-        cond: (g, c, p) => monsOf(g, p).filter(x => x !== c && !x.flags.noTribute).length >= 2 && monsOf(g, opp(p)).length > 0,
+        cond: (g, c, p) => monsOf(g, p).filter(x => x !== c && !E.lib.noTribCost(x)).length >= 2 && monsOf(g, opp(p)).length > 0,
         cost: function* (g, c, p) { yield* tributeN(g, p, 2, 'Tribute 2 monsters', c); },
         after: (g, c) => { c.flags.obeliskUsed = g.turnNo; },
         res: function* (g, c, p) { destroy(g, monsOf(g, opp(p)), { by: p, src: c }); } }] },
@@ -380,13 +380,13 @@ E.addScripts({
       cost: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; const [e] = yield* pick(g, p, 'Send which face-up Equip Card to the GY?', stOf(g, p).filter(e => faceUp(e) && !!e.equipTo), 1, 1, 'cost'); if (e) { move(g, e, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(e).n} to the GY.`); } },
       res: function* (g, c, p, L2) { const T = L2.data.L; T.negBy = p; negate(g, T, true); } }] },
   'Phoenixian Seed': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Send it: Special Summon Phoenixian Cluster Amaryllis',
-    cond: (g, c, p) => g.p[p].hand.some(x => named(x, 'Phoenixian Cluster Amaryllis')),
+    cond: (g, c, p) => g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Phoenixian Cluster Amaryllis')),
     cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent Phoenixian Seed to the GY.`); },
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const xs = g.p[p].hand.filter(x => named(x, 'Phoenixian Cluster Amaryllis')); const [x] = yield* pick(g, p, 'Special Summon Phoenixian Cluster Amaryllis', xs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   // Cyber Laser Dragon's own lock (full-04.js) lets it be Special Summoned while this card is face-up and resolving.
   'Photon Generator Unit': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).filter(m => cyberDragon(m) && !m.flags.noTribute).length >= 2 && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].some(x => named(x, 'Cyber Laser Dragon')),
-    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 Cyber Dragons', monsOf(g, p).filter(m => cyberDragon(m) && !m.flags.noTribute), 2, 2, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); },
+    cond: (g, c, p) => monsOf(g, p).filter(m => cyberDragon(m) && !E.lib.noTribCost(m)).length >= 2 && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].some(x => named(x, 'Cyber Laser Dragon')),
+    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 Cyber Dragons', monsOf(g, p).filter(m => cyberDragon(m) && !E.lib.noTribCost(m)), 2, 2, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); },
     res: function* (g, c, p) {
       if (freeM(g, p) < 0) return;
       const xs = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => named(x, 'Cyber Laser Dragon')); if (!xs.length) return;
@@ -419,10 +419,10 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Plant from your GY?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Plant' && canSS(g, p, x)), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   'Pollinosis': { effs: [{ type: 'act', negSummon: true,
-    cond: (g, c, p, x) => monsOf(g, p).some(m => race(m) === 'Plant' && !m.flags.noTribute) &&
+    cond: (g, c, p, x) => monsOf(g, p).some(m => race(m) === 'Plant' && !E.lib.noTribCost(m)) &&
       ((!x.top && !!g.attempt && g.attempt.how !== 'flip') || (spellTrapAct(x.top) && !x.top.negated)),
     cost: function* (g, c, p, L2) { L2.data.mode = g.chain.length ? 'link' : 'summon'; L2.data.L = g.chain[g.chain.length - 1];
-      const [m] = yield* pick(g, p, 'Tribute a Plant monster', monsOf(g, p).filter(m => race(m) === 'Plant' && !m.flags.noTribute), 1, 1, 'cost');
+      const [m] = yield* pick(g, p, 'Tribute a Plant monster', monsOf(g, p).filter(m => race(m) === 'Plant' && !E.lib.noTribCost(m)), 1, 1, 'cost');
       if (m) { const nm = m.pos === 'set' ? 'a face-down monster' : D(m).n; move(g, m, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); } },
     res: function* (g, c, p, L2) { if (L2.data.mode === 'summon') { if (g.attempt) { g.attempt.negated = true; log(g, 'The summon was negated.'); } } else { L2.data.L.negBy = p; negate(g, L2.data.L, true); } } }] },
   'Portable Battery Pack': { effs: [

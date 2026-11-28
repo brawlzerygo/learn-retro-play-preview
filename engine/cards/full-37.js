@@ -21,7 +21,7 @@ const ritualSpell = (pred, exact) => ({ effs: [{ type: 'act', tags: { ss: 1 },
   cond: (g, c, p) => canRitual(g, p, { monster: pred, exact }),
   res: function* (g, c, p) { yield* ritualSummon(g, p, { monster: pred, exact }); } }] });
 // "by an effect of a card controlled by your opponent" (same as full-26.js): the move's own `by` when given, else the turn player.
-const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's by (engine move: the resolving link's controller), never the turn player
 // Countdown on a face-up Spell/Trap: counts the controller's (mine) or the opponent's (!mine) phases of one kind after activation.
 const countdown = (ph, mine, n, label, how = 'destroy') => ({ type: 'trig', loc: 'st', mand: true, label,
   on: (g, ev, c) => { if (ev.type !== 'phase' || ev.ph !== ph || c.flags.f37cd == null) return false;
@@ -231,7 +231,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'move' && ev.wasField && ev.to === 'hand' && isMon(ev.c),
       res: function* (g, c, p, L2) { const x = L2.ev.c; if (x.zone === 'hand') { move(g, x, 'ban', { reason: 'effect', by: p }); log(g, `${name(x)} was banished instead.`); } } }] },
   'Demise of the Land': { effs: [{ type: 'act',
-    cond: (g, c, p) => !!g.sw && g.sw.p !== p && !['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && g.p[p].deck.some(x => isSpell(x) && D(x).sub === 'Field'),
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && !['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && g.p[p].deck.some(x => isSpell(x) && D(x).sub === 'Field'),
     res: function* (g, c, p) {
       const xs = g.p[p].deck.filter(x => isSpell(x) && D(x).sub === 'Field'); if (!xs.length) return;
       const [x] = yield* pick(g, p, 'Activate which Field Spell from your Deck?', xs, 1, 1, 'good'); shuffleDeck(g, p); if (!x) return;
@@ -385,7 +385,7 @@ E.addScripts({
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(m => m.flags.f37dk === g.turnNo && m.flags.f37dkBy === c.u), { by: p }); } },
     { type: 'trig', loc: 'any', when: true, tags: { ss: 1 }, label: 'Special Summon Doomkaiser Dragon',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed,
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Doomkaiser Dragon')),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Doomkaiser Dragon')),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon Doomkaiser Dragon from your GY', g.p[p].gy.filter(x => named(x, 'Doomkaiser Dragon')), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   'Doomsday Horror': {

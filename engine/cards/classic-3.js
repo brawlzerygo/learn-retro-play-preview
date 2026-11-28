@@ -29,7 +29,7 @@ const nomiGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === sr
 const bounceAttacker = { type: 'trig', loc: 'any', mand: true, label: 'Return the attacker to the hand',
   on: (g, ev, c) => ev.type === 'dsEnd' && ev.t === c && ev.a && ev.a.ctrl !== (onField(c) ? c.ctrl : c.owner),
   res: function* (g, c, p, L2) { const a = L2.ev.a; if (a && onField(a) && a.zone === 'm') { const n = name(a); move(g, a, 'hand', { reason: 'effect', by: p }); log(g, `${n} returned to the hand.`); } } };
-const umiOn = g => [g.p[0].fz, g.p[1].fz].some(f => f && faceUp(f) && (named(f, 'Umi') || named(f, 'A Legendary Ocean')));
+const umiOn = g => [g.p[0].fz, g.p[1].fz].some(f => f && faceUp(f) && L.isUmi(f));
 const MAGNETS = ['Alpha The Magnet Warrior', 'Beta The Magnet Warrior', 'Gamma the Magnet Warrior'];
 
 E.addScripts({
@@ -83,7 +83,7 @@ E.addScripts({
 
   'Flying Kamakiri #1': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Summon a WIND from the Deck',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && attr(x) === 'WIND' && L.baseAtk(x) <= 1500),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'WIND' && L.baseAtk(x) <= 1500),
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'WIND' && L.baseAtk(x) <= 1500 && D(x).k !== 'ritual');
       const [x] = yield* pick(g, p, 'Special Summon a WIND monster with 1500 or less ATK from your Deck', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
 
@@ -245,7 +245,7 @@ E.addScripts({
 
   'Pinch Hopper': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Summon an Insect from the hand',
     on: (g, ev, c) => fromFieldToGY(ev, c) && ev.prevCtrl === c.owner,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && race(x) === 'Insect' && D(x).k !== 'ritual'),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Insect' && D(x).k !== 'ritual'),
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which Insect from your hand?', g.p[p].hand.filter(x => isMon(x) && race(x) === 'Insect' && D(x).k !== 'ritual'), 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
 
   'Puppet Master': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Pay 2000: revive 2 Fiends',
@@ -308,7 +308,7 @@ E.addScripts({
       } },
     cont: nomiGY,
     effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Tribute: summon Alpha, Beta and Gamma',
-      cond: (g, c, p) => nFreeM(g, p) >= 2 && MAGNETS.every(n => g.p[p].gy.some(x => named(x, n))),
+      cond: (g, c, p) => nFreeM(g, p) >= 2 && MAGNETS.every(n => g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, n))),
       cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Valkyrion the Magna Warrior.`); },
       target: function* (g, c, p, L2) { const ts = []; for (const n of MAGNETS) { const [x] = yield* pick(g, p, `Target ${n} in your GY`, g.p[p].gy.filter(x => named(x, n)), 1, 1, 'good'); if (x) ts.push(x); } L2.t = ts; },
       res: function* (g, c, p, L2) { const xs = L2.t.filter(x => x.zone === 'gy'); if (xs.length > nFreeM(g, p)) return; for (const x of xs) ss(g, p, x, 'atk'); } }] },

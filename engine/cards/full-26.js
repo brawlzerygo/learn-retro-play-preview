@@ -30,7 +30,7 @@ const noTargetLeft = (g, q) => monsOf(g, q).length > 0 && monsOf(g, q).every(m =
 const attackLock = (g, src, a) => a.type === 'attack' && a.c && a.c.ctrl !== src.ctrl && noTargetLeft(g, src.ctrl) && !has(g, a.c, 'directAttack');
 // "by an effect of a card controlled by your opponent" (same as goat-6.js): the move's own `by` when given, else the turn player.
 // PARTIAL: an opponent's Quick Effect on your own turn without `by` is missed.
-const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's by (engine move: the resolving link's controller), never the turn player
 const sentByOpp = (g, ev, c, froms) => ev.type === 'move' && ev.c === c && ev.to === 'gy' && froms.includes(ev.from) && ['effect', 'discard'].includes(ev.reason) && byOpp(g, ev, c);
 // Flip effect shape
 const flip = (label, more) => ({ type: 'trig', mand: true, faceDownOk: true, label, on: (g, ev, c) => ev.type === 'flip' && ev.c === c, ...more });
@@ -140,7 +140,7 @@ E.addScripts({
       const [x] = yield* pick(g, p, 'Special Summon which Insect from your hand?', xs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   // Counted at resolution; the opponent picks which of their monsters are destroyed.
   'Pineapple Blast': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => !!g.sw && g.sw.p === p && ['normal', 'tribute'].includes(g.sw.how) && monsOf(g, opp(p)).length > monsOf(g, p).length,
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, p).length > 0 && ['normal', 'tribute'].includes(g.sw.how) && monsOf(g, opp(p)).length > monsOf(g, p).length,
     res: function* (g, c, p) { const o = opp(p), k = monsOf(g, o).length - monsOf(g, p).length; if (k <= 0) return;
       const xs = yield* pick(g, o, `Choose ${k} of your monsters to be destroyed`, monsOf(g, o), k, k, 'cost'); destroy(g, xs, { by: p, src: c }); } }] },
   'Piranha Army': { cont: { dmg: (g, src, p, n, o) => o.battle && o.direct && o.src === src && p !== src.ctrl && !negd(g, src) ? 2 * n : undefined } },
@@ -303,7 +303,7 @@ E.addScripts({
   // The card's behavior (as in goat-2.js): the declared Level sends everything to the GY, any other Level Special Summons it.
   // The batch text reads the other way round ("if its Level isn't the declared number, send ... to the GY"), which is
   // not how Reasoning has ever played, so the printed behavior is kept.
-  'Reasoning': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(canNS),
+  'Reasoning': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(canNS),
     res: function* (g, c, p) { const o = opp(p); const i = yield* choose(g, o, 'Reasoning: declare a Level', Array.from({ length: 12 }, (_, k) => 'Level ' + (k + 1))); const lvD = i + 1; log(g, `${PN(g, o)} declared Level ${lvD}.`);
       const [m, rest] = excavate(g, p); log(g, `${PN(g, p)} revealed ${rest.length + (m ? 1 : 0)} card${rest.length + (m ? 1 : 0) === 1 ? '' : 's'}${m ? `, down to ${D(m).n}` : ''}.`);
       for (const x of rest) if (x.zone === 'deck') move(g, x, 'gy', { reason: 'effect' });
@@ -331,7 +331,7 @@ E.addScripts({
   'Regenerating Mummy': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Return to the hand',
     on: (g, ev, c) => sentByOpp(g, ev, c, ['hand']),
     res: function* (g, c, p) { if (c.zone === 'gy') { move(g, c, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} returned Regenerating Mummy to the hand.`); } } }] },
-  'Reinforcements': { effs: [{ type: 'act', cond: g => fieldMons(g).some(faceUp),
+  'Reinforcements': { effs: [{ type: 'act', ds: true, cond: g => fieldMons(g).some(faceUp),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which face-up monster gains 500 ATK?', fieldMons(g).filter(faceUp), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { addMod(g, t, { atk: 500, end: true }); log(g, `${name(t)} gained 500 ATK this turn.`); } } }] },
   'Reload': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.some(x => x !== c),

@@ -171,7 +171,7 @@ E.addScripts({
   "Horus' Servant": { cont: { grant: (g, src, c, flag) => flag === 'cantBeTargeted' && c.zone === 'm' && faceUp(c) && /^Horus the Black Flame Dragon/.test(D(c).n) } },
   'Hoshiningen': { cont: { atk: (g, src, c) => !faceUp(c) ? 0 : attr(c) === 'LIGHT' ? 500 : attr(c) === 'DARK' ? -400 : 0 } },
   'House of Adhesive Tape': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => !!g.sw && g.sw.p !== p && ['normal', 'tribute', 'flip'].includes(g.sw.how) && g.sw.cs.some(x => onField(x) && faceUp(x) && stat(g, x, 'def') <= 500),
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && ['normal', 'tribute', 'flip'].includes(g.sw.how) && g.sw.cs.some(x => onField(x) && faceUp(x) && stat(g, x, 'def') <= 500),
     target: function* (g, c, p, L2) { L2.data.cs = g.sw.cs.slice(); },
     res: function* (g, c, p, L2) { destroy(g, L2.data.cs.filter(x => onField(x) && faceUp(x) && stat(g, x, 'def') <= 500), { by: p, src: c }); } }] },
   'Huge Revolution': { effs: [{ type: 'act', tags: { destroy: 1 },
@@ -194,7 +194,7 @@ E.addScripts({
   'Hungry Burger': { effs: [] },
   'Hyena': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon Hyenas from your Deck',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => named(x, 'Hyena')),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Hyena')),
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => named(x, 'Hyena')); const n = Math.min(cs.length, nFreeM(g, p)); if (!n) return;
       const xs = yield* pick(g, p, 'Special Summon any number of Hyena from your Deck', cs, 1, n, 'good'); for (const x of xs) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   'Hysteric Fairy': { effs: [{ type: 'ign', label: 'Tribute 2 monsters: gain 1000 LP', cond: (g, c, p) => monsOf(g, p).length >= 2,
@@ -213,14 +213,14 @@ E.addScripts({
     cont: { negates: (g, src, c) => isSpell(c) && onField(c) },
     effs: [noop, scanMenu('st'), scanWatch,
       { type: 'trig', loc: 'st', mand: true, label: 'Pay 700 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby',
-        res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 700) pay(g, p, 700); else destroy(g, [c], { by: p }); } }] },
+        res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 700) pay(g, p, 700); else destroy(g, [c], { by: p, rule: true }); } }] },   // maintenance: a rule destroy, not an effect (Imperial Custom ruling 3)
   'Inaba White Rabbit': { cont: noSSFromGY, self: { directAttack: true, attackOk: () => false }, effs: [spiritReturn] },
   'Incandescent Ordeal': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && canRitual(g, p, { monster: x => named(x, 'Legendary Flame Lord') }),
     res: function* (g, c, p) { yield* ritualSummon(g, p, { monster: x => named(x, 'Legendary Flame Lord') }); } }] },
   // PARTIAL: the Standby Phase cost is a chain link; the die roll is done by chainScan (above).
   'Infernalqueen Archfiend': { effs: [scanMenu('m'), scanWatch,
     { type: 'trig', mand: true, label: 'Pay 500 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { by: p }); } },
+      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } },
     { type: 'trig', mand: true, label: 'An Archfiend gains 1000 ATK', on: (g, ev) => ev.type === 'phase' && ev.ph === 'standby',
       cond: g => fieldMons(g).some(x => faceUp(x) && /Archfiend/.test(D(x).n)),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Archfiend monster gains 1000 ATK?', fieldMons(g).filter(x => faceUp(x) && /Archfiend/.test(D(x).n)), 1, 1, 'good'); },
@@ -314,7 +314,7 @@ E.addScripts({
   'KA-2 Des Scissors': { effs: [{ type: 'trig', mand: true, label: 'Damage equal to its Level x 500', on: (g, ev, c) => battleKill(ev, c),
     res: function* (g, c, p, L2) { const n = 500 * num(D(L2.ev.c).lv || 0); if (n > 0) damage(g, opp(p), n, { src: c, srcP: p }); } }] },
   'Kaibaman': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Tribute: Special Summon Blue-Eyes White Dragon',
-    cond: (g, c, p) => g.p[p].hand.some(x => named(x, 'Blue-Eyes White Dragon')),
+    cond: (g, c, p) => g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Blue-Eyes White Dragon')),
     cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Kaibaman.`); },
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => named(x, 'Blue-Eyes White Dragon')); if (!cs.length || freeM(g, p) < 0) return;
       const [x] = yield* pick(g, p, 'Special Summon which Blue-Eyes White Dragon?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
@@ -343,7 +343,7 @@ E.addScripts({
   // until damage calculation is done.
   'Kazejin': { effs: [
     { type: 'quick', ds: true, label: 'Make the attacker’s ATK 0',
-      cond: (g, c, p) => g.inDS && g.battle && g.battle.t === c && g.tp !== c.ctrl && !c.flags.guardUsed && g.battle.a && onField(g.battle.a) && !g.battle.a.mods.some(m => m.guardZero),
+      cond: (g, c, p) => (g.inDS && g.battle && g.battle.t === c && g.tp !== c.ctrl && !c.flags.guardUsed && g.battle.a && onField(g.battle.a) && !g.battle.a.mods.some(m => m.guardZero)) && !!g.battle && E.lib.canTarget(g, g.battle.a, { c, p }),
       target: function* (g, c, p, L2) { L2.t = [g.battle.a]; },
       after: (g, c) => { c.flags.guardUsed = true; },
       res: function* (g, c, p, L2) { const a = live(L2)[0]; if (!a || a.zone !== 'm' || !g.battle) return; addMod(g, a, { set: 0, which: 'atk', end: true, guardZero: true }); g.seq++; log(g, `${name(a)}'s ATK became 0 for damage calculation.`); } },
@@ -375,7 +375,7 @@ E.addScripts({
     if (flag !== 'noBattleDestroy' || c.ctrl !== src.ctrl || !g.battle || !inBattle(g, c)) return false;
     const o = g.battle.a === c ? g.battle.t : g.battle.a; return !!o && onField(o) && ATK(g, o) === ATK(g, c); } } },
   "Knight's Title": { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && named(x, 'Dark Magician')) && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].some(x => named(x, 'Dark Magician Knight')),
+    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && named(x, 'Dark Magician')) && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Dark Magician Knight')),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 face-up Dark Magician', monsOf(g, p).filter(x => faceUp(x) && named(x, 'Dark Magician')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed Dark Magician.`); } },
     res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => named(x, 'Dark Magician Knight')); if (!cs.length || freeM(g, p) < 0) return;
       const [x] = yield* pick(g, p, 'Special Summon which Dark Magician Knight?', cs, 1, 1, 'good'); if (!x) return; const fromDeck = x.zone === 'deck'; ss(g, p, x, 'atk'); if (fromDeck) shuffleDeck(g, p); } }] },

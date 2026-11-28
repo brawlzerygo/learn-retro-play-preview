@@ -174,7 +174,7 @@ E.addScripts({
   // only as the first play of the next Main Phase (nothing else may happen in between, phase changes aside).
   // The hook remembers the last Gladiator Beast Special Summon; Lash stays usable until any other event but a phase change.
   'Gladiator Lash': { effs: [{ type: 'trig', loc: 'any', on: (g, ev) => { if (ev.type === 'summon' && SSTYPES.includes(ev.how) && ev.cs.some(gbMon)) g._lashW = { p: ev.p, turn: g.turnNo, n: g.events.length, cs: ev.cs.slice() }; return false; }, res: function* () {} },
-    { type: 'act', cond: (g, c, p) => (!!g.sw && g.sw.p === p && g.sw.cs.some(x => onField(x) && gbMon(x)))
+    { type: 'act', cond: (g, c, p) => (!!g.sw && E.lib.swOf(g, p).length > 0 && g.sw.cs.some(x => onField(x) && gbMon(x)))
       || (!!g._lashW && g._lashW.p === p && g._lashW.turn === g.turnNo && g._lashW.cs.some(x => onField(x) && gbMon(x)) && g.events.slice(g._lashW.n).every(e => e.type === 'phase')),
     res: function* (g, c, p) { const o = opp(p); if (!g.p[o].hand.length) return; const [x] = yield* pick(g, o, 'Discard 1 card', g.p[o].hand, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, o)} discarded ${nm(x)}.`); } } }] },
   'Gladiator Proving Ground': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.some(x => gbMon(x) && lv(x) <= 4),
@@ -218,7 +218,7 @@ E.addScripts({
   // The original Level counts (rulings). Not in the Damage Step.
   'A Deal with Dark Ruler': { effs: [
     { type: 'trig', loc: 'any', on: (g, ev) => { if (ev.type === 'move' && ev.wasField && ev.to === 'gy' && ev.snap && ev.snap.mon && num(D(ev.c).lv) >= 8) (g._ddr = g._ddr || [0, 0])[ev.prevCtrl] = g.turnNo; return false; }, res: function* () {} },
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g._ddr && g._ddr[p] === g.turnNo && freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].some(x => nm(x) === 'Berserk Dragon'),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g._ddr && g._ddr[p] === g.turnNo && freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => nm(x) === 'Berserk Dragon'),
       res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => nm(x) === 'Berserk Dragon'); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon Berserk Dragon', cs, 1, 1, 'good'); if (!x) return; const fromDeck = x.zone === 'deck'; ss(g, p, x, 'atk'); if (fromDeck) shuffleDeck(g, p); } }] },
   'A Feather of the Phoenix': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.some(x => x !== c),
     cost: function* (g, c, p) { yield* discard1(g, p, c); },
@@ -245,7 +245,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Look at which Set card?', fieldOf(g, opp(p)).filter(x => x.pos === 'set'), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && t.pos === 'set') log(g, `${PN(g, p)} looked at the Set card: ${nm(t)}.`); } }] },
   'A Rival Appears!': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => freeM(g, p) >= 0 && oppFaceUp(g, p).some(t => g.p[p].hand.some(x => canBeSSFromHand(x) && lv(x) === lv(t))),
+    cond: (g, c, p) => freeM(g, p) >= 0 && oppFaceUp(g, p).some(t => g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => canBeSSFromHand(x) && lv(x) === lv(t))),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Select which of their monsters?', oppFaceUp(g, p).filter(t => g.p[p].hand.some(x => canBeSSFromHand(x) && lv(x) === lv(t))), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || freeM(g, p) < 0) return; const cs = g.p[p].hand.filter(x => canBeSSFromHand(x) && lv(x) === lv(t)); if (!cs.length) return; const [x] = yield* pick(g, p, `Special Summon a Level ${lv(t)} monster from your hand`, cs, 1, 1, 'good'); if (x) ss(g, p, x, yield* posPick(g, p, x)); } }] },
   // The 2010 card text: "Return ..., and if you do, destroy ...", so the return is part of the effect, not a cost.
@@ -381,12 +381,12 @@ E.addScripts({
   /* ===== Ancient and Anti cards ===== */
   // PARTIAL: the attack redirect isn't done (ENGINE: attack() and damageStep() keep the attack target local).
   'Ancient Lamp': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Special Summon La Jinn',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => nm(x) === 'La Jinn the Mystical Genie of the Lamp'),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => nm(x) === 'La Jinn the Mystical Genie of the Lamp'),
     res: function* (g, c, p) { if (!onField(c) || !faceUp(c) || freeM(g, p) < 0) return; const cs = g.p[p].hand.filter(x => nm(x) === 'La Jinn the Mystical Genie of the Lamp'); const [x] = yield* pick(g, p, 'Special Summon La Jinn', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   'Ancient Leaf': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp >= 9000 && g.p[p].deck.length >= 2,
     cost: function* (g, c, p) { pay(g, p, 2000); },
     res: function* (g, c, p) { draw(g, p, 2); } }] },
-  'Ancient Rules': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => D(x).k === 'normal' && lv(x) >= 5),
+  'Ancient Rules': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => D(x).k === 'normal' && lv(x) >= 5),
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => D(x).k === 'normal' && lv(x) >= 5); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which Normal Monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x, yield* posPick(g, p, x)); } }] },
   'Ancient Telescope': { effs: [{ type: 'act', cond: (g, c, p) => g.p[opp(p)].deck.length > 0,
     res: function* (g, c, p) { const d = g.p[opp(p)].deck; const top = d.slice(-5).reverse(); log(g, `${PN(g, p)} saw the top of ${PN(g, opp(p))}'s Deck: ${top.map(nm).join(', ')}.`); } }] },

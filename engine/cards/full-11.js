@@ -44,7 +44,7 @@ function synMats(g, p, sx, o) {
   for (let mask = 1; mask < (1 << n) && out.length < 12; mask++) {
     const mats = mons.filter((_, i) => mask & (1 << i)); if (mats.length < 2) continue;
     if (mats.reduce((s, c) => s + lv(c), 0) !== Lv) continue;
-    if (mats.some(t => D(t).tu && o.tuner(t) && mats.filter(x => x !== t).every(x => o.non(x) && !D(x).tu))) out.push(mats);
+    if (E.lib.synOk(g, sx, mats, { line: false }) && mats.some(t => D(t).tu && o.tuner(t) && mats.filter(x => x !== t).every(x => o.non(x) && !D(x).tu))) out.push(mats);
   }
   return out;
 }
@@ -55,7 +55,7 @@ const synProc = o => ({ extra: true, how: 'synchro', label: 'Synchro Summon',
     for (const m of mats) move(g, m, 'gy', { reason: 'synchro', by: p, group: grp });
     log(g, `${PN(g, p)} sent ${mats.map(m => D(m).n).join(' + ')} to the GY for a Synchro Summon.`); } });
 // A Special Summon in the Damage Step opens no "when summoned" window.
-function ssx(g, ...a) { const r = ss(g, ...a); if (g.inDS) g.sw = null; return r; }
+function ssx(g, ...a) { const r = ss(g, ...a); if (g.inDS) { g.sw = null; if (g.ssBatch) g.ssBatch.noSw = true; } return r; }
 // A battle worked out by the card (as classic-5.js): the engine's attack() keeps its target local. ENGINE: attack redirect.
 function miniBattle(g, a, t) {
   if (!a || !onField(a) || a.zone !== 'm') return;
@@ -98,7 +98,7 @@ function unionEffs(okTarget, text) {
 const unionCont = { replaceDestroy: (g, src, m, o) => {
   if (o.rule || !o.battle || src.zone !== 'st' || src.equipTo !== m.u || !src.flags.union) return false;
   move(g, src, 'gy', { reason: 'battle', destroyed: true, by: o.by }); log(g, `${D(src).n} was destroyed instead of ${name(m)}.`); return true; } };
-const isUmi = c => faceUp(c) && ['Umi', 'A Legendary Ocean'].includes(D(c).n);
+const isUmi = c => faceUp(c) && L.isUmi(c);
 const sanctuary = g => allField(g).some(x => faceUp(x) && named(x, 'The Sanctuary in the Sky'));
 const isPsy = c => isMon(c) && race(c) === 'Psychic';
 let REFLECT = 0;
@@ -163,7 +163,7 @@ E.addScripts({
         if (ev.type === 'move' && ev.destroyed && ev.wasField && ev.from === 'm' && ev.snap && ev.snap.faceUp && ev.snap.race === 'Machine' && c.flags.junkGrp !== ev.group) { c.flags.junkGrp = ev.group; addCtr(g, c, 'junk', 2); log(g, `Machine Assembly Line got 2 Junk Counters (${ctr(c, 'junk')}).`); }
         return false; }, res: function* () {} },
       { type: 'ign', loc: 'st', tags: { ss: 1 }, label: 'Send it: revive a Machine',
-        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && race(x) === 'Machine' && lv(x) <= ctr(c, 'junk')),
+        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Machine' && lv(x) <= ctr(c, 'junk')),
         cost: function* (g, c, p, L2) { L2.data.n = ctr(c, 'junk'); move(g, c, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent Machine Assembly Line to the GY.`); },
         target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Machine?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Machine' && lv(x) <= L2.data.n), 1, 1, 'good'); },
         res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
@@ -216,7 +216,7 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Place a counter on which face-up Spell Card?', stOf(g, p).filter(x => x !== c && faceUp(x) && x.zone === 'st' && (isSpell(x) || isMon(x))), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { addCtr(g, t, 'reflector', 1); log(g, `${name(t)} got a counter.`); } } }] },
   'Magical Arm Shield': { effs: [
-    { type: 'act', cond: (g, c, p) => !!(g.aw && g.aw.a.ctrl !== p) && monsOf(g, p).length > 0 && freeM(g, p) >= 0 && oppFaceUp(g, p).some(m => m !== g.aw.a),
+    { type: 'act', cond: (g, c, p) => (!!(g.aw && g.aw.a.ctrl !== p)) && !!g.aw && E.lib.canTarget(g, g.aw.a, { c, p }) && monsOf(g, p).length > 0 && freeM(g, p) >= 0 && oppFaceUp(g, p).some(m => m !== g.aw.a),
       target: function* (g, c, p, L2) { L2.data.a = g.aw.a; yield* tgt(g, p, L2, 'Take control of which face-up monster?', oppFaceUp(g, p).filter(m => m !== g.aw.a), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0], a = L2.data.a; if (!t || !faceUp(t) || t.ctrl === p) return; const from = t.ctrl;
         if (!takeControl(g, p, t, false)) return; (g.mas || (g.mas = [])).push({ by: c.u, u: t.u, from });
@@ -240,7 +240,7 @@ E.addScripts({
         if (ev.type === 'move' && ev.destroyed && ev.wasField && ev.c !== c && seen[ev.c.u] > 0) { addCtr(g, c, 'spell', seen[ev.c.u]); log(g, `Magical Citadel of Endymion got ${seen[ev.c.u]} Spell Counter(s) (${ctr(c, 'spell')}).`); }
         const now = {}; for (const x of allField(g)) if (ctr(x, 'spell')) now[x.u] = ctr(x, 'spell'); c.flags.endyCtr = now; return false; }, res: function* () {} }] },
   'Magical Dimension': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Spellcaster') && g.p[p].hand.some(x => isMon(x) && race(x) === 'Spellcaster'),
+    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Spellcaster') && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Spellcaster'),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target which monster you control to Tribute?', monsOf(g, p), 1, 1, 'cost'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || t.ctrl !== p) return; move(g, t, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(t).n}.`);
       const sc = g.p[p].hand.filter(x => isMon(x) && race(x) === 'Spellcaster'); if (!sc.length || freeM(g, p) < 0) return;
@@ -248,7 +248,7 @@ E.addScripts({
       if (fieldMons(g).length && (yield* yn(g, p, 'Destroy 1 monster on the field?'))) { const [d] = yield* pick(g, p, 'Destroy which monster?', fieldMons(g), 1, 1, 'bad'); if (d) { destroy(g, [d], { by: p, src: c }); g.sw = null; } } } }] },
   'Magical Exemplar': { effs: [spellCtr(2),
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Remove counters: summon a Spellcaster',
-      cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].gy].some(x => isMon(x) && race(x) === 'Spellcaster' && lv(x) >= 1 && lv(x) <= ctr(c, 'spell')),
+      cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].gy].filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Spellcaster' && lv(x) >= 1 && lv(x) <= ctr(c, 'spell')),
       cost: function* (g, c, p, L2) { const lvs = [...new Set([...g.p[p].hand, ...g.p[p].gy].filter(x => isMon(x) && race(x) === 'Spellcaster' && lv(x) >= 1 && lv(x) <= ctr(c, 'spell')).map(lv))].sort((a, b) => a - b);
         const i = lvs.length > 1 ? yield* choose(g, p, 'Remove how many Spell Counters?', lvs.map(String)) : 0; L2.data.n = lvs[i]; addCtr(g, c, 'spell', -L2.data.n); log(g, `Magical Exemplar removed ${L2.data.n} Spell Counter(s).`); },
       res: function* (g, c, p, L2) { const cs = [...g.p[p].hand, ...g.p[p].gy].filter(x => isMon(x) && race(x) === 'Spellcaster' && lv(x) === L2.data.n); if (!cs.length || freeM(g, p) < 0) return;
@@ -276,7 +276,7 @@ E.addScripts({
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.flags.hatsBy === c.u), { by: p }); } }] },
   'Magical Labyrinth': { effs: [equipAct(m => name(m) === 'Labyrinth Wall', 'Equip to which Labyrinth Wall?'),
     { type: 'ign', loc: 'st', tags: { ss: 1 }, label: 'Tribute the Wall: summon Wall Shadow',
-      cond: (g, c, p) => { const m = eqOf(g, c); return !!m && m.ctrl === p && g.p[p].deck.some(x => named(x, 'Wall Shadow')); },
+      cond: (g, c, p) => { const m = eqOf(g, c); return !!m && m.ctrl === p && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Wall Shadow')); },
       cost: function* (g, c, p) { const m = eqOf(g, c); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
       res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => named(x, 'Wall Shadow')); const [x] = yield* pick(g, p, 'Special Summon Wall Shadow from your Deck', cs, 1, 1, 'good'); if (x) ss(g, p, x); shuffleDeck(g, p); } }] },
   'Magical Mallet': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.some(x => x !== c),
@@ -313,7 +313,7 @@ E.addScripts({
     { type: 'trig', loc: 'st', on: (g, ev, c) => {
       if (ev.type === 'move' && ev.from === 'hand' && ev.to === 'gy' && ['discard', 'cost'].includes(ev.reason) && ev.c.owner === opp(c.ctrl) && g.p[ev.c.owner].lp > 0) { log(g, 'Magical Thorn inflicts 500 damage.'); damage(g, ev.c.owner, 500, { src: c, srcP: c.ctrl }); }
       return false; }, res: function* () {} }] },
-  'Malevolent Catastrophe': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => !!(g.aw && g.aw.a.ctrl !== p),
+  'Malevolent Catastrophe': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => (!!(g.aw && g.aw.a.ctrl !== p)) && !!g.aw && E.lib.canTarget(g, g.aw.a, { c, p }),
     res: function* (g, c, p) { destroy(g, stOnField(g).filter(x => x !== c), { by: p, src: c }); } }] },
   'Malevolent Nuzzler': { cont: eqBonus(700, 0), effs: [equipAct(),
     { type: 'trig', loc: 'gy', when: true, label: 'Pay 500: put it on top of your Deck',
@@ -352,7 +352,7 @@ E.addScripts({
     effs: [equipAct(() => true, 'Equip Mask of the Accursed to which monster?', 'bad'),
       { type: 'trig', loc: 'st', mand: true, opt: true, label: '500 damage', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && !!c.equipTo,
         res: function* (g, c, p) { const t = eqOf(g, c); if (t && onField(c)) damage(g, t.ctrl, 500, { src: c, srcP: p }); } }] },
-  'Mask of Weakness': { effs: [{ type: 'act', label: 'Attacker loses 700 ATK',
+  'Mask of Weakness': { effs: [{ type: 'act', ds: true, label: 'Attacker loses 700 ATK',
     cond: (g, c, p) => !!(g.aw && g.aw.a && g.aw.a.ctrl !== p),
     target: function* (g, c, p, L2) { L2.t = [g.aw.a]; },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { addMod(g, t, { atk: -700, end: true }); log(g, `${name(t)} lost 700 ATK.`); } } }] },
@@ -376,7 +376,7 @@ E.addScripts({
     res: function* (g, c, p) { damage(g, opp(p), 2000, { src: c, srcP: p }); } }] },
   'Masked Dragon': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Special Summon a Dragon',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && race(x) === 'Dragon' && baseAtk(x) <= 1500),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Dragon' && baseAtk(x) <= 1500),
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Dragon' && baseAtk(x) <= 1500); const [x] = yield* pick(g, p, 'Special Summon a Dragon with 1500 or less ATK from your Deck', cs, 1, 1, 'good'); if (x) ssx(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   'Masked Sorcerer': { effs: [{ type: 'trig', mand: true, label: 'Draw 1 card', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl,
     res: function* (g, c, p) { draw(g, p, 1); } }] },
@@ -412,7 +412,7 @@ E.addScripts({
     res: function* (g, c, p) { const o = opp(p); log(g, `${PN(g, o)}'s hand: ${g.p[o].hand.map(name).join(', ') || 'no cards'}.`);
       const sets = fieldOf(g, o).filter(x => x.pos === 'set'); log(g, `${PN(g, o)}'s Set cards: ${sets.map(x => D(x).n).join(', ') || 'none'}.`); } }] },
   'Mind Master': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Pay 800, Tribute a Psychic: summon a Psychic',
-    cond: (g, c, p) => g.p[p].lp > 800 && monsOf(g, p).some(x => isPsy(x) && !named(x, 'Mind Master')) && g.p[p].deck.some(x => isPsy(x) && lv(x) <= 4),
+    cond: (g, c, p) => g.p[p].lp > 800 && monsOf(g, p).some(x => isPsy(x) && !named(x, 'Mind Master')) && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isPsy(x) && lv(x) <= 4),
     cost: function* (g, c, p) { pay(g, p, 800); const [x] = yield* pick(g, p, 'Tribute 1 Psychic monster', monsOf(g, p).filter(x => isPsy(x) && !named(x, 'Mind Master')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => isPsy(x) && lv(x) <= 4); const [x] = yield* pick(g, p, 'Special Summon a Level 4 or lower Psychic from your Deck', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   // ENGINE: no revealed-hand state; the hand is logged when this card is summoned.

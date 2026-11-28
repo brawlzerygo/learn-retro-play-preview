@@ -248,7 +248,7 @@ E.addScripts({
       const [x] = yield* pick(g, p, 'Set which Trap from your hand (it can be activated this turn)?', ts, 1, 1, 'good'); if (!x) return;
       move(g, x, 'st', { ctrl: p, pos: 'set', reason: 'set' }); x.turnIn = g.turnNo - 1; log(g, `${PN(g, p)} Set a Trap that can be activated this turn.`); } }] },
   'Bubble Shuffle': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => bubbleman(x) && x.pos === 'atk') && monsOf(g, opp(p)).some(x => x.pos === 'atk') && g.p[p].hand.some(x => isMon(x) && isEHERO(x)),
+    cond: (g, c, p) => monsOf(g, p).some(x => bubbleman(x) && x.pos === 'atk') && monsOf(g, opp(p)).some(x => x.pos === 'atk') && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && isEHERO(x)),
     target: function* (g, c, p, L2) {
       const [b] = yield* pick(g, p, 'Target which Elemental HERO Bubbleman?', monsOf(g, p).filter(x => bubbleman(x) && x.pos === 'atk'), 1, 1, 'cost');
       const [o] = yield* pick(g, p, 'Target which of their Attack Position monsters?', monsOf(g, opp(p)).filter(x => x.pos === 'atk'), 1, 1, 'bad');
@@ -336,7 +336,7 @@ E.addScripts({
       res: function* (g, c, p) { if (monsOf(g, p).length) return; const cs = g.p[p].hand.filter(x => race(x) === 'Zombie' && ssable(x)); if (!cs.length) return;
         const [x] = yield* pick(g, p, 'Special Summon which Zombie from your hand?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   'Call of the Reaper': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => !!g.sw && g.sw.cs.some(x => x.owner === p && cameFrom(g, x) === 'gy') && freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Supay', 'Fire Ant Ascator')),
+    cond: (g, c, p) => !!g.sw && g.sw.cs.some(x => x.owner === p && cameFrom(g, x) === 'gy') && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Supay', 'Fire Ant Ascator')),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which monster from your GY?', g.p[p].gy.filter(x => named(x, 'Supay', 'Fire Ant Ascator')), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   // PARTIAL: the redirect is worked out in the card (see battleInstead); its DEF boost is offered with the redirect.

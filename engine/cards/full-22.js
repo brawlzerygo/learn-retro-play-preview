@@ -116,7 +116,7 @@ E.addScripts({
   // PARTIAL: any Ritual Monster in the GY can be summoned (the "properly Ritual Summoned before" ruling isn't tracked).
   // The banish when this card is destroyed uses a chain link (the ruling says it starts none).
   'Fulfillment of the Contract': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 800 && freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && D(x).k === 'ritual'),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 800 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && D(x).k === 'ritual'),
       cost: function* (g, c, p) { pay(g, p, 800); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Ritual Monster from your GY?', g.p[p].gy.filter(x => isMon(x) && D(x).k === 'ritual'), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'atk') && equip(g, c, t)) c.flags.foc = t.u; } },

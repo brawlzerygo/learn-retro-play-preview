@@ -142,7 +142,7 @@ E.addScripts({
   // "When this card is Normal Summoned, select and Special Summon 1 Level 3 Tuner monster from your GY. Its effects are negated."
   'Dark Bug': { effs: [{ type: 'trig', mand: true, tags: { ss: 1 }, label: 'Summon a Level 3 Tuner from the GY',
     on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && D(x).tu && lv(x) === 3),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && D(x).tu && lv(x) === 3),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Level 3 Tuner?', g.p[p].gy.filter(x => isMon(x) && D(x).tu && lv(x) === 3), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t, 'atk', { negate: true })) log(g, `${name(t)}'s effects are negated.`); } }] },
   'Dark Cat with White Tail': { effs: [{ type: 'trig', mand: true, faceDownOk: true, label: 'Return 3 monsters to the hand',
@@ -265,7 +265,7 @@ E.addScripts({
       { type: 'trig', loc: 'gy', mand: true, label: 'Equip to and take control of a monster',
         on: (g, ev, c) => {
           if (ev.type === 'move' && ev.c === c && ev.from === 'm' && ev.to === 'gy' && ev.destroyed && ev.prevCtrl === c.owner) {
-            const byOpp = ev.battle ? ev.killer && ev.killer.ctrl !== c.owner : ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+            const byOpp = ev.battle ? ev.killer && ev.killer.ctrl !== c.owner : ev.by != null && ev.by !== c.owner;
             if (byOpp) c.flags.necro = g.turnNo;
           }
           return ev.type === 'phase' && ev.ph === 'end' && c.flags.necro === g.turnNo;
@@ -414,7 +414,7 @@ E.addScripts({
     res: function* (g, c, p) { destroy(g, stOf(g, opp(p)), { by: p, src: c }); } }] },
   // ENGINE: Flip Summons can't be forbidden, so they aren't blocked after it.
   'Dark Magic Curtain': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => !g.summoned[p] && freeM(g, p) >= 0 && g.p[p].deck.some(x => named(x, 'Dark Magician')),
+    cond: (g, c, p) => !g.summoned[p] && freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Dark Magician')),
     cost: function* (g, c, p) { pay(g, p, Math.floor(g.p[p].lp / 2));
       addRule(g, (g2, a) => (a.type === 'ns' || a.type === 'ss') && a.p === p && !g2.f05curtain, { end: g.turnNo }); },
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => named(x, 'Dark Magician')); if (!cs.length) return;
@@ -473,7 +473,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { L2.data.T = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { const T = L2.data.T; T.negBy = p; negate(g, T, true); } }] },
   'Dark Mirror Force': { effs: [{ type: 'act',
-    cond: (g, c, p) => !!(g.aw && g.aw.a.ctrl !== p) && monsOf(g, opp(p)).some(x => x.pos !== 'atk'),
+    cond: (g, c, p) => (!!(g.aw && g.aw.a.ctrl !== p)) && !!g.aw && E.lib.canTarget(g, g.aw.a, { c, p }) && monsOf(g, opp(p)).some(x => x.pos !== 'atk'),
     res: function* (g, c, p) { const xs = monsOf(g, opp(p)).filter(x => x.pos !== 'atk'); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.map(x => D(x).n).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished.`); } }] },
   // The five face-up when it resolves may attack directly this turn, for 400 battle damage each when they do.
   'Dark Scorpion Combination': {

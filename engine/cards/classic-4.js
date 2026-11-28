@@ -73,7 +73,7 @@ E.addScripts({
   'Laser Cannon Armor': { cont: eqBonus(300, 300), effs: [equipAct(isRace('Insect'), 'Equip to which face-up Insect?')] },
   'Magical Labyrinth': { effs: [equipAct(m => name(m) === 'Labyrinth Wall', 'Equip to which Labyrinth Wall?'),
     { type: 'ign', loc: 'st', tags: { ss: 1 }, label: 'Tribute the Wall: summon Wall Shadow',
-      cond: (g, c, p) => { const m = fieldMons(g).find(x => x.u === c.equipTo); return !!m && m.ctrl === p && g.p[p].deck.some(x => named(x, 'Wall Shadow')); },
+      cond: (g, c, p) => { const m = fieldMons(g).find(x => x.u === c.equipTo); return !!m && m.ctrl === p && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Wall Shadow')); },
       cost: function* (g, c, p) { const m = fieldMons(g).find(x => x.u === c.equipTo); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(m).n}.`); } },
       res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => named(x, 'Wall Shadow')); const [x] = yield* pick(g, p, 'Special Summon Wall Shadow from your Deck', cs, 1, 1, 'good'); if (x) ss(g, p, x); shuffleDeck(g, p); } }] },
   // "Only attack the monster equipped with this card": the controller's other face-up monsters can't be attacked.
@@ -110,9 +110,9 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target which Spell or Set card?', stOnField(g).filter(x => x !== c && (x.pos === 'set' || isSpell(x))), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; if (t.pos === 'set') log(g, `The Set card was ${D(t).n}.`); if (isSpell(t)) destroy(g, [t], { by: p, src: c }); } }] },
   'Elegant Egotist': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => freeM(g, p) >= 0 && fieldMons(g).some(m => faceUp(m) && name(m) === 'Harpie Lady') && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Harpie Lady', 'Harpie Lady Sisters')),
-    res: function* (g, c, p) { if (freeM(g, p) < 0 || !fieldMons(g).some(m => faceUp(m) && name(m) === 'Harpie Lady')) return;
-      const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, 'Harpie Lady', 'Harpie Lady Sisters')); const [x] = yield* pick(g, p, 'Special Summon Harpie Lady or Harpie Lady Sisters', cs, 1, 1, 'good');
+    cond: (g, c, p) => freeM(g, p) >= 0 && fieldMons(g).some(m => faceUp(m) && L.nameIs(m, 'Harpie Lady')) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => L.nameIs(x, 'Harpie Lady') || named(x, 'Harpie Lady Sisters')),
+    res: function* (g, c, p) { if (freeM(g, p) < 0 || !fieldMons(g).some(m => faceUp(m) && L.nameIs(m, 'Harpie Lady'))) return;
+      const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => L.nameIs(x, 'Harpie Lady') || named(x, 'Harpie Lady Sisters')); const [x] = yield* pick(g, p, 'Special Summon Harpie Lady or Harpie Lady Sisters', cs, 1, 1, 'good');
       if (x) { const fromDeck = x.zone === 'deck'; ss(g, p, x); if (fromDeck) shuffleDeck(g, p); } } }] },
   "Harpie's Feather Duster": { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => stOf(g, opp(p)).length > 0,
     res: function* (g, c, p) { destroy(g, stOf(g, opp(p)), { by: p, src: c }); } }] },
@@ -146,7 +146,7 @@ E.addScripts({
       const [b] = yield* tgt(g, p, L2, 'Which monster gains the lost ATK?', fieldMons(g).filter(m => faceUp(m) && m !== a), 1, 1, 'good');
       L2.t = [a, b].filter(Boolean); },
     res: function* (g, c, p, L2) { const [a, b] = L2.t; if (!a || !onField(a) || !faceUp(a)) return; const A = stat(g, a, 'atk'), lost = A - Math.floor(A / 2);
-      addMod(g, a, { atk: -lost, end: true }); log(g, `${name(a)}'s ATK was halved.`);
+      addMod(g, a, { set: A - lost, which: 'atk', end: true }); log(g, `${name(a)}'s ATK was halved.`);
       if (b && onField(b) && faceUp(b)) { addMod(g, b, { atk: lost, end: true }); log(g, `${name(b)} gained ${lost} ATK.`); } } }] },
   // Swaps the original values; changes from other cards still apply on top.
   'Shield & Sword': { effs: [{ type: 'act', cond: g => fieldMons(g).some(faceUp),
@@ -183,7 +183,7 @@ E.addScripts({
       const us = new Set(changed.map(m => m.u)); addRule(g, (g2, a) => a.type === 'pos' && a.c && us.has(a.c.u), { end: g.turnNo });
       if (onField(c)) move(g, c, 'gy', { reason: 'rule' }); } }] },
   'Dark Magic Curtain': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => !g.summoned[p] && freeM(g, p) >= 0 && g.p[p].deck.some(x => named(x, 'Dark Magician')),
+    cond: (g, c, p) => !g.summoned[p] && freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Dark Magician')),
     cost: function* (g, c, p) { pay(g, p, Math.floor(g.p[p].lp / 2)); },
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => named(x, 'Dark Magician')); if (cs.length && freeM(g, p) >= 0) { const [x] = yield* pick(g, p, 'Special Summon Dark Magician from your Deck', cs, 1, 1, 'good'); if (x) ss(g, p, x); } shuffleDeck(g, p);
       addRule(g, (g2, a) => (a.type === 'ns' || a.type === 'ss') && a.p === p, { end: g.turnNo }); } }] },
@@ -227,7 +227,7 @@ E.addScripts({
       if (h.length) draw(g, p, h.length); } }] },
   'Multiply': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && name(m) === 'Kuriboh'),
     cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which Kuriboh?', monsOf(g, p).filter(m => faceUp(m) && name(m) === 'Kuriboh'), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Kuriboh.`); } },
-    res: function* (g, c, p) { const n = nFreeM(g, p); if (n) tokens(g, p, { n: 'Kuriboh Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 300, def: 200 }, n, 'def', { noTribute: true }); } }] },
+    res: function* (g, c, p) { const n = nFreeM(g, p); if (n) tokens(g, p, { n: 'Kuriboh Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 300, def: 200 }, n, 'def', { noTribute: 'summon' }); } }] },
   // "Cards and effects cannot be activated in response": nothing can be activated while this link is on the chain.
   'Anti-Magic Arrows': { effs: [{ type: 'act',
     cond: (g, c, p, x) => g.phase === 'battle' && !x.top && !g.aw && !g.inDS && !fieldMons(g).some(m => m.declared),
@@ -241,7 +241,7 @@ E.addScripts({
       if (!us.length || mats.some(x => !x) || nFreeM(g, p) < mats.length) return;
       if (!(yield* L.yn(g, p, `Special Summon ${mats.map(name).join(' and ')} from your GY?`))) return;
       for (const m of mats) ss(g, p, m); } }] },
-  'Graceful Dice': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).length > 0,
+  'Graceful Dice': { effs: [{ type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).length > 0,
     res: function* (g, c, p) { const n = dice(g, p) * 100; for (const m of monsOf(g, p)) addMod(g, m, { atk: n, def: n, end: true }); if (monsOf(g, p).length) log(g, `${PN(g, p)}'s monsters gained ${n} ATK and DEF.`); } }] },
 
   /* ----- Continuous Spells ----- */

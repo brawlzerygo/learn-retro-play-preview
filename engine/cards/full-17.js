@@ -169,7 +169,7 @@ const insectUp = (from, next) => ({ type: 'trig', tags: { ss: 1 }, label: `Send 
     if (ev.type === 'flip' && ev.c === c) c.flags.f17up = g.turnNo;
     return ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && c.turnIn !== g.turnNo && c.flags.f17up !== g.turnNo;
   },
-  cond: (g, c, p) => onField(c) && faceUp(c) && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, next)),
+  cond: (g, c, p) => onField(c) && faceUp(c) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, next)),
   cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${from} to the GY.`); },
   res: function* (g, c, p) {
     const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, next)); if (!cs.length || freeM(g, p) < 0) return;
@@ -190,7 +190,7 @@ const tyrCanAttack = (g, c) => onField(c) && faceUp(c) && c.zone === 'm' && c.po
 E.addScripts({
   /* ----- the Agents ----- */
   'The Agent of Creation - Venus': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Pay 500 LP: summon Mystical Shine Ball',
-    cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Mystical Shine Ball')),
+    cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Mystical Shine Ball')),
     cost: function* (g, c, p) { pay(g, p, 500); },
     res: function* (g, c, p) {
       const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, 'Mystical Shine Ball')); if (!cs.length || freeM(g, p) < 0) { shuffleDeck(g, p); return; }
@@ -380,7 +380,7 @@ E.addScripts({
   // Ported from classic-5.js. Umi or A Legendary Ocean (treated as Umi) counts.
   'Tornado Wall': (() => {
     const UMIS = ['Umi', 'A Legendary Ocean'];
-    const umiUp = g => allField(g).some(x => faceUp(x) && UMIS.includes(D(x).n));
+    const umiUp = g => allField(g).some(x => faceUp(x) && L.isUmi(x));
     return { cont: { dmg: (g, src, p, n, o) => (o && o.battle && p === src.ctrl && umiUp(g) && g.battle && g.battle.a && g.battle.a.ctrl !== p) ? 0 : n },
       effs: [{ type: 'act', cond: g => umiUp(g), res: noop },
         { type: 'trig', loc: 'st', mand: true, tags: { destroy: 1 }, label: 'Destroyed when Umi leaves', on: (g, ev, c) => faceUp(c) && ev.type === 'move' && ev.wasField && UMIS.includes(D(ev.c).n) && !umiUp(g),
@@ -434,7 +434,7 @@ E.addScripts({
       } }] };
   })(),
   'Trap of the Imperial Tomb': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => !!g.sw && g.sw.p === p && g.sw.cs.some(x => onField(x) && x.ctrl === p && x.owner !== p && race(x) === 'Zombie' && cameFrom(g, x) === 'gy') && allField(g).filter(x => x !== c).length >= 2,
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, p).length > 0 && g.sw.cs.some(x => onField(x) && x.ctrl === p && x.owner !== p && race(x) === 'Zombie' && cameFrom(g, x) === 'gy') && allField(g).filter(x => x !== c).length >= 2,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which 2 cards on the field?', allField(g).filter(x => x !== c), 2, 2, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
   // Chains to the Trap's activation; the Trap's effect still resolves (rulings), the card itself is destroyed.

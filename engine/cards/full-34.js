@@ -56,7 +56,7 @@ function synMats(g, p, sx, o) {
   for (let mask = 1; mask < (1 << n) && out.length < 12; mask++) {
     const mats = mons.filter((_, i) => mask & (1 << i)); if (mats.length < 2) continue;
     if (mats.reduce((s, c) => s + lv(c), 0) !== Lv) continue;
-    if (mats.some(t => D(t).tu && o.tuner(t) && mats.filter(x => x !== t).every(x => !D(x).tu))) out.push(mats);
+    if (E.lib.synOk(g, sx, mats, { line: false }) && mats.some(t => D(t).tu && o.tuner(t) && mats.filter(x => x !== t).every(x => !D(x).tu))) out.push(mats);
   }
   return out;
 }
@@ -279,7 +279,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which monster?', monsOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { negateAttack(g); destroy(g, live(L2), { by: p, src: c }); } }] },
   // Only a monster that was Synchro Summoned and stayed face-up since (the count is noted when it is Synchro Summoned).
-  'Synchro Strike': { effs: [REC, { type: 'act',
+  'Synchro Strike': { effs: [REC, { type: 'act', ds: true,
     cond: g => fieldMons(g).some(x => faceUp(x) && x.summonType === 'synchro' && x.flags.f34mats > 0),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Synchro Summoned monster gains ATK?', fieldMons(g).filter(x => faceUp(x) && x.summonType === 'synchro' && x.flags.f34mats > 0), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || !t.flags.f34mats) return; const n = 500 * t.flags.f34mats;

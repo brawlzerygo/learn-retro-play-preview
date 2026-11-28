@@ -74,7 +74,7 @@ function ownNames(g, p) { const s = new Set(); for (const z of ['deck', 'hand', 
 const convulsion = g => allField(g).some(x => faceUp(x) && named(x, 'Convulsion of Nature'));
 // where a monster came to the field from in this summon's group
 const cameFromDeck = (g, x, grp) => g.events.some(e => e.type === 'move' && e.c === x && e.to === 'm' && e.group === grp && e.from === 'deck');
-const umiOn = g => [g.p[0].fz, g.p[1].fz].some(f => f && faceUp(f) && (named(f, 'Umi') || named(f, 'A Legendary Ocean')));
+const umiOn = g => [g.p[0].fz, g.p[1].fz].some(f => f && faceUp(f) && L.isUmi(f));
 const TYPES = ['Aqua', 'Beast', 'Beast-Warrior', 'Dinosaur', 'Divine-Beast', 'Dragon', 'Fairy', 'Fiend', 'Fish', 'Insect', 'Machine', 'Plant', 'Psychic', 'Pyro', 'Reptile', 'Rock', 'Sea Serpent', 'Spellcaster', 'Thunder', 'Warrior', 'Winged Beast', 'Zombie'];
 const ATTRS = ['DARK', 'LIGHT', 'EARTH', 'WATER', 'FIRE', 'WIND', 'DIVINE'];
 const isArchfiend = x => isMon(x) && /Archfiend/.test(D(x).n);
@@ -96,7 +96,7 @@ E.addScripts({
     proc: { label: 'Special Summon (banish Vampire Lord)', cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && named(x, 'Vampire Lord')),
       cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Banish 1 Vampire Lord you control', monsOf(g, p).filter(x => faceUp(x) && named(x, 'Vampire Lord')), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished Vampire Lord.`); } } },
     effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Discard a Zombie: revive a lower Zombie',
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(z => isMon(z) && race(z) === 'Zombie' && g.p[p].gy.some(y => isMon(y) && race(y) === 'Zombie' && lv(y) < lv(z))),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(z => isMon(z) && race(z) === 'Zombie' && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(y => isMon(y) && race(y) === 'Zombie' && lv(y) < lv(z))),
       cost: function* (g, c, p, L2) { const cs = g.p[p].hand.filter(z => isMon(z) && race(z) === 'Zombie' && g.p[p].gy.some(y => isMon(y) && race(y) === 'Zombie' && lv(y) < lv(z)));
         const [z] = yield* pick(g, p, 'Discard 1 Zombie monster', cs, 1, 1, 'cost'); if (!z) return; L2.data.lv = lv(z); move(g, z, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(z)}.`); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, `Special Summon which Zombie (Level ${(L2.data.lv || 1) - 1} or lower)?`, g.p[p].gy.filter(y => isMon(y) && race(y) === 'Zombie' && lv(y) < (L2.data.lv || 0)), 1, 1, 'good'); },
@@ -146,7 +146,7 @@ E.addScripts({
     res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => faceUp(x) && race(x) === 'Warrior'), { by: p, src: c }); } }] },
   'Warrior Lady of the Wasteland': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Summon an EARTH Warrior from the Deck',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && attr(x) === 'EARTH' && race(x) === 'Warrior' && D(x).atk !== '?' && baseAtk(x) <= 1500),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'EARTH' && race(x) === 'Warrior' && D(x).atk !== '?' && baseAtk(x) <= 1500),
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'EARTH' && race(x) === 'Warrior' && D(x).atk !== '?' && baseAtk(x) <= 1500);
       const [x] = yield* pick(g, p, 'Special Summon an EARTH Warrior with 1500 or less ATK', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   // Port of goat-5.js (a plain Fusion; the recipe is read from the text).
@@ -323,7 +323,7 @@ E.addScripts({
       if (def(g, t) <= 2000) destroy(g, [t], { by: p, src: c }); else if (onField(t)) setFaceDown(g, t); } }] },
   // Halves the original ATK (kept on the card; it ends if the monster is turned face-down or leaves the field).
   'Adhesion Trap Hole': { effs: [{ type: 'act',
-    cond: (g, c, p) => !!g.sw && g.sw.p !== p && g.sw.cs.some(x => onField(x) && faceUp(x)),
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && g.sw.cs.some(x => onField(x) && faceUp(x)),
     target: function* (g, c, p, L2) { L2.data.cs = g.sw.cs.slice(); },
     res: function* (g, c, p, L2) { for (const x of L2.data.cs) if (onField(x) && faceUp(x) && x.zone === 'm') { x.flags.baseAtk = Math.floor(baseAtk(x) / 2); log(g, `${name(x)}'s original ATK was halved.`); } } }] },
   // The monsters that took part in a damage calculation this turn are marked (the mark clears if they leave the field).
@@ -392,7 +392,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { addCtr(g, t, 'spell', 1); log(g, `${name(t)} got a Spell Counter.`); } } },
     { type: 'trig', loc: 'any', tags: { ss: 1 }, label: 'Summon a Level 2 or lower Spellcaster face-down',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed,
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && race(x) === 'Spellcaster' && lv(x) <= 2),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Spellcaster' && lv(x) <= 2),
       res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Spellcaster' && lv(x) <= 2);
         const [x] = yield* pick(g, p, 'Special Summon a Level 2 or lower Spellcaster face-down', cs, 1, 1, 'good'); if (x) { log(g, `${PN(g, p)} showed ${name(x)}.`); ss(g, p, x, 'set'); } shuffleDeck(g, p); } }] },
   // Activation: an opponent's draw outside the Draw Phase among the last game events. Then each such draw (once per
@@ -420,7 +420,7 @@ E.addScripts({
         if (D(top).n === L2.data.n && !forbid(g, { type: 'search', p })) { move(g, top, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(top)} to the hand.`); }
         else move(g, top, 'gy', { reason: 'effect' }); } }] },
   "Archfiend's Roar": { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && g.p[p].gy.some(isArchfiend),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isArchfiend),
       cost: function* (g, c, p) { pay(g, p, 500); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Archfiend monster?', g.p[p].gy.filter(isArchfiend), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t, 'atk')) { t.flags.noTribute = true; t.flags.roarBy = c.u; t.flags.roarEnd = g.turnNo; } } },

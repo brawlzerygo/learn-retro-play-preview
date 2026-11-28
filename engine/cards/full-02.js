@@ -340,7 +340,7 @@ E.addScripts({
       on: (g, ev, c) => { const b = ST(g).bt[c.u]; return ev.type === 'phase' && ev.ph === 'bpEnd' && !!b && b.turn === g.turnNo && !b.done; },
       res: function* (g, c, p) { const b = ST(g).bt[c.u]; if (!b) return; b.done = true; const m = fieldMons(g).find(x => x.u === b.u); if (!m || m.ctrl !== b.p) return;
         if (!takeControl(g, opp(b.p), m, false)) destroy(g, [m], { by: b.p, src: c }); } }] },
-  'Battle Tuned': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].gy.some(isTuner) && monsOf(g, p).some(faceUp),
+  'Battle Tuned': { effs: [{ type: 'act', ds: true, cond: (g, c, p) => g.p[p].gy.some(isTuner) && monsOf(g, p).some(faceUp),
     cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Banish 1 Tuner from your GY', g.p[p].gy.filter(isTuner), 1, 1, 'cost'); L2.data.a = baseAtk(x); move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${name(x)}.`); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, `Which monster gains ${L2.data.a} ATK?`, monsOf(g, p).filter(faceUp), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { addMod(g, t, { atk: L2.data.a }); log(g, `${name(t)} gained ${L2.data.a} ATK.`); } } }] },
@@ -378,7 +378,7 @@ E.addScripts({
   })(),
   'Beast of the Pharaoh': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Special Summon a Zombie',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.reason === 'synchro' && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && race(x) === 'Zombie' && lv(x) <= 4),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Zombie' && lv(x) <= 4),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Level 4 or lower Zombie?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Zombie' && lv(x) <= 4), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   'Beast Soul Swap': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Beast'),

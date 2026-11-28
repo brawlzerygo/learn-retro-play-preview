@@ -32,7 +32,7 @@ const inBattle = (g, c) => !!(g.battle && (g.battle.a === c || g.battle.t === c)
 const battling = (g, a, b) => g.inDS && g.battle && a !== b && ((g.battle.a === a && g.battle.t === b) || (g.battle.a === b && g.battle.t === a));
 // Does this card's effect inflict effect damage? (goat-4.js's test: battle damage text doesn't count)
 const burnText = c => { const t = tx(c).replace(/[^.]*battle damage[^.]*\.?/gi, ''); return /inflict[^.]*damage|damage to (both|each|your)|takes? [^.]*damage/i.test(t); };
-const umiOn = g => [g.p[0].fz, g.p[1].fz].some(f => f && faceUp(f) && named(f, 'Umi', 'A Legendary Ocean'));
+const umiOn = g => [g.p[0].fz, g.p[1].fz].some(f => f && faceUp(f) && L.isUmi(f));
 const sanctuaryOf = (g, p) => { const f = g.p[p].fz; return !!f && faceUp(f) && named(f, 'The Sanctuary in the Sky'); };
 const HARPIE = ['Harpie Lady', 'Harpie Lady 1', 'Harpie Lady 2', 'Harpie Lady 3', 'Cyber Harpie Lady'];
 // Equip Spells
@@ -131,7 +131,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { const k = L2.ev.killer; const who = k ? (onField(k) ? k.ctrl : k.owner) : opp(L2.ev.prevCtrl); damage(g, who, 1000, { src: c, srcP: L2.ev.prevCtrl }); } }] },
   'Aussa the Earth Charmer': charmer('EARTH'),
   'Autonomous Action Unit': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 1500 && freeM(g, p) >= 0 && g.p[opp(p)].gy.some(isMon),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 1500 && freeM(g, p) >= 0 && g.p[opp(p)].gy.filter(x => E.lib.ssable(g, p, x)).some(isMon),
       cost: function* (g, c, p) { pay(g, p, 1500); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, "Special Summon which monster from your opponent's GY?", g.p[opp(p)].gy.filter(isMon), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'atk')) { equip(g, c, t); c.flags.f19aau = t.u; } } },
@@ -309,7 +309,7 @@ E.addScripts({
   // control (read from their text); Creature Swap style effects that don't target still move it.
   // Review fix: a control-taking card can't be activated when the Goblin's controller has only face-up Goblins (rulings:
   // Change of Heart, Snatch Steal and Brain Control can't take it, and neither player can activate Creature Swap then).
-  'Blindly Loyal Goblin': { self: { cantBeTargeted: true, targetFilter: (g, x, L2) => /take control|control of|gain control|switch control|change control/i.test(tx(L2.c)) },
+  'Blindly Loyal Goblin': { self: { noCtrlSwitch: true, cantBeTargeted: true, targetFilter: (g, x, L2) => /take control|control of|gain control|switch control|change control/i.test(tx(L2.c)) },
     cont: { forbid: (g, src, a) => a.type === 'activate' && !!a.c && faceUp(src) && (a.p === opp(src.ctrl) || named(a.c, 'Creature Swap'))
       && /take control|control of|gain control|switch control|change control/i.test(tx(a.c))
       && monsOf(g, src.ctrl).every(m => faceUp(m) && named(m, 'Blindly Loyal Goblin')) },
@@ -336,7 +336,7 @@ E.addScripts({
   'Bowganian': { effs: [{ type: 'trig', mand: true, opt: true, label: '600 damage', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
     res: function* (g, c, p) { damage(g, opp(p), 600, { src: c, srcP: p }); } }] },
   'Bubonic Vermin': { effs: [{ type: 'trig', faceDownOk: true, tags: { ss: 1 }, label: 'Special Summon a Bubonic Vermin', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => named(x, 'Bubonic Vermin')),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Bubonic Vermin')),
     res: function* (g, c, p) { const x = g.p[p].deck.find(y => named(y, 'Bubonic Vermin')); if (x && freeM(g, p) >= 0) ss(g, p, x, 'set'); shuffleDeck(g, p); } }] },
   'Buster Blader': { self: { atk: (g, c) => 500 * [...monsOf(g, opp(c.ctrl)).filter(faceUp), ...g.p[opp(c.ctrl)].gy].filter(x => isMon(x) && race(x) === 'Dragon').length }, effs: [] },
   // The boost is added in the Damage Step of its battles. If the equipped monster's ATK goes above 1000 by another effect,

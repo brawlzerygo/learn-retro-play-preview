@@ -208,7 +208,7 @@ E.addScripts({
         move(g, c, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added Spirit Burner to the hand instead of drawing.`); } }] },
   'Spirit Caller': { effs: [{ type: 'trig', faceDownOk: true, tags: { ss: 1 }, label: 'Special Summon a Level 3 or lower Normal Monster',
     on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => D(x).k === 'normal' && lv(x) <= 3),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => D(x).k === 'normal' && lv(x) <= 3),
     res: function* (g, c, p) { const cs = g.p[p].gy.filter(x => D(x).k === 'normal' && lv(x) <= 3); if (!cs.length) return; const [x] = yield* pick(g, p, 'Special Summon which Normal Monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   // ENGINE: banishing from the GY has no replacement hook, so the substitutes on the field are not used.
   // PARTIAL: the card resolves and is logged, with no effect.
@@ -250,7 +250,7 @@ E.addScripts({
     res: function* (g, c, p) { if (onField(c) && faceUp(c) && c.pos === 'atk') gain(g, p, 1000); } }] },
   'Spirit of the Pharaoh': { effs: [pharaohLock,
     { type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon up to 4 Zombie Normal Monsters', on: (g, ev, c) => evSummoned(ev, c, ['special']),
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => D(x).k === 'normal' && race(x) === 'Zombie' && lv(x) <= 2),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => D(x).k === 'normal' && race(x) === 'Zombie' && lv(x) <= 2),
       target: function* (g, c, p, L2) { const cs = g.p[p].gy.filter(x => D(x).k === 'normal' && race(x) === 'Zombie' && lv(x) <= 2); yield* tgt(g, p, L2, 'Special Summon which Zombie Normal Monsters?', cs, 1, Math.min(4, cs.length, g.p[p].m.filter(z => !z).length), 'good'); },
       res: function* (g, c, p, L2) { for (const t of L2.t) if (t.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, t, 'atk'); } }] },
   // Activated after Pot of Greed resolves (ruling): the engine's spellResolved event.

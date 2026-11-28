@@ -103,7 +103,7 @@ E.addScripts({
       res: function* (g, c, p) { negateAttack(g); } }] },
   'Morphtronic Celfon': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Roll a die: summon a Morphtronic',
-      cond: (g, c, p) => c.pos === 'atk' && freeM(g, p) >= 0 && g.p[p].deck.some(x => morphMon(x) && lv(x) <= 4),
+      cond: (g, c, p) => c.pos === 'atk' && freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => morphMon(x) && lv(x) <= 4),
       res: function* (g, c, p) { const n = 1 + Math.floor(g.rnd() * 6); log(g, `${PN(g, p)} rolled a ${n}.`);
         const top = g.p[p].deck.slice(-n), cands = top.filter(x => morphMon(x) && lv(x) <= 4);
         if (cands.length && freeM(g, p) >= 0) { const [x] = yield* pick(g, p, 'Special Summon which Morphtronic?', cands, 1, 1, 'good'); if (x) ss(g, p, x); }
@@ -127,7 +127,7 @@ E.addScripts({
         const [y] = yield* pick(g, p, 'Add which Morphtronic from your GY?', gs, 1, 1, 'good'); move(g, y, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(y)} to the hand.`); } }] },
   'Morphtronic Scopen': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Summon a Level 4 Morphtronic',
-      cond: (g, c, p) => c.pos === 'atk' && freeM(g, p) >= 0 && g.p[p].hand.some(x => morphMon(x) && lv(x) === 4),
+      cond: (g, c, p) => c.pos === 'atk' && freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => morphMon(x) && lv(x) === 4),
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => morphMon(x) && lv(x) === 4); if (!cs.length) return; const [x] = yield* pick(g, p, 'Special Summon which Morphtronic?', cs, 1, 1, 'good');
         if (x && ss(g, p, x)) { x.flags.scopenBy = c.u; x.flags.scopenT = g.turnNo; } } },
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.scopenBy === c.u && x.flags.scopenT === g.turnNo),
@@ -140,7 +140,7 @@ E.addScripts({
       target: function* (g, c, p, L) { const cs = allField(g); if (cs.length) yield* tgt(g, p, L, 'Destroy which card?', cs, 1, 1, 'bad'); },
       res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'Machine Duplication': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, p).some(x => faceUp(x) && race(x) === 'Machine' && atk(g, x) <= 500 && g.p[p].deck.some(y => D(y).n === D(x).n)),
+    cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, p).some(x => faceUp(x) && race(x) === 'Machine' && atk(g, x) <= 500 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(y => D(y).n === D(x).n)),
     target: function* (g, c, p, L) { const [t] = yield* tgt(g, p, L, 'Target a Machine with 500 or less ATK', monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Machine' && atk(g, x) <= 500 && g.p[p].deck.some(y => D(y).n === D(x).n)), 1, 1, 'good'); L.data.n = t && D(t).n; },
     res: function* (g, c, p, L) { const cs = g.p[p].deck.filter(y => D(y).n === L.data.n); const n = Math.min(2, cs.length, nFreeM(g, p)); if (!n) return;
       const xs = yield* pick(g, p, `Special Summon up to ${n} ${L.data.n}`, cs, 1, n, 'good'); for (const x of xs) ss(g, p, x); shuffleDeck(g, p); } }] },
@@ -173,7 +173,7 @@ E.addScripts({
   'Ojama Country': { // ENGINE: activatable() never looks at the Field Zone, so the Special Summon effect below is never offered
     effs: [{ type: 'act', res: function* () {} },
       { type: 'ign', loc: 'fz', opt: true, tags: { ss: 1 }, label: 'Send an Ojama: revive an Ojama',
-        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(isOjama) && g.p[p].gy.some(x => isMon(x) && isOjama(x)),
+        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(isOjama) && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && isOjama(x)),
         cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send an Ojama card from your hand to the GY', g.p[p].hand.filter(isOjama), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
         target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which Ojama?', g.p[p].gy.filter(x => isMon(x) && isOjama(x)), 1, 1, 'good'); },
         res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy' && onField(c)) ss(g, p, t); } }],
@@ -181,7 +181,7 @@ E.addScripts({
       atk: (g, src, c) => monsOf(g, src.ctrl).some(x => faceUp(x) && isMon(x) && isOjama(x)) ? num(D(c).def) - baseAtk(c) : 0,
       def: (g, src, c) => monsOf(g, src.ctrl).some(x => faceUp(x) && isMon(x) && isOjama(x)) ? baseAtk(c) - num(D(c).def) : 0 } },
   'Symbols of Duty': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => D(x).k === 'normal') ,
+    cond: (g, c, p) => monsOf(g, p).some(x => D(x).k === 'normal') && allCards(g, 'gy').some(x => E.lib.ssable(g, p, x) && L.canTarget(g, x, { c, p })),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send a Normal Monster you control to the GY', monsOf(g, p).filter(x => D(x).k === 'normal'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
     target: function* (g, c, p, L) { const cs = allCards(g, 'gy').filter(isMon); if (cs.length) yield* tgt(g, p, L, 'Special Summon which monster from either GY?', cs, 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (!t || t.zone !== 'gy' || !onField(c)) return; if (ss(g, p, t) && equip(g, c, t)) link(g, c, t); } }] },
@@ -200,7 +200,7 @@ E.addScripts({
   /* ----- Psychic ----- */
   'Overdrive Teleporter': { cont: noSSFromGY, // "Cannot be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere
     effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Pay 2000: summon 2 Psychics',
-      cond: (g, c, p) => !c.flags.odt && g.p[p].lp > 2000 && nFreeM(g, p) >= 2 && g.p[p].deck.filter(x => isMon(x) && lv(x) === 3 && race(x) === 'Psychic').length >= 2,
+      cond: (g, c, p) => !c.flags.odt && g.p[p].lp > 2000 && nFreeM(g, p) >= 2 && g.p[p].deck.filter(x => isMon(x) && lv(x) === 3 && race(x) === 'Psychic' && E.lib.ssable(g, p, x)).length >= 2,
       cost: function* (g, c, p) { c.flags.odt = true; pay(g, p, 2000); },
       res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isMon(x) && lv(x) === 3 && race(x) === 'Psychic'); if (cs.length < 2 || nFreeM(g, p) < 2) return;
         const xs = yield* pick(g, p, 'Special Summon 2 Level 3 Psychics', cs, 2, 2, 'good'); for (const x of xs) ss(g, p, x); shuffleDeck(g, p); } }] },
@@ -212,7 +212,7 @@ E.addScripts({
     res: function* (g, c, p, L) { const o = L.data.o; if (o && onField(o) && faceUp(o)) { addMod(g, o, { atk: -L.data.n, def: -L.data.n, end: true }); log(g, `${name(o)} lost ${L.data.n} ATK and DEF.`); } } }] },
   'Mind Protector': { cont: { forbid: (g, src, a) => a.type === 'attack' && atk(g, a.c) <= 2000 && race(a.c) !== 'Psychic' },
     effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500 && (yield* yn(g, p, 'Pay 500 LP to keep Mind Protector?'))) pay(g, p, 500); else destroy(g, [c], { by: p }); } }] },
+      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500 && (yield* yn(g, p, 'Pay 500 LP to keep Mind Protector?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
   'Level Eater': { // PARTIAL: "can't be Tributed except for a Tribute Summon" is not enforced
     effs: [{ type: 'ign', loc: 'gy', tags: { ss: 1 }, label: 'Lower a Level: Special Summon',
       cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, p).some(x => faceUp(x) && lv(x) >= 5),
@@ -324,17 +324,17 @@ E.addScripts({
       res: function* (g, c, p) { if (!onField(c)) return; const cs = [...g.p[p].deck, ...g.p[p].gy].filter(sixSam).filter(x => x.zone === 'gy' || !L.forbid(g, { type: 'search', p })); if (!cs.length) return;
         const [x] = yield* pick(g, p, 'Add a Six Samurai from your Deck or GY', cs, 1, 1, 'good'); const fromDeck = x.zone === 'deck'; move(g, x, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(x)} to the hand.`); if (fromDeck) shuffleDeck(g, p); } },
     { type: 'ign', loc: 'st', tags: { ss: 1 }, label: '6 counters: revive a Shien',
-      cond: (g, c, p) => bushido(g, p) >= 6 && freeM(g, p) >= 0 && g.p[p].gy.some(isShienEff),
+      cond: (g, c, p) => bushido(g, p) >= 6 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isShienEff),
       cost: function* (g, c, p) { removeBushido(g, p, 6); },
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which Shien monster?', g.p[p].gy.filter(isShienEff), 1, 1, 'good'); },
       res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy' && onField(c)) ss(g, p, t); } }] },
 
   /* ----- Spaceship ----- */
   'Blue Thunder T-45': { effs: [{ type: 'trig', loc: 'any', mand: true, tags: { ss: 1 }, on: (g, ev, c) => killedByBattle(ev, c), cond: (g, c, p) => freeM(g, p) >= 0,
-    res: function* (g, c, p) { const t = token(g, p, { n: 'Thunder Option Token', a: 'LIGHT', r: 'Machine', lv: 4, atk: 1500, def: 1500 }, 'atk', { noTribute: true });
+    res: function* (g, c, p) { const t = token(g, p, { n: 'Thunder Option Token', a: 'LIGHT', r: 'Machine', lv: 4, atk: 1500, def: 1500 }, 'atk', { noTribute: 'summon' });
       if (t) { log(g, `${PN(g, p)} Special Summoned a Thunder Option Token.`); const ev = L.emit(g, { type: 'summon', cs: [t], how: 'special', p, byEffect: true }); g.sw = { cs: [t], p, how: 'special', group: ev.group }; } } }] },
   'Falchion Beta': { effs: [{ type: 'trig', loc: 'any', mand: true, on: (g, ev, c) => killedByBattle(ev, c),
-    cond: (g, c, p) => g.p[p].deck.some(x => lightMach(x) && baseAtk(x) <= 1200) || (freeM(g, p) >= 0 && g.p[p].gy.some(x => lightMach(x) && baseAtk(x) <= 1200)),
+    cond: (g, c, p) => g.p[p].deck.some(x => lightMach(x) && baseAtk(x) <= 1200) || (freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => lightMach(x) && baseAtk(x) <= 1200)),
     target: function* (g, c, p, L) { const canA = g.p[p].deck.some(x => lightMach(x) && baseAtk(x) <= 1200), canB = freeM(g, p) >= 0 && g.p[p].gy.some(x => lightMach(x) && baseAtk(x) <= 1200);
       L.data.mode = canA && canB ? yield* choose(g, p, 'Falchion Beta: choose an effect', ['Send a LIGHT Machine from the Deck to the GY', 'Special Summon a LIGHT Machine from the GY']) : canA ? 0 : 1;
       if (L.data.mode === 1) { L.tags = { ss: 1 }; yield* tgt(g, p, L, 'Special Summon which LIGHT Machine?', g.p[p].gy.filter(x => lightMach(x) && baseAtk(x) <= 1200), 1, 1, 'good'); } },
@@ -369,7 +369,7 @@ E.addScripts({
       const ia = g.p[p].m.indexOf(a), ib = g.p[o].m.indexOf(b); g.p[p].m[ia] = b; g.p[o].m[ib] = a; a.ctrl = o; b.ctrl = p;
       for (const x of [a, b]) { x.flags.ctrlUntil = null; x.flags.ctrlFrom = null; x.posChanged = true; }
       log(g, `${PN(g, p)} and ${PN(g, o)} switched control of ${L.shown(g, a)} and ${L.shown(g, b)}.`); } }] },
-  'Rush Recklessly': { effs: [{ type: 'act', cond: g => fieldMons(g).some(faceUp),
+  'Rush Recklessly': { effs: [{ type: 'act', ds: true, cond: g => fieldMons(g).some(faceUp),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Which monster gains 700 ATK?', fieldMons(g).filter(faceUp), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) { addMod(g, t, { atk: 700, end: true }); log(g, `${name(t)} gained 700 ATK.`); } } }] },
   'Macro Cosmos': { cont: { gyBan: 'all' },   // ② "Any card sent to the GY is banished instead": a replacement in move() (2026-11-28 audit)
@@ -387,7 +387,7 @@ E.addScripts({
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Equip Mage Power to which monster?', fieldMons(g).filter(faceUp), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) equip(g, c, t); } }],
     cont: { atk: (g, src, m) => src.equipTo === m.u ? 500 * stOf(g, src.ctrl).length : 0, def: (g, src, m) => src.equipTo === m.u ? 500 * stOf(g, src.ctrl).length : 0 } },
-  'Gravity Bind': { effs: [{ type: 'act', res: function* (g) { if (g.aw && g.aw.a && lv(g.aw.a) >= 4) negateAttack(g); } }],
+  'Gravity Bind': { effs: [{ type: 'act', res: function* (g) { if (g.aw && g.aw.a && lv(g.aw.a) >= 4) L.stopAttack(g); } }],
     cont: { forbid: (g, src, a) => a.type === 'attack' && lv(a.c) >= 4 } },
   'Metal Reflect Slime': { // PARTIAL: as a monster it has no Type/Attribute and its Spell/Trap Zone is freed
     self: { cantAttack: true },
@@ -437,14 +437,14 @@ E.addScripts({
 
   /* ----- X-Saber ----- */
   'XX-Saber Emmersblade': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => xSaber(x) && lv(x) <= 4),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => xSaber(x) && lv(x) <= 4),
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => xSaber(x) && lv(x) <= 4); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon an X-Saber from your Deck', cs, 1, 1, 'good'); if (x) ss(g, p, x); shuffleDeck(g, p); } }] },
   'XX-Saber Fulhelmknight': { effs: [
     { type: 'trig', label: 'Negate the attack', on: (g, ev, c) => ev.type === 'attack' && ev.p !== c.ctrl && !c.flags.fulUsed,
       cost: function* (g, c, p, L) { c.flags.fulUsed = true; L.t = [g.aw && g.aw.a].filter(Boolean); },
       res: function* (g, c, p) { negateAttack(g); } },
     { type: 'trig', loc: 'any', tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c && ev.snap && ev.snap.pos !== 'atk',
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => xSaber(x) && lv(x) <= 4),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => xSaber(x) && lv(x) <= 4),
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which X-Saber?', g.p[p].gy.filter(x => xSaber(x) && lv(x) <= 4), 1, 1, 'good'); },
       res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   'X-Saber Galahad': { self: { atk: (g, c) => { const b = g.battle; if (!g.inDS || !b) return 0; if (b.a === c && b.t) return 300; if (b.t === c && b.a && b.a.ctrl !== c.ctrl) return -500; return 0; } },
@@ -463,7 +463,7 @@ E.addScripts({
   'XX-Saber Faultroll': { cont: noSSFromGY,
     proc: { cond: (g, c, p) => monsOf(g, p).filter(x => faceUp(x) && xSaber(x)).length >= 2, label: 'Special Summon (you control 2 X-Sabers)' },
     effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Revive a Level 4 or lower X-Saber',
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => xSaber(x) && lv(x) <= 4),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => xSaber(x) && lv(x) <= 4),
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which X-Saber?', g.p[p].gy.filter(x => xSaber(x) && lv(x) <= 4), 1, 1, 'good'); },
       res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   'XX-Saber Hyunlei': { noSynchro: true, proc: synProc(xSaber),

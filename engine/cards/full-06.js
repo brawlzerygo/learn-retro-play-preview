@@ -13,7 +13,7 @@ const atk = L.atk, def = L.def;
 /* ----- helpers ----- */
 const named = (c, n) => D(c).n === n;
 const txt = c => { const d = D(c); return ((d.ps && /①/.test(d.ps)) ? d.ps + '\n' : '') + (d.tx || ''); };
-const isUmi = c => c && faceUp(c) && (name(c) === 'Umi' || named(c, 'A Legendary Ocean'));
+const isUmi = c => c && faceUp(c) && L.isUmi(c);
 const umiOn = g => [g.p[0].fz, g.p[1].fz].some(isUmi);
 const isDHero = c => isMon(c) && /^Destiny HERO/.test(name(c));
 const isGB = c => isMon(c) && /^Gladiator Beast/.test(name(c));
@@ -198,7 +198,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'deck', { reason: 'effect' }); log(g, `${D(t).n} was shuffled into the Deck.`); } } }] },
   'Des Frog': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Des Frogs',
     on: (g, ev, c) => evSummoned(ev, c, ['tribute']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'T.A.D.P.O.L.E.')) && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Des Frog')),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'T.A.D.P.O.L.E.')) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Des Frog')),
     res: function* (g, c, p) {
       const n = Math.min(g.p[p].gy.filter(x => named(x, 'T.A.D.P.O.L.E.')).length, nFreeM(g, p)); // counted at resolution
       const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, 'Des Frog'));
@@ -366,7 +366,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which banished monster?', allCards(g, 'ban').filter(dimOk), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'ban') ss(g, p, t, 'atk'); } }] },
   'Dimension Explosion': { effs: [markProper, { type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && D(x).k === 'fusion') && g.p[p].ban.some(dimOk) && g.p[opp(p)].ban.some(dimOk) && freeM(g, opp(p)) >= 0,
+    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && D(x).k === 'fusion') && g.p[p].ban.filter(x => E.lib.ssable(g, p, x)).some(dimOk) && g.p[opp(p)].ban.some(dimOk) && freeM(g, opp(p)) >= 0,
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Return a face-up Fusion Monster to the Extra Deck', monsOf(g, p).filter(x => faceUp(x) && D(x).k === 'fusion'), 1, 1, 'cost'); if (x) { move(g, x, 'extra', { reason: 'cost' }); log(g, `${PN(g, p)} returned ${D(x).n} to the Extra Deck.`); } },
     target: function* (g, c, p, L2) { const a = yield* pick(g, p, 'Choose up to 2 of your banished monsters', g.p[p].ban.filter(dimOk), 1, 2, 'good'); const b = yield* pick(g, opp(p), 'Choose up to 2 of your banished monsters', g.p[opp(p)].ban.filter(dimOk), 1, 2, 'good'); L2.t = [...a, ...b]; },
     res: function* (g, c, p, L2) { const grp = g.group; for (const t of L2.t) if (t.zone === 'ban' && freeM(g, t.owner) >= 0) ss(g, t.owner, t, 'atk', { group: grp }); } }] },
@@ -386,7 +386,7 @@ E.addScripts({
   'Dimension Wall': { cont: { loc: 'gy', dmg: (g, src, p, n, o) => {
       const w = g.dimWall; if (!(n > 0 && o && o.battle && w && w.p === p && w.turn === g.turnNo && g.battle && g.battle.a && g.battle.a.u === w.a && src.u === w.c)) return n;
       damage(g, opp(p), n, { battle: true, src: o.src, srcP: p, direct: o.direct }); return 0; } },
-    effs: [{ type: 'act', cond: (g, c, p) => !!(g.aw && g.aw.a && g.aw.a.ctrl !== p),
+    effs: [{ type: 'act', cond: (g, c, p) => (!!(g.aw && g.aw.a && g.aw.a.ctrl !== p)) && !!g.aw && E.lib.canTarget(g, g.aw.a, { c, p }),
       target: function* (g, c, p, L2) { L2.data.a = g.aw.a; },
       res: function* (g, c, p, L2) { const a = L2.data.a; if (a && onField(a)) { g.dimWall = { p, a: a.u, c: c.u, turn: g.turnNo }; log(g, `${PN(g, opp(p))} will take the battle damage from this attack.`); } } }] },
 
@@ -443,7 +443,7 @@ E.addScripts({
       if ((ev.type === 'summon' && ['normal', 'tribute', 'gemini'].includes(ev.how)) || (ev.type === 'set' && ev.c && ev.c.zone === 'm')) { if (g.ns[q] >= 1) { g.ns[q]--; g.dblSumDone[q] = g.turnNo; } }
       return false; } }] },
   'Double Tag Team': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => !!(g.sw && g.sw.p === p && !['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && g.sw.cs.some(x => onField(x) && isGB(x))) && freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].some(x => isGB(x) && lv(x) <= 4),
+    cond: (g, c, p) => !!(g.sw && E.lib.swOf(g, p).length > 0 && !['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && g.sw.cs.some(x => onField(x) && isGB(x))) && freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => isGB(x) && lv(x) <= 4),
     res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => isGB(x) && lv(x) <= 4); const [x] = yield* pick(g, p, 'Special Summon a Level 4 or lower Gladiator Beast', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   // PARTIAL: it is not destroyed when control of the monster changes; with two equipped monsters the engine lets the
   // opponent attack directly instead of not at all.

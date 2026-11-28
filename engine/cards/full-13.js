@@ -150,7 +150,7 @@ E.addScripts({
     on: (g, ev, c) => { if (!setTrap(c) || c.turnIn === g.turnNo || ev.type !== 'move') return false;
       if (!(ev.wasField && ev.destroyed && !ev.battle && ev.to === 'gy' && ev.prevCtrl === c.ctrl && /^Cloudian/.test(D(ev.c).n) && ev.snap && ev.snap.faceUp && ev.snap.pos === 'def')) return false;
       c.flags.f13rc = [...(c.flags.f13rc || []).filter(u => g.p[c.ctrl].gy.some(x => x.u === u)), ev.c.u]; return true; },
-    cond: (g, c, p) => setTrap(c) && freeM(g, p) >= 0 && g.p[p].gy.some(x => (c.flags.f13rc || []).includes(x.u)),
+    cond: (g, c, p) => setTrap(c) && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => (c.flags.f13rc || []).includes(x.u)),
     cost: flipUpCost,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Cloudian?', g.p[p].gy.filter(x => (c.flags.f13rc || []).includes(x.u)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t, 'atk')) { addCtr(g, t, 'fog', 1); log(g, `A Fog Counter was placed on ${name(t)}.`); } trapToGY(g, c); } }] },
@@ -230,7 +230,7 @@ E.addScripts({
         cond: (g, c, p) => c.used.f13rn !== g.turnNo && g.p[p].deck.length > 0 && g.p[opp(p)].gy.length > 0, after: (g, c) => { c.used.f13rn = g.turnNo; },
         cost: function* (g, c, p) { L.mill(g, p, 1); },
         res: function* (g, c, p) { const xs = g.p[opp(p)].gy.slice(); for (const x of xs) toDeck(g, x, p); if (xs.length) log(g, `${PN(g, opp(p))}'s GY was shuffled into the Deck.`); } }] },
-  'Rainbow Path': { effs: [{ type: 'act', cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && stOf(g, p).some(x => x !== c && isCB(x)),
+  'Rainbow Path': { effs: [{ type: 'act', cond: (g, c, p) => (!!g.aw && g.aw.a.ctrl !== p && stOf(g, p).some(x => x !== c && isCB(x))) && !!g.aw && E.lib.canTarget(g, g.aw.a, { c, p }),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which Crystal Beast card to the GY?', stOf(g, p).filter(x => x !== c && isCB(x)), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
     target: function* (g, c, p, L2) { L2.t = [g.aw.a]; },
     res: function* (g, c, p, L2) { const a = live(L2)[0]; if (!a || !g.aw || g.aw.a !== a) return; negateAttack(g); log(g, `${PN(g, p)} negated the attack.`);
@@ -248,7 +248,7 @@ E.addScripts({
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(m => m !== c), { by: p }); } },
     { type: 'trig', loc: 'any', when: true, tags: { ss: 1 }, label: 'Special Summon Red Dragon Archfiend from your GY',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed,
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => named(x, 'Red Dragon Archfiend') && x.f13proper),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Red Dragon Archfiend') && x.f13proper),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Red Dragon Archfiend?', g.p[p].gy.filter(x => named(x, 'Red Dragon Archfiend') && x.f13proper), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
 
@@ -275,7 +275,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { const t = L2.ev.c; if (t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
 
   /* ----- Release, Return, Revival ----- */
-  'Release from Stone': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].ban.some(x => isMon(x) && race(x) === 'Rock' && !x.flags.faceDownBan),
+  'Release from Stone': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].ban.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && race(x) === 'Rock' && !x.flags.faceDownBan),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which banished Rock monster?', g.p[p].ban.filter(x => isMon(x) && race(x) === 'Rock' && !x.flags.faceDownBan), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'ban' && onField(c) && ss(g, p, t, 'atk')) link(g, c, t); } }] },
   'Release Restraint': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(m => named(m, 'Gearfried the Iron Knight')),
@@ -300,7 +300,7 @@ E.addScripts({
         g.rotd = g.rotd.filter(e => e.by !== c.u); } }] },
   // PARTIAL: the End Phase destruction uses a chain link (the ruling says it doesn't start a Chain).
   'Return of the Six Samurai': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && /Six Samurai/.test(D(x).n)),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && /Six Samurai/.test(D(x).n)),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which "Six Samurai" monster?', g.p[p].gy.filter(x => isMon(x) && /Six Samurai/.test(D(x).n)), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t, 'atk')) { t.flags.f13rss = g.turnNo; c.f13rss = g.turnNo; } } },
     { type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, label: 'Destroy the summoned monster',
@@ -318,7 +318,7 @@ E.addScripts({
     cond: (g, c, p) => g.p[p].hand.length === 0 && g.p[p].lp > 500,
     cost: function* (g, c, p) { pay(g, p, 500); },
     res: function* (g, c, p) { if (c.zone === 'gy' && g.p[p].hand.length === 0) { move(g, c, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added Return Zombie to the hand.`); } } }] },
-  'Revival Gift': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => nFreeM(g, opp(p)) >= 2 && freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && D(x).tu),
+  'Revival Gift': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => nFreeM(g, opp(p)) >= 2 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && D(x).tu),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Tuner from your GY?', g.p[p].gy.filter(x => isMon(x) && D(x).tu), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk', { negate: true });
       if (nFreeM(g, opp(p)) >= 2) tokens(g, opp(p), { n: 'Gift Fiend Token', a: 'DARK', r: 'Fiend', lv: 3, atk: 1500, def: 1500 }, 2, 'def'); } }] },
@@ -365,7 +365,7 @@ E.addScripts({
     cont: { grant: (g, src, m, flag) => flag === 'noBattleDamage' && m.ctrl === src.ctrl && faceUp(m) && isRitualMon(m),
       replaceDestroy: (g, src, m, o) => !o.battle && !!o.src && isMon(o.src) && m.ctrl === src.ctrl && m.zone === 'm' && faceUp(m) && isRitualMon(m) } },
   'Ritual Foregone': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 1000 && freeM(g, p) >= 0 && !(g.f13rf && g.f13rf[p] === g.turnNo) && g.p[p].hand.some(isRitualMon),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 1000 && freeM(g, p) >= 0 && !(g.f13rf && g.f13rf[p] === g.turnNo) && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(isRitualMon),
       after: (g, c, p) => { (g.f13rf || (g.f13rf = {}))[p] = g.turnNo; },
       cost: function* (g, c, p) { pay(g, p, 1000); },
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(isRitualMon); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which Ritual Monster?', cs, 1, 1, 'good');

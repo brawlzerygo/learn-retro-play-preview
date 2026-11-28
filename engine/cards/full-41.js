@@ -54,7 +54,7 @@ function synMats(g, p, sx, tunerOk) {
   for (let mask = 1; mask < (1 << mons.length) && out.length < 12; mask++) {
     const mats = mons.filter((_, i) => mask & (1 << i)); if (mats.length < 2) continue;
     if (mats.reduce((s, c) => s + lv(c), 0) !== Lv) continue;
-    if (mats.some(t => isTuner(t) && tunerOk(t) && mats.filter(x => x !== t).every(x => !isTuner(x)))) out.push(mats);
+    if (E.lib.synOk(g, sx, mats, { line: false }) && mats.some(t => isTuner(t) && tunerOk(t) && mats.filter(x => x !== t).every(x => !isTuner(x)))) out.push(mats);
   }
   return out;
 }
@@ -166,14 +166,14 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t) damage(g, t.ctrl, 500, { src: c, srcP: p }); } }),
     { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon a Mecha Bunny face-down',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => named(x, 'Mecha Bunny')),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Mecha Bunny')),
       res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => named(x, 'Mecha Bunny')); if (!cs.length || freeM(g, p) < 0) return; ss(g, p, cs[0], 'set'); shuffleDeck(g, p); } }] },
 
   'Mechanical Hound': { cont: { forbid: (g, src, a) => a.type === 'activate' && a.p !== src.ctrl && a.c && isSpell(a.c) && a.eff && a.eff.type === 'act' && g.p[src.ctrl].hand.length === 0 } },
 
   'Medium Piece Golem': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Small Piece Golem',
     on: (g, ev, c) => evSummoned(ev, c),
-    cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, p).some(m => faceUp(m) && named(m, 'Big Piece Golem')) && g.p[p].deck.some(x => named(x, 'Small Piece Golem')),
+    cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, p).some(m => faceUp(m) && named(m, 'Big Piece Golem')) && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Small Piece Golem')),
     res: function* (g, c, p) { if (!monsOf(g, p).some(m => faceUp(m) && named(m, 'Big Piece Golem')) || freeM(g, p) < 0) return;
       const cs = g.p[p].deck.filter(x => named(x, 'Small Piece Golem')); if (!cs.length) return; ss(g, p, cs[0], 'atk', { negate: true }); shuffleDeck(g, p); } }] },
 
@@ -216,7 +216,7 @@ E.addScripts({
   'Metabo Globster': { effs: [{ type: 'trig', loc: 'any', mand: true, tags: { ss: 1 }, label: 'Summon 3 Metabo Tokens',
     on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.reason === 'tribute') c.f41up = !!(ev.snap && ev.snap.faceUp);
       return ev.type === 'summon' && ev.how === 'tribute' && (ev.tribs || []).includes(c) && !!c.f41up && attr(ev.cs[0]) === 'DARK'; },
-    res: function* (g, c, p) { c.f41up = false; const n = Math.min(3, nFreeM(g, p)); if (n) tokens(g, p, { n: 'Metabo Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 0, def: 0 }, n, 'def', { noTribute: true }); } }] },
+    res: function* (g, c, p) { c.f41up = false; const n = Math.min(3, nFreeM(g, p)); if (n) tokens(g, p, { n: 'Metabo Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 0, def: 0 }, n, 'def', { noTribute: 'summon' }); } }] },
 
   // PARTIAL: "instead of the normal draw" happens after the draw: the drawn card goes back on top of the Deck
   'Meteor Flare': { effs: [{ type: 'act',
@@ -349,7 +349,7 @@ E.addScripts({
   // Port of classic-4.js
   'Multiply': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && name(m) === 'Kuriboh'),
     cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which Kuriboh?', monsOf(g, p).filter(m => faceUp(m) && name(m) === 'Kuriboh'), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Kuriboh.`); } },
-    res: function* (g, c, p) { const n = nFreeM(g, p); if (n) tokens(g, p, { n: 'Kuriboh Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 300, def: 200 }, n, 'def', { noTribute: true }); } }] },
+    res: function* (g, c, p) { const n = nFreeM(g, p); if (n) tokens(g, p, { n: 'Kuriboh Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 300, def: 200 }, n, 'def', { noTribute: 'summon' }); } }] },
 
   // Port of full-25.js's Goat "Mushroom Man #2": LP lost, not damage
   'Mushroom Man 2': { effs: [
@@ -491,7 +491,7 @@ E.addScripts({
         res: function* (g, c) { if (onField(c)) { move(g, c, 'gy', { reason: 'rule' }); log(g, 'Nightmare\'s Steelcage was sent to the GY.'); } } }] },
 
   'Nimble Musasabi': { effs: [
-    { type: 'trig', faceDownOk: true, res: noop, on: (g, ev, c) => { c.flags.noTribute = true; return false; } },
+    { type: 'trig', faceDownOk: true, res: noop, on: (g, ev, c) => { c.flags.noTribute = 'summon'; return false; } },   // "can't be Tributed for a Tribute Summon"
     { type: 'trig', loc: 'gy', mand: true, label: '500 damage',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
       res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p });

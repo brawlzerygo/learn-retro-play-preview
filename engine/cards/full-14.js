@@ -236,7 +236,7 @@ E.addScripts({
   'Silent Abyss': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy face-down and non-WATER monsters',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
     res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.pos === 'set' || attr(x) !== 'WATER'), { by: p, src: c }); } }] },
-  'Silent Doom': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(isNormalMon),
+  'Silent Doom': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isNormalMon),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Normal Monster?', g.p[p].gy.filter(isNormalMon), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t, 'def')) { t.flags.cantAttack = true; log(g, `${name(t)} can't attack.`); } } }] },
   // ENGINE: a negated Continuous card's own static effects (cont) still apply; its activated and trigger effects are blocked.
@@ -309,7 +309,7 @@ E.addScripts({
   // before a link resolves).
   'Skull Archfiend of Lightning': { effs: [
     { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Pay 500 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { by: p }); } },
+      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } },
     { type: 'quick', speed: 3, ds: true, label: 'Roll a die',
       cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && t.p !== p && t.c !== c && (t.t || []).includes(c) && faceUp(c) && !(t.data && t.data.f14die)); },
       target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; L2.data.L.data.f14die = true; },
@@ -331,7 +331,7 @@ E.addScripts({
   // Burning Skull Head comes from the GY (ENGINE: no draw replacement hook).
   'Skull Flame': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Special Summon Burning Skull Head',
-      cond: (g, c, p) => g.phase === 'main1' && freeM(g, p) >= 0 && g.p[p].hand.some(x => named(x, 'Burning Skull Head')),
+      cond: (g, c, p) => g.phase === 'main1' && freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Burning Skull Head')),
       after: (g, c, p) => { E.lib.lockBP(g, p); },
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => named(x, 'Burning Skull Head')); if (!cs.length) return; const [x] = yield* pick(g, p, 'Special Summon Burning Skull Head', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } },
     { type: 'trig', label: 'Add Burning Skull Head instead of drawing',
@@ -443,7 +443,7 @@ E.addScripts({
       { type: 'trig', on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c) && c.flags.f14proc) c.f14proper = true; return false; }, res: noop },
       { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => { if (!g.f14purity) { g.f14purity = true; addRule(g, (g2, a) => a.type === 'ss' && a.c && named(a.c, 'Soul of Purity and Light') && ['gy', 'ban'].includes(a.c.zone) && !a.c.f14proper); } return false; } }] },
   'Soul of the Pure': { effs: [{ type: 'act', res: function* (g, c, p) { gain(g, p, 800); } }] },
-  'Soul Resurrection': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(isNormalMon),
+  'Soul Resurrection': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isNormalMon),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Normal Monster in Defense Position?', g.p[p].gy.filter(isNormalMon), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'def')) link(g, c, t); } }] },
   'Soul Reversal': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].gy.some(isFlipMon),

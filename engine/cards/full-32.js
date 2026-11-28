@@ -154,7 +154,7 @@ E.addScripts({
   'Gemini Lancer': { self: { piercing: (g, c) => !!c.flags.gemini }, effs: [] },
   'Gemini Scorpion': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon a Gemini from your hand',
     on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute', 'special', 'synchro', 'fusion', 'ritual']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => gemMon(x) && lv(x) <= 4),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => gemMon(x) && lv(x) <= 4),
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => gemMon(x) && lv(x) <= 4); const [x] = yield* pick(g, p, 'Special Summon a Level 4 or lower Gemini monster', cs, 1, 1, 'good'); if (x) ss(g, p, x); } }] },
   'Gemini Summoner': { effs: [
     // "The first time this card would be destroyed by battle each turn" (as Gemini Soldier: applied when damage calculation dooms it)
@@ -225,7 +225,7 @@ E.addScripts({
     { type: 'trig', mand: true, label: 'Change to Defense Position', on: (g, ev, c) => evSummoned(ev, c, ['normal']),
       res: function* (g, c) { if (onField(c) && faceUp(c)) setPos(g, c, 'def'); } },
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Special Summon an Infernity from your GY',
-      cond: (g, c, p) => handEmpty(g, p) && freeM(g, p) >= 0 && g.p[p].gy.some(x => infMon(x) && !named(x, 'Infernity Necromancer')),
+      cond: (g, c, p) => handEmpty(g, p) && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => infMon(x) && !named(x, 'Infernity Necromancer')),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Infernity monster?', g.p[p].gy.filter(x => infMon(x) && !named(x, 'Infernity Necromancer')), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
 
@@ -325,7 +325,7 @@ E.addScripts({
   'Machina Armored Unit': { effs: [actNoop,
     { type: 'trig', loc: 'st', when: true, opt: true, tags: { ss: 1 }, label: 'Special Summon a weaker Machine',
       on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.destroyed && ev.to === 'gy' && ev.c.owner === c.ctrl && ev.snap && ev.snap.race === 'Machine' && race(ev.c) === 'Machine',
-      cond: (g, c, p, x) => freeM(g, p) >= 0 && x.ev.c.zone === 'gy' && g.p[p].deck.some(y => isMon(y) && race(y) === 'Machine' && attr(y) === attr(x.ev.c) && baseAtk(y) < baseAtk(x.ev.c)),
+      cond: (g, c, p, x) => freeM(g, p) >= 0 && x.ev.c.zone === 'gy' && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(y => isMon(y) && race(y) === 'Machine' && attr(y) === attr(x.ev.c) && baseAtk(y) < baseAtk(x.ev.c)),
       res: function* (g, c, p, L2) { const d = L2.ev.c; if (d.zone !== 'gy') return;
         const cs = g.p[p].deck.filter(y => isMon(y) && race(y) === 'Machine' && attr(y) === attr(d) && baseAtk(y) < baseAtk(d)); if (!cs.length) return;
         const [x] = yield* pick(g, p, 'Special Summon which Machine from your Deck?', cs, 1, 1, 'good'); if (x) ss(g, p, x); shuffleDeck(g, p); } }] },
@@ -335,7 +335,7 @@ E.addScripts({
   'Machina Sniper': { effs: [], cont: { grant: (g, src, c, flag) => flag === 'noAttackTarget' && c.zone === 'm' && isMachina(c) && !named(c, 'Machina Sniper') } },
   'Machina Soldier': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon a Machina from your hand',
     on: (g, ev, c) => evSummoned(ev, c, ['normal']) && monsOf(g, c.ctrl).every(x => x === c),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => isMachina(x) && !named(x, 'Machina Soldier')),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMachina(x) && !named(x, 'Machina Soldier')),
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMachina(x) && !named(x, 'Machina Soldier')); const [x] = yield* pick(g, p, 'Special Summon which Machina monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x); } }] },
   // ENGINE: as a monster it keeps the Trap's data, so other cards don't see it as a Machine or EARTH monster
   'Machine King - 3000 B.C.': { effs: [
@@ -472,7 +472,7 @@ E.addScripts({
       { type: 'trig', loc: 'fz', on: (g, ev, c) => { if (posChangeEv(ev) && c.flags.mapGrp !== ev.group) { c.flags.mapGrp = ev.group; addCtr(g, c, 'morph', 1); } return false; }, res: noop },
       { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon a Morphtronic from your GY',
         on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && ev.to === 'gy',
-        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(morphMon),
+        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(morphMon),
         target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Morphtronic?', g.p[p].gy.filter(morphMon), 1, 1, 'good'); },
         res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   'Morphtronic Mix-up': { effs: [{ type: 'act', tags: { destroy: 1 },
@@ -487,7 +487,7 @@ E.addScripts({
         const [x] = cs.length > 1 ? yield* pick(g, p, 'Change which Morphtronic to Defense Position?', cs, 1, 1) : cs; if (x) setPos(g, x, 'def'); } }] },
   'Morphtronic Repair Unit': { cont: { forbid: (g, src, a) => a.type === 'pos' && src.equipTo === a.c.u },
     effs: [{ type: 'act', tags: { ss: 1 },
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => x !== c && morphMon(x)) && g.p[p].gy.some(morphMon),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => x !== c && morphMon(x)) && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(morphMon),
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which Morphtronic from your hand to the GY?', g.p[p].hand.filter(morphMon), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Morphtronic from your GY?', g.p[p].gy.filter(morphMon), 1, 1, 'good'); },
       // when this card leaves the field the monster is destroyed (link); if the monster leaves, this card goes too

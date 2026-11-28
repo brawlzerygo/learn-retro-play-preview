@@ -98,7 +98,7 @@ const lockInstall = { type: 'trig', loc: 'any', res: noop,
 const horusKill = { type: 'trig', on: (g, ev, c) => { if (ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c) c.flags.horusKill = g.turnNo; return false; }, res: noop };
 const horusUp = next => ({ type: 'trig', tags: { ss: 1 }, label: `Send it: summon ${next}`,
   on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.horusKill === g.turnNo,
-  cond: (g, c, p) => onField(c) && faceUp(c) && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, `Horus the Black Flame Dragon ${next}`)),
+  cond: (g, c, p) => onField(c) && faceUp(c) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, `Horus the Black Flame Dragon ${next}`)),
   cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(c).n} to the GY.`); },
   res: function* (g, c, p) {
     const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, `Horus the Black Flame Dragon ${next}`)); if (!cs.length || freeM(g, p) < 0) return;
@@ -137,7 +137,7 @@ E.addScripts({
   // "Your GY is unaffected by Necrovalley": batch-4.js nvRules reads a face-up Chief. Only 1 face-up Chief: Flip Summons aren't stopped.
   "Gravekeeper's Chief": { effs: [lockInstall, { type: 'trig', when: true, tags: { ss: 1 }, label: "Special Summon a Gravekeeper's from your GY",
     on: (g, ev, c) => evSummoned(ev, c, ['tribute']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(isGK),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isGK),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, "Special Summon which Gravekeeper's monster?", g.p[p].gy.filter(isGK), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   "Gravekeeper's Curse": { effs: [{ type: 'trig', mand: true, label: '500 damage', on: (g, ev, c) => evSummoned(ev, c),
@@ -328,7 +328,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target which Elemental HERO?', monsOf(g, p).filter(x => faceUp(x) && isEHERO(x)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const a = stat(g, t, 'atk'); addMod(g, t, { set: Math.floor(a / 2), which: 'atk', end: true }); t.flags.extraAttack = g.turnNo; log(g, `${name(t)}'s ATK was halved and it can attack twice this turn.`); } }] },
   'Hero Kid': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Hero Kids from your Deck', on: (g, ev, c) => evSummoned(ev, c, SPECIAL),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => named(x, 'Hero Kid')),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Hero Kid')),
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => named(x, 'Hero Kid')); const n = Math.min(cs.length, 5 - monsOf(g, p).length); if (n <= 0) return;
       const xs = yield* pick(g, p, 'Special Summon any number of Hero Kid from your Deck', cs, 1, n, 'good'); for (const x of xs) ss(g, p, x, 'def'); shuffleDeck(g, p); } }] },
   // ENGINE: name() can't be changed by a script, so the target's name stays the same (only the Deck to GY part is done).
@@ -372,7 +372,7 @@ E.addScripts({
   // ENGINE: takeControl() has no "control can't switch" check, so the first sentence isn't applied.
   // Control can't switch: a take of control is undone at once (the full-07.js Element pattern).
   // PARTIAL / ENGINE: takeControl() has no forbid check, so Change of Heart and the like resolve and then control goes straight back.
-  'Horus the Black Flame Dragon LV4': { effs: [horusKill, horusUp('LV6'), { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => {
+  'Horus the Black Flame Dragon LV4': { self: { noCtrlSwitch: true }, effs: [horusKill, horusUp('LV6'), { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => {
     if (!onField(c) || !faceUp(c)) { c.f09ctrl = null; return false; }
     if (c.f09ctrl != null && c.ctrl !== c.f09ctrl && !negd(g, c) && freeM(g, c.f09ctrl) >= 0) { const back = c.f09ctrl; c.flags.ctrlUntil = null; c.flags.ctrlFrom = null; L.takeControl(g, back, c, false); log(g, `Control of ${name(c)} can't switch.`); }
     c.f09ctrl = c.ctrl; return false; } }] },

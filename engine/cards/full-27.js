@@ -65,7 +65,7 @@ const skilled = (target) => ({ effs: [spellCounter3,
 // ENGINE: no window during damage calculation, so it is used in the Damage Step windows before it.
 const guardian = [
   { type: 'quick', ds: true, label: 'Make the attacker’s ATK 0',
-    cond: (g, c, p) => g.inDS && g.battle && g.battle.t === c && g.tp !== c.ctrl && !c.flags.guardUsed && g.battle.a && onField(g.battle.a) && !g.battle.a.mods.some(m => m.guardZero),
+    cond: (g, c, p) => (g.inDS && g.battle && g.battle.t === c && g.tp !== c.ctrl && !c.flags.guardUsed && g.battle.a && onField(g.battle.a) && !g.battle.a.mods.some(m => m.guardZero)) && !!g.battle && E.lib.canTarget(g, g.battle.a, { c, p }),
     target: function* (g, c, p, L2) { L2.t = [g.battle.a]; },
     after: (g, c) => { c.flags.guardUsed = true; },
     res: function* (g, c, p, L2) { const a = live(L2)[0]; if (!a || a.zone !== 'm' || !g.battle) return; addMod(g, a, { set: 0, which: 'atk', end: true, guardZero: true }); g.seq++; log(g, `${name(a)}'s ATK became 0 for damage calculation.`); } },
@@ -372,7 +372,7 @@ E.addScripts({
       res: function* (g, c, p) { const ms = monsOf(g, opp(p)); if (!ms.length) return; const [x] = yield* pick(g, p, 'Return which of their monsters to the hand?', ms, 1, 1, 'bad');
         if (x && onField(x)) { move(g, x, 'hand', { reason: 'effect', by: p }); log(g, `${D(x).n} returned to the ${isExtraD(D(x)) ? 'Extra Deck' : 'hand'}.`); } } },
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 500 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500 && (yield* yn(g, p, "Pay 500 LP to keep Spirit's Invitation?"))) pay(g, p, 500); else destroy(g, [c], { by: p }); } }] },
+      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500 && (yield* yn(g, p, "Pay 500 LP to keep Spirit's Invitation?"))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
   // ENGINE: "This card's activation and effect can't be negated" isn't enforced (no hook in negate()).
   'Spiritualism': { effs: [{ type: 'act', cond: (g, c, p) => stOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Spell/Trap to the hand?', stOf(g, opp(p)), 1, 1, 'bad'); },

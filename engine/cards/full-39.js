@@ -24,7 +24,7 @@ function toBottom(g, x) { if (isExtraD(D(x))) { move(g, x, 'extra', { reason: 'e
 const flip = (label, more) => ({ type: 'trig', mand: true, faceDownOk: true, label, on: (g, ev, c) => ev.type === 'flip' && ev.c === c, ...more });
 const isSpecialHow = how => !['normal', 'tribute', 'flip', 'gemini'].includes(how);
 // "by an effect of a card controlled by your opponent" (as full-26.js): the move's own `by` when given, else the turn player.
-const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's by (engine move: the resolving link's controller), never the turn player
 // Dark World: discarded from the hand to the GY by a resolving card effect; a discard paid as a cost doesn't count (Edison archive:
 // "DO NOT activate when: discarded as a cost"; ev.asCost from the engine), nor the hand size limit (as full-36.js).
 const dwDiscard = (g, ev, c) => {
@@ -56,7 +56,7 @@ const nomiMark = { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => { if (
 const noSSFromGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src };
 // Archfiend upkeep (as full-28.js): pay or destroy; Pandemonium removes the cost
 const archCost = n => ({ type: 'trig', mand: true, label: `Pay ${n} LP`, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-  res: function* (g, c, p) { if (!onField(c) || allField(g).some(x => faceUp(x) && named(x, 'Pandemonium'))) return; if (g.p[p].lp > n) pay(g, p, n); else destroy(g, [c], { by: p }); } });
+  res: function* (g, c, p) { if (!onField(c) || allField(g).some(x => faceUp(x) && named(x, 'Pandemonium'))) return; if (g.p[p].lp > n) pay(g, p, n); else destroy(g, [c], { by: p, rule: true }); } });
 // Equip Spells (as full-26.js)
 const equipAct = (filter = () => true, text = 'Equip to which face-up monster?') => ({ type: 'act',
   cond: g => fieldMons(g).some(m => faceUp(m) && filter(m)),
@@ -204,7 +204,7 @@ E.addScripts({
         res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !onField(c) || !faceUp(c)) return; c.flags.f39gt = t.u; t.flags.noTribute = true; t.flags.f39gb = c.u; log(g, `${face(g, t)} can't attack or be Tributed while Grapple Blocker is face-up.`); } },
       { type: 'trig', mand: true, label: 'Pay 500 LP or destroy it',
         on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
-        res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; const canPay = g.p[p].lp > 500; const i = canPay ? yield* choose(g, p, 'Grapple Blocker: pay 500 LP or destroy it?', ['Pay 500 LP', 'Destroy Grapple Blocker']) : 1; if (i === 0) pay(g, p, 500); else destroy(g, [c], { by: p }); } },
+        res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; const canPay = g.p[p].lp > 500; const i = canPay ? yield* choose(g, p, 'Grapple Blocker: pay 500 LP or destroy it?', ['Pay 500 LP', 'Destroy Grapple Blocker']) : 1; if (i === 0) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } },
       // the lock ends when this card leaves the field or is turned face-down
       { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => { for (const m of fieldMons(g)) if (m.flags.f39gb === c.u && !(faceUp(c) && c.zone === 'm' && c.flags.f39gt === m.u)) { delete m.flags.f39gb; delete m.flags.noTribute; } return false; } }] },
   'Grass Phantom': { self: { atk: (g, c) => 500 * g.p[c.ctrl].gy.filter(x => named(x, 'Grass Phantom')).length } },
@@ -401,7 +401,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
   'Hidden Soldiers': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => !!g.sw && g.sw.p !== p && ['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && lv(x) <= 4 && attr(x) === 'DARK' && canSS(g, p, x)),
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && ['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && lv(x) <= 4 && attr(x) === 'DARK' && canSS(g, p, x)),
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && lv(x) <= 4 && attr(x) === 'DARK'); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which DARK monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   // Its Token goes to the opponent's side. When that Token is destroyed by battle with a Plant, its controller sends 1 card from the
   // hand to the GY. PARTIAL: that send is a chain link (it should not start a chain).

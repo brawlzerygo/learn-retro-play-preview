@@ -172,7 +172,7 @@ function allureQueen(maxLv, from, next) {
         move(g, t, 'st', { ctrl: p, pos: 'up', reason: 'equip' }); t.equipTo = c.u; t.flags.f29aq = true; log(g, `${D(t).n} was equipped to ${name(c)}.`); } }];
   if (next) effs.push({ type: 'trig', label: `Send it: Special Summon ${next}`, tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && !!aqEquip(g, c),
-    cond: (g, c, p) => !!aqEquip(g, c) && [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, next)),
+    cond: (g, c, p) => !!aqEquip(g, c) && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, next)),
     cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${D(c).n} to the GY.`); },
     res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, next)); const [x] = yield* pick(g, p, `Special Summon ${next} from your hand or Deck`, cs, 1, 1, 'good');
       if (!x) return; const fromDeck = x.zone === 'deck'; x.flags.f29aqFrom = D(c).n; if (!ss(g, p, x, 'atk')) x.flags.f29aqFrom = null; if (fromDeck) shuffleDeck(g, p); } });
@@ -226,7 +226,7 @@ const ARC_EFFS = [
   // tails, send 1 card from your hand to the GY.
   { type: 'trig', tags: { ss: 1 }, label: 'Special Summon an Arcana Force from your hand',
     on: (g, ev, c) => arcIs(g, c, AF.emp, 'H') && opponentNS(ev, c),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && isArcana(x)),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && isArcana(x)),
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && isArcana(x)); const [x] = yield* pick(g, p, 'Special Summon which Arcana Force?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } },
   { type: 'trig', mand: true, label: 'Send 1 card from your hand to the GY',
     on: (g, ev, c) => arcIs(g, c, AF.emp, 'T') && opponentNS(ev, c),
@@ -324,7 +324,7 @@ function synMats(g, p, sx, o) {
   for (let mask = 1; mask < (1 << n) && out.length < 12; mask++) {
     const mats = mons.filter((_, i) => mask & (1 << i)); if (mats.length < 1 + (o.minNon || 1)) continue;
     if (mats.reduce((s, c) => s + lv(c), 0) !== Lv) continue;
-    if (mats.some(t => D(t).tu && o.tuner(t) && mats.filter(x => x !== t).every(x => o.non(x) && !D(x).tu))) out.push(mats);
+    if (E.lib.synOk(g, sx, mats, { line: false }) && mats.some(t => D(t).tu && o.tuner(t) && mats.filter(x => x !== t).every(x => o.non(x) && !D(x).tu))) out.push(mats);
   }
   return out;
 }
@@ -552,7 +552,7 @@ E.addScripts({
       return false; } },
     { type: 'trig', tags: { ss: 1 }, label: 'Special Summon the monsters it destroyed',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'bpEnd' && !!c.flags.f29momK && c.flags.f29momK.turn === g.turnNo,
-      cond: (g, c, p) => freeM(g, p) >= 0 && allCards(g, 'gy').some(x => c.flags.f29momK && c.flags.f29momK.us.includes(x.u)),
+      cond: (g, c, p) => freeM(g, p) >= 0 && allCards(g, 'gy').filter(x => E.lib.ssable(g, p, x)).some(x => c.flags.f29momK && c.flags.f29momK.us.includes(x.u)),
       res: function* (g, c, p) { const us = (c.flags.f29momK || {}).us || []; c.flags.f29momK = null; const kids = [];
         for (const x of allCards(g, 'gy').filter(x => us.includes(x.u))) if (ss(g, p, x, 'atk')) kids.push(x.u);
         if (onField(c)) c.flags.f29kids = (c.flags.f29kids || []).concat(kids); } },

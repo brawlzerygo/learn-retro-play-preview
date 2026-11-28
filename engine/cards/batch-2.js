@@ -36,7 +36,7 @@ function synMats(g, p, sx, o) {
     const mats = mons.filter((_, i) => mask & (1 << i)); if (mats.length < 2) continue;
     if (mats.reduce((s, c) => s + lv(c), 0) !== Lv) continue;
     const okSet = mats.some(t => D(t).tu && o.tuner(t) && mats.filter(x => x !== t).every(x => o.non(x) && (o.tunerAsNon || !D(x).tu)));
-    if (okSet) out.push(mats);
+    if (okSet && E.lib.synOk(g, sx, mats, { line: false })) out.push(mats);   // the materials' own rules (Fishborg Blaster, Debris Dragon)
   }
   return out;
 }
@@ -52,14 +52,15 @@ function* ssFromDeck(g, p, filter, text, pos = 'atk', o = {}) {
   const [x] = yield* pick(g, p, text, cands, 1, 1, 'good'); if (x && !ssx(g, p, x, pos, o)) { shuffleDeck(g, p); return null; } shuffleDeck(g, p); return x;
 }
 /* A Special Summon in the Damage Step opens no "when summoned" window (Bottomless, Torrential): clear g.sw so it can't go stale. */
-function ssx(g, ...a) { const r = ss(g, ...a); if (g.inDS) g.sw = null; return r; }
+function ssx(g, ...a) { const r = ss(g, ...a); if (g.inDS) { g.sw = null; if (g.ssBatch) g.ssBatch.noSw = true; } return r; }
 const takenFromBattle = (ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy';
 
 E.addScripts({
   /* ----- Lightsworn ----- */
   'Aurkus, Lightsworn Druid': {
-    // ENGINE: "neither player can target Lightsworn monsters" needs a targeting check inside tgt(); the self flag below is not read by the engine yet.
-    self: { cantBeTargeted: true },
+    // "Neither player can target Lightsworn monsters with card effects": on the field (face-up), in the GY and banished (site ruling 1);
+    // the engine's canTarget reads the grant for every targeting effect, tgt() and hand-filled target picks alike (2026-11-28 audit)
+    cont: { grant: (g, src, c, flag) => flag === 'cantBeTargeted' && isLS(c) && isMon(c) },
     effs: [lsEnd(2)] },
   'Celestia, Lightsworn Angel': { effs: [{ type: 'trig', when: true, tags: { destroy: 1 }, label: 'Send 4, destroy up to 2 cards',
     on: (g, ev, c) => evSummoned(ev, c, ['tribute']) && (ev.tribs || []).some(isLS),
@@ -85,7 +86,7 @@ E.addScripts({
       res: function* (g, c, p) { destroy(g, allField(g).filter(x => x !== c), { by: p }); } },
     lsEnd(4)] },
   'Lumina, Lightsworn Summoner': { effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Discard: revive a Lightsworn',
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.length > 0 && g.p[p].gy.some(x => isMon(x) && isLS(x) && lv(x) <= 4),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.length > 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && isLS(x) && lv(x) <= 4),
       cost: function* (g, c, p) { yield* discard1(g, p, g.p[p].hand); },
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon a Level 4 or lower Lightsworn from your GY', g.p[p].gy.filter(x => isMon(x) && isLS(x) && lv(x) <= 4), 1, 1, 'good'); },
       res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ssx(g, p, t); } },
@@ -154,7 +155,7 @@ E.addScripts({
     effs: [
       { type: 'trig', mand: true, on: (g, ev, c) => { if (ev.type === 'attack' && ev.a === c) pay(g, c.ctrl, 1000); return false; }, res: function* () {} },
       { type: 'ign', tags: { ss: 1 }, label: 'Send to GY: summon Soldier, Sniper, Defender',
-        cond: (g, c, p) => nFreeM(g, p) + 1 >= 3 && FORCE3.every(n => g.p[p].gy.some(x => D(x).n === n)),
+        cond: (g, c, p) => nFreeM(g, p) + 1 >= 3 && FORCE3.every(n => g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => D(x).n === n)),
         cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost' }); },
         target: function* (g, c, p, L) { L.t = FORCE3.map(n => g.p[p].gy.find(x => D(x).n === n)).filter(Boolean); },
         res: function* (g, c, p, L) { if (nFreeM(g, p) < 3 || !L.t.every(t => t.zone === 'gy')) return; for (const t of L.t) ssx(g, p, t); } }] },
@@ -178,19 +179,19 @@ E.addScripts({
 
   /* ----- Amaryllis / Plants ----- */
   'Botanical Lion': {
-    // ENGINE: "control of this card can't switch" needs a check in takeControl().
-    self: { atk: (g, c) => 300 * monsOf(g, c.ctrl).filter(x => faceUp(x) && race(x) === 'Plant').length } },
+    // ② "Control of this card can't Switch": the engine's takeControl reads noCtrlSwitch
+    self: { noCtrlSwitch: true, atk: (g, c) => 300 * monsOf(g, c.ctrl).filter(x => faceUp(x) && race(x) === 'Plant').length } },
   'Dandylion': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'gy',
     cond: (g, c, p) => nFreeM(g, p) >= 2,
-    res: function* (g, c, p) { if (nFreeM(g, p) >= 2) { tokens(g, p, { n: 'Fluff Token', a: 'WIND', r: 'Plant', lv: 1, atk: 0, def: 0 }, 2, 'def', { noTribute: true }); if (g.inDS) g.sw = null; } } }] },
+    res: function* (g, c, p) { if (nFreeM(g, p) >= 2) { tokens(g, p, { n: 'Fluff Token', a: 'WIND', r: 'Plant', lv: 1, atk: 0, def: 0 }, 2, 'def', { noTribute: 'summon' }); if (g.inDS) { g.sw = null; if (g.ssBatch) g.ssBatch.noSw = true; } } } }] },
   'Lonefire Blossom': { effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Tribute a Plant: summon a Plant',
-    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Plant') && g.p[p].deck.some(x => isPlant(x) && !noSS(x)),
+    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Plant') && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isPlant(x) && !noSS(x)),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a face-up Plant', monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Plant'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { if (freeM(g, p) >= 0) yield* ssFromDeck(g, p, isPlant, 'Special Summon a Plant from your Deck'); } }] },
   'Lord Poison': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 },
     on: (g, ev, c) => takenFromBattle(ev, c) && ev.destroyed,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isPlant(x) && D(x).n !== 'Lord Poison'),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isPlant(x) && D(x).n !== 'Lord Poison'),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which Plant from your GY?', g.p[p].gy.filter(x => isPlant(x) && D(x).n !== 'Lord Poison'), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ssx(g, p, t); } }] },
   'Morphing Jar': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
@@ -213,7 +214,7 @@ E.addScripts({
     cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [x] = yield* pick(g, p, 'Tribute a face-up Plant', monsOf(g, p).filter(m => faceUp(m) && race(m) === 'Plant'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
   'D.D.R. - Different Dimension Reincarnation': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => x !== c) && g.p[p].ban.some(isMon),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => x !== c) && g.p[p].ban.filter(x => E.lib.ssable(g, p, x)).some(isMon),
     cost: function* (g, c, p) { yield* discard1(g, p, g.p[p].hand.filter(x => x !== c)); },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which banished monster?', g.p[p].ban.filter(isMon), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (!t || t.zone !== 'ban' || !onField(c)) return; if (ssx(g, p, t, 'atk') && equip(g, c, t)) link(g, c, t); } }] },
@@ -251,8 +252,8 @@ E.addScripts({
     target: function* (g, c, p, L) { yield* E.lib.tgt(g, p, L, 'Target the attacking monster', [g.aw.a], 1, 1, 'bad'); },
     res: function* (g, c, p, L) { const t = live(L)[0]; if (!E.lib.attackingNow(g, t)) return; negateAttack(g); damage(g, t.ctrl, atk(g, t), { src: c, srcP: p }); } }] },
   'Skill Drain': {
-    // ENGINE: a monster effect already on the chain when Skill Drain starts applying still resolves (resolveChain only checks c.flags.negated).
-    cont: { negates: (g, src, c) => !trapStunned(g) && isMon(c) && c.zone === 'm' && faceUp(c) },
+    // actOk: monsters can still activate their effects (and pay costs) under it (Edison ruling 4; engine negActAllowed)
+    cont: { actOk: true, negates: (g, src, c) => !trapStunned(g) && isMon(c) && c.zone === 'm' && faceUp(c) },
     effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000, cost: function* (g, c, p) { pay(g, p, 1000); }, res: function* () {} }] },
 
   /* ----- Cat ----- */
@@ -260,15 +261,15 @@ E.addScripts({
     { type: 'trig', mand: true, on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c)) c.flags.noTribute = true; return evSummoned(ev, c, ['normal', 'flip']); },
       res: function* (g, c) { if (onField(c) && c.pos === 'atk') { c.pos = 'def'; log(g, `${name(c)} changed to Defense Position.`); } } },
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Discard a Spell: summon a Level 4',
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(isSpell) && g.p[p].deck.some(x => isMon(x) && lv(x) === 4 && !noSS(x)),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(isSpell) && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && lv(x) === 4 && !noSS(x)),
       cost: function* (g, c, p) { yield* discard1(g, p, g.p[p].hand.filter(isSpell), 'Discard a Spell'); },
       res: function* (g, c, p) { const x = yield* ssFromDeck(g, p, x => lv(x) === 4, 'Special Summon a Level 4 monster from your Deck'); if (x) addRule(g, (g2, a) => a.type === 'attack' && a.c === x, { end: g.turnNo }); } }] },
   'Rescue Cat': { effs: [
     { type: 'ign', tags: { ss: 1 }, label: 'Send to GY: summon 2 Beasts',
-      cond: (g, c, p) => nFreeM(g, p) + 1 >= 2 && g.p[p].deck.filter(x => isMon(x) && race(x) === 'Beast' && lv(x) <= 3 && !noSS(x)).length >= 2,
+      cond: (g, c, p) => nFreeM(g, p) + 1 >= 2 && g.p[p].deck.filter(x => isMon(x) && race(x) === 'Beast' && lv(x) <= 3 && E.lib.ssable(g, p, x)).length >= 2,
       cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost' }); },
       res: function* (g, c, p) {
-        const cands = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Beast' && lv(x) <= 3 && !noSS(x)); if (cands.length < 2 || nFreeM(g, p) < 2) { shuffleDeck(g, p); return; }
+        const cands = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Beast' && lv(x) <= 3 && E.lib.ssable(g, p, x)); if (cands.length < 2 || nFreeM(g, p) < 2) { shuffleDeck(g, p); return; }
         const xs = yield* pick(g, p, 'Special Summon 2 Level 3 or lower Beasts', cands, 2, 2, 'good');
         for (const x of xs) if (ssx(g, p, x, 'atk')) x.flags.rescueEnd = g.turnNo;
         shuffleDeck(g, p); } },
@@ -304,11 +305,11 @@ E.addScripts({
       cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost' }); },
       res: function* (g) { if (g.attempt) { g.attempt.negated = true; log(g, 'The Special Summon was negated.'); } } }] },
   'Trap Stun': { effs: [{ type: 'act',
-    // PARTIAL: Traps activated later this turn can't be activated at all (instead of being activated and negated); Traps already on the chain are negated.
+    // Traps can still be activated; every other Trap effect on the field is negated this turn (engine ruleNeg: face-up ones stop applying,
+    // ones activated later resolve negated; Edison rulings "does not prevent Trap Cards from being activated"). Traps on the chain too.
     res: function* (g, c, p) {
-      g.trapStun = g.turnNo;
-      for (const L2 of g.chain) if (isTrap(L2.c) && L2.c !== c && !L2.negated) { L2.negated = true; log(g, `${name(L2.c)}'s effect was negated.`); }
-      addRule(g, (g2, a) => a.type === 'activate' && isTrap(a.c) && a.c !== c, { end: g.turnNo });
+      g.trapStun = g.turnNo; g.trapStunU = c.u; g.seq++;
+      for (const L2 of g.chain) if (isTrap(L2.c) && L2.c !== c && !L2.negated && !['gy', 'hand'].includes(L2.eff.loc)) { L2.negated = true; log(g, `${name(L2.c)}'s effect was negated.`); }
       log(g, 'Trap effects are negated this turn.'); } }] },
 
   /* ----- Dragon Aggro ----- */
@@ -339,10 +340,10 @@ E.addScripts({
       { type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => fromFieldToGY(ev, c) && ((ev.snap && ev.snap.faceUp) || ev.battle),
         res: function* (g, c, p) { if (c.zone === 'gy') { move(g, c, 'deckTop', { reason: 'effect' }); log(g, 'Archlord Kristya returned to the top of the Deck.'); } } }] },
   'Shining Angel': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, on: (g, ev, c) => takenFromBattle(ev, c) && ev.destroyed,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && attr(x) === 'LIGHT' && baseAtk(x) <= 1500 && !noSS(x)),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'LIGHT' && baseAtk(x) <= 1500 && !noSS(x)),
     res: function* (g, c, p) { yield* ssFromDeck(g, p, x => attr(x) === 'LIGHT' && baseAtk(x) <= 1500, 'Special Summon a LIGHT with 1500 or less ATK from your Deck'); } }] },
   'Nova Summoner': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, on: (g, ev, c) => takenFromBattle(ev, c) && ev.destroyed,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => novaOk(g, x)),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => novaOk(g, x)),
     res: function* (g, c, p) { yield* ssFromDeck(g, p, x => novaOk(g, x), 'Special Summon from your Deck'); } }] },
   'Dimensional Alchemist': { effs: [
     { type: 'ign', opt: true, label: 'Banish the top card: +500 ATK', cond: (g, c, p) => g.p[p].deck.length > 0,

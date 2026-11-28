@@ -23,7 +23,7 @@ const equipAct = (filter = () => true, text = 'Equip to which face-up monster?')
   target: function* (g, c, p, L2) { yield* tgt(g, p, L2, text, fieldMons(g).filter(m => faceUp(m) && filter(m)), 1, 1, 'good'); },
   res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && filter(t) && onField(c)) equip(g, c, t); } });
 // "by an effect of a card controlled by your opponent" (as full-39.js): the move's own `by` when given, else the turn player.
-const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's by (engine move: the resolving link's controller), never the turn player
 // Dark World: discarded from the hand to the GY by a card effect (as full-39.js). The hand size limit doesn't count.
 const dwDiscard = (g, ev, c) => {
   if (!(ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ev.reason === 'discard' && !ev.asCost)) return false;
@@ -44,7 +44,7 @@ function synMats(g, p, sx, tunerOk) {
   for (let mask = 1; mask < (1 << mons.length) && out.length < 12; mask++) {
     const mats = mons.filter((_, i) => mask & (1 << i)); if (mats.length < 2) continue;
     if (mats.reduce((s, c) => s + lv(c), 0) !== Lv) continue;
-    if (mats.some(t => isTuner(t) && tunerOk(t) && mats.filter(x => x !== t).every(x => !isTuner(x)))) out.push(mats);
+    if (E.lib.synOk(g, sx, mats, { line: false }) && mats.some(t => isTuner(t) && tunerOk(t) && mats.filter(x => x !== t).every(x => !isTuner(x)))) out.push(mats);
   }
   return out;
 }
@@ -129,7 +129,7 @@ E.addScripts({
       const xs = stOf(g, opp(p)).filter(faceUp); if (xs.length) destroy(g, xs, { by: p, src: c }); } }] },
   // Quick Effect in the GY: exactly 1 Synchro Monster Special Summoned to the opponent's field. Banishing itself is the cost.
   'Shiny Black C': { effs: [{ type: 'quick', loc: 'gy', tags: { destroy: 1 }, label: 'Banish: destroy the Synchro Monster',
-    cond: (g, c, p) => !!g.sw && g.sw.p !== p && !['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && g.sw.cs.length === 1 && D(g.sw.cs[0]).k === 'synchro' && onField(g.sw.cs[0]) && faceUp(g.sw.cs[0]) && g.sw.cs[0].ctrl !== p,
+    cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && !['normal', 'tribute', 'flip', 'gemini'].includes(g.sw.how) && g.sw.cs.length === 1 && D(g.sw.cs[0]).k === 'synchro' && onField(g.sw.cs[0]) && faceUp(g.sw.cs[0]) && g.sw.cs[0].ctrl !== p,
     cost: function* (g, c, p, L2) { L2.data.t = g.sw.cs[0]; move(g, c, 'ban', { reason: 'cost', by: p }); log(g, `${PN(g, p)} banished Shiny Black C.`); },
     target: function* (g, c, p, L2) { L2.t = [L2.data.t]; },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) destroy(g, [t], { by: p, src: c }); } }] },
@@ -203,7 +203,7 @@ E.addScripts({
         res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; const q = L2.ev.tp; const n = 1000 - 500 * stOf(g, q).length; if (n > 0) damage(g, q, n, { src: c, srcP: p }); } }] },
   'Simultaneous Loss': { effs: [{ type: 'act', res: function* (g, c, p) { mill(g, p, 1); mill(g, opp(p), 1); } }] },
   'Six Scrolls of the Samurai': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).filter(x => faceUp(x) && /Six Samurai/.test(name(x))).length >= 2 && g.p[p].deck.some(x => named(x, 'Great Shogun Shien')),
+    cond: (g, c, p) => monsOf(g, p).filter(x => faceUp(x) && /Six Samurai/.test(name(x))).length >= 2 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Great Shogun Shien')),
     cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute which 2 face-up Six Samurai monsters?', monsOf(g, p).filter(x => faceUp(x) && /Six Samurai/.test(name(x))), 2, 2, 'cost');
       for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); },
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const x = g.p[p].deck.find(y => named(y, 'Great Shogun Shien')); if (x && canSS(g, p, x)) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
@@ -272,7 +272,7 @@ E.addScripts({
   // The summoned monster returns to the hand in this turn's End Phase (a monster unaffected by Traps stays).
   'Slip Summon': { effs: [
     { type: 'act', tags: { ss: 1 },
-      cond: (g, c, p) => !!g.sw && g.sw.p !== p && freeM(g, p) >= 0 && g.p[p].hand.some(x => x !== c && isMon(x) && lv(x) <= 4 && D(x).k !== 'ritual' && canSS(g, p, x)),
+      cond: (g, c, p) => !!g.sw && E.lib.swOf(g, 1 - p).length > 0 && freeM(g, p) >= 0 && g.p[p].hand.some(x => x !== c && isMon(x) && lv(x) <= 4 && D(x).k !== 'ritual' && canSS(g, p, x)),
       res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].hand.filter(x => isMon(x) && lv(x) <= 4 && D(x).k !== 'ritual' && canSS(g, p, x)); if (!cs.length) return;
         const [x] = yield* pick(g, p, 'Special Summon which Level 4 or lower monster in Defense Position?', cs, 1, 1, 'good');
         if (x && ss(g, p, x, 'def')) { x.flags.f44slip = true; (c.f44ss || (c.f44ss = [])).push({ u: x.u, turn: g.turnNo }); } } },
@@ -283,7 +283,7 @@ E.addScripts({
         for (const x of fieldMons(g).filter(m => us.includes(m.u) && m.flags.f44slip && !(faceUp(m) && has(g, m, 'unaffectedTraps')))) { move(g, x, 'hand', { reason: 'effect' }); log(g, `${D(x).n} returned to the hand.`); } } }] },
   'Small Piece Golem': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Medium Piece Golem',
     on: (g, ev, c) => evSummoned(ev, c),
-    cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, p).some(m => faceUp(m) && named(m, 'Big Piece Golem')) && g.p[p].deck.some(x => named(x, 'Medium Piece Golem')),
+    cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, p).some(m => faceUp(m) && named(m, 'Big Piece Golem')) && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Medium Piece Golem')),
     res: function* (g, c, p) { if (freeM(g, p) < 0) return;
       const cs = g.p[p].deck.filter(x => named(x, 'Medium Piece Golem')); if (!cs.length) return; ss(g, p, cs[0], 'atk', { negate: true }); shuffleDeck(g, p); } }] },
   // Discard is the cost. Not tagged as destruction: Stardust Dragon can't negate it (ruling).

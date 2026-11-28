@@ -17,7 +17,7 @@ const actNoop = { type: 'act', res: noop };
 const canSS = (g, p, x) => isMon(x) && !forbid(g, { type: 'ss', c: x, p, how: 'special' });
 const isLS = x => /Lightsworn/.test(name(x));
 // "by an effect of a card controlled by your opponent" (as in full-26.js): the move's own `by` when given, else the turn player.
-const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
+const byOpp = (g, ev, c) => ev.by != null && ev.by !== c.owner;   // the move's by (engine move: the resolving link's controller), never the turn player
 const flip = (label, more) => ({ type: 'trig', mand: true, faceDownOk: true, label, on: (g, ev, c) => ev.type === 'flip' && ev.c === c, ...more });
 // the monster it battles right now
 const foeOf = (g, c) => g.battle ? (g.battle.a === c ? g.battle.t : g.battle.t === c ? g.battle.a : null) : null;
@@ -258,7 +258,7 @@ E.addScripts({
       const [b] = yield* pick(g, p, 'Which monster gains the lost ATK?', fieldMons(g).filter(m => faceUp(m) && m !== a), 1, 1, 'good');
       L2.t = [a, b].filter(Boolean); },
     res: function* (g, c, p, L2) { const [a, b] = L2.t; if (!a || !onField(a) || !faceUp(a)) return; const A = stat(g, a, 'atk'), lost = A - Math.floor(A / 2);
-      addMod(g, a, { atk: -lost, end: true }); log(g, `${name(a)}'s ATK was halved.`);
+      addMod(g, a, { set: A - lost, which: 'atk', end: true }); log(g, `${name(a)}'s ATK was halved.`);
       if (b && onField(b) && faceUp(b)) { addMod(g, b, { atk: lost, end: true }); log(g, `${name(b)} gained ${lost} ATK.`); } } }] },
   // ENGINE: no response window right after a destruction, so it is an optional trigger while Set.
   'Rise of the Snake Deity': { effs: [lateAct({ label: 'Special Summon Vennominaga', tags: { ss: 1 },
@@ -300,7 +300,7 @@ E.addScripts({
     effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon 2 Rockstone Tokens',
       on: (g, ev, c) => fromFieldToGY(ev, c) && ev.battle && !!g.battle && g.battle.a === c,
       res: function* (g, c, p) { const n = Math.min(2, nFreeM(g, p)); if (n <= 0) return; const pos = yield* askPos(g, p, 'Rockstone Tokens');
-        tokens(g, p, { n: 'Rockstone Token', a: 'EARTH', r: 'Rock', lv: 1, atk: 0, def: 0 }, n, pos, { noTribute: true }); } }] },
+        tokens(g, p, { n: 'Rockstone Token', a: 'EARTH', r: 'Rock', lv: 1, atk: 0, def: 0 }, n, pos, { noTribute: 'summon' }); } }] },
   'Roll Out!': { effs: [{ type: 'act',
     cond: (g, c, p) => g.p[p].st.filter(z => !z).length >= (c.zone === 'st' ? 1 : 2) && g.p[p].gy.some(u => isUnion(u) && unionTargets(g, p, u).length > 0),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Equip which Union monster from your GY?', g.p[p].gy.filter(u => isUnion(u) && unionTargets(g, p, u).length > 0), 1, 1, 'good'); },

@@ -64,7 +64,7 @@ const archDice = (who, hits, label) => ({ type: 'quick', speed: 3, ds: true, lab
   res: function* (g, c, p, L2) { const T = L2.data.L; if (!T || T.negated) return; const n = dice(g, p); if (hits.includes(n)) { T.negBy = p; negate(g, T, true); } else log(g, 'Nothing happened.'); } });
 const archCost = { type: 'trig', mand: true, label: 'Pay 500 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
   // PARTIAL: with 500 LP or less the card is destroyed instead of paying (the text gives no rule for it).
-  res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { by: p }); } };
+  res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } };
 // Cobra Jar's token remembers its Jar (the token is gone once it leaves the field)
 const cobraOf = (ev, c) => ev.type === 'move' && ev.snap && ev.snap.flags && ev.snap.flags.f20jar === c.u && ev.battle && ev.destroyed;
 
@@ -222,12 +222,12 @@ E.addScripts({
   'Darkbishop Archfiend': { effs: [archCost, archDice((g, c, m) => isArchfiend(m), [1, 3, 6], 'Roll a die (1, 3 or 6 negates)')] },
   'Darklord Marie': { effs: [{ type: 'trig', loc: 'gy', opt: true, mand: true, label: 'Gain 200 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner,
     res: function* (g, c, p) { if (c.zone === 'gy') gain(g, p, 200); } }] },
-  'Deal of Phantom': { effs: [{ type: 'act', cond: g => fieldMons(g).some(faceUp),
+  'Deal of Phantom': { effs: [{ type: 'act', ds: true, cond: g => fieldMons(g).some(faceUp),
     target: function* (g, c, p, L2) { L2.data.n = 100 * g.p[p].gy.filter(isMon).length; yield* tgt(g, p, L2, 'Which face-up monster gains ATK?', fieldMons(g).filter(faceUp), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || !L2.data.n) return; addMod(g, t, { atk: L2.data.n, end: true }); log(g, `${name(t)} gained ${L2.data.n} ATK.`); } }] },
   'Decayed Commander': { effs: [
     { type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Zombie Tiger', on: (g, ev, c) => evSummoned(ev, c, ['normal']),
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => named(x, 'Zombie Tiger')),
+      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Zombie Tiger')),
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => named(x, 'Zombie Tiger')); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which Zombie Tiger?', cs, 1, 1, 'good'); if (x) ss(g, p, x); } },
     { type: 'trig', mand: true, label: 'Discard a random card', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.direct && ev.src === c && ev.p !== c.ctrl,
       res: function* (g, c, p) { discardRandom(g, opp(p), p); } }] },
@@ -257,7 +257,7 @@ E.addScripts({
   // Whose effect sent it: the move's `by` when set, else an effect during the opponent's turn.
   // PARTIAL: an opponent's Quick Effect on your own turn that sends it with no "by" is missed.
   'Despair from the Dark': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon itself',
-    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'gy' && ['hand', 'deck'].includes(ev.from) && ['effect', 'discard'].includes(ev.reason) && (ev.by != null ? ev.by !== c.owner : g.tp !== c.owner),
+    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'gy' && ['hand', 'deck'].includes(ev.from) && ['effect', 'discard'].includes(ev.reason) && (ev.by != null && ev.by !== c.owner),
     cond: (g, c, p) => freeM(g, p) >= 0, res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c, 'atk'); } }] },
   'Desrook Archfiend': { effs: [archCost, archDice((g, c, m) => m === c, [3], 'Roll a die (3 negates)'),
     { type: 'trig', loc: 'hand', when: true, tags: { ss: 1 }, label: 'Send this card: revive Terrorking Archfiend',
@@ -301,7 +301,7 @@ E.addScripts({
     res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand.slice(); if (!h.length) return; for (const x of h) move(g, x, 'deck', { reason: 'effect', by: p }); log(g, `${PN(g, o)} shuffled ${h.length} card${h.length > 1 ? 's' : ''} into the Deck.`); draw(g, o, h.length); } }] },
   'Dokurorider': { effs: [] },
   'Don Turtle': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Don Turtles', on: (g, ev, c) => evSummoned(ev, c, ['normal', 'flip']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => named(x, 'Don Turtle')),
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Don Turtle')),
     res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => named(x, 'Don Turtle')); const n = Math.min(cs.length, nFreeM(g, p)); if (!n) return;
       const xs = yield* pick(g, p, 'Special Summon any number of Don Turtle from your hand', cs, 1, n, 'good'); for (const x of xs) ss(g, p, x); } }] },
   'Don Zaloog': { effs: [{ type: 'trig', when: true, label: 'Discard or mill 2',
@@ -338,7 +338,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { L2.t = [g.aw.a]; },
     res: function* (g, c, p, L2) { const a = live(L2)[0]; if (!a || !g.aw || g.aw.a !== a) return; const n = faceUp(a) ? atk(g, a) : 0; negateAttack(g); gain(g, p, n); } }] },
   'Dramatic Rescue': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p, x) => { const T = x.top; return !!T && !T.negated && T.t.some(m => onField(m) && m.zone === 'm' && faceUp(m) && m.ctrl === p && /Amazoness/.test(name(m))) && g.p[p].hand.some(y => y !== c && ssAble(y)); },
+    cond: (g, c, p, x) => { const T = x.top; return !!T && !T.negated && T.t.some(m => onField(m) && m.zone === 'm' && faceUp(m) && m.ctrl === p && /Amazoness/.test(name(m))) && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(y => y !== c && ssAble(y)); },
     target: function* (g, c, p, L2) { const T = g.chain[g.chain.length - 1]; L2.t = T.t.filter(m => onField(m) && m.zone === 'm' && faceUp(m) && m.ctrl === p && /Amazoness/.test(name(m))).slice(0, 1); },
     res: function* (g, c, p, L2) { const m = live(L2)[0]; if (!m || !faceUp(m)) return; move(g, m, 'hand', { reason: 'effect', by: p }); log(g, `${D(m).n} returned to the hand.`);
       const cs = g.p[p].hand.filter(y => y !== m && ssAble(y)); if (!cs.length || freeM(g, p) < 0) return;
