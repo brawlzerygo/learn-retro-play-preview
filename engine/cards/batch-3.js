@@ -15,7 +15,7 @@ const nm = x => D(x).n;
 const isGB = x => /^Gladiator Beast/.test(nm(x));
 const gbMon = x => isMon(x) && isGB(x);
 const isGK = x => isMon(x) && /^Gravekeeper's/.test(nm(x));
-const isAG = x => isMon(x) && /^Ancient Gear/.test(nm(x));
+const isAG = x => isMon(x) && /Ancient Gear/.test(nm(x));   // Ultimate Ancient Gear Golem is an Ancient Gear monster too
 const isFish = x => isMon(x) && race(x) === 'Fish';
 const hasAb = (x, s) => (D(x).ab || '').split(' ').includes(s);
 const mon = x => isMon(x) && !L.isExtraD(D(x));
@@ -371,8 +371,8 @@ E.addScripts({
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g, c, p) { const xs = [...monsOf(g, opp(p)).filter(faceUp), ...g.p[opp(p)].gy].filter(x => isMon(x) && race(x) === 'Machine'); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.map(nm).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished.`); } }] },
   "Gottoms' Emergency Call": { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => nFreeM(g, p) >= 2 && fieldMons(g).some(x => faceUp(x) && /^X-Saber/.test(name(x))) && allCards(g, 'gy').filter(x => isMon(x) && /^X-Saber/.test(nm(x))).length >= 2,
-    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which 2 X-Sabers?', allCards(g, 'gy').filter(x => isMon(x) && /^X-Saber/.test(nm(x))), 2, 2, 'good'); },
+    cond: (g, c, p) => nFreeM(g, p) >= 2 && fieldMons(g).some(x => faceUp(x) && /X-Saber/.test(name(x))) && allCards(g, 'gy').filter(x => isMon(x) && /X-Saber/.test(nm(x))).length >= 2,
+    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which 2 X-Sabers?', allCards(g, 'gy').filter(x => isMon(x) && /X-Saber/.test(nm(x))), 2, 2, 'good'); },
     res: function* (g, c, p, L) { if (L.t.length < 2 || L.t.some(x => x.zone !== 'gy') || nFreeM(g, p) < 2) return; for (const t of L.t) ss(g, p, t); } }] },
   'Swallow Flip': { effs: [{ type: 'act',
     cond: (g, c, p, x) => x.top && !x.top.negated && !x.top.cardAct && isMon(x.top.c) && x.top.eff.type === 'trig' && x.top.ev && x.top.ev.type === 'summon' && !['normal', 'tribute', 'flip', 'gemini'].includes(x.top.ev.how),

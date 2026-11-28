@@ -14,7 +14,7 @@ const atk = L.atk, def = L.def;
 const nm = x => D(x).n;
 const isGB = x => /^Gladiator Beast/.test(nm(x));
 const gbMon = x => isMon(x) && isGB(x);
-const isAG = x => isMon(x) && /^Ancient Gear/.test(name(x));
+const isAG = x => isMon(x) && /Ancient Gear/.test(name(x));   // Ultimate Ancient Gear Golem counts
 const isAmz = x => isMon(x) && /Amazon/.test(name(x)); // "Amazoness" monsters (and Amazon Archer, the old name)
 const isAlien = x => isMon(x) && /Alien/.test(name(x));
 const SSTYPES = ['special', 'synchro', 'fusion', 'ritual'];
