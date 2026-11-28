@@ -65,24 +65,8 @@ const synProc = tunerOk => ({ extra: true, how: 'synchro', label: 'Synchro Summo
     for (const m of mats) move(g, m, 'gy', { reason: 'synchro', by: p, group: grp });
     log(g, `${PN(g, p)} sent ${mats.map(m => D(m).n).join(' + ')} to the GY for a Synchro Summon.`); } });
 
-/* Spell resolutions a face-up monster sees (Mythical Beast Cerberus). A Spell Card activation counts once its chain link has
- left the chain without being negated. A link is noticed when it is on the chain (or resolving) during any game event; a Spell
- activated from the hand is also noticed by its own activation, and counts when it reaches the GY by rule (Normal, Quick-Play)
- or is still face-up once the chain is empty (Continuous, Equip, Field). PARTIAL: a Set Spell flipped up whose chain makes
- no game event at all is missed. Returns how many resolved since the last call. */
-function spellsResolved(g, ev, c) {
-  const W = c.flags.f41sp || (c.flags.f41sp = {}); let n = 0;
-  const links = g.chain.slice(); if (g.resolvingL) links.push(g.resolvingL);
-  for (const L2 of links) if (L2 && L2.cardAct && isSpell(L2.c)) { const w = W[L2.c.u]; if (!w) W[L2.c.u] = { L: L2, c: L2.c }; else if (!w.L) w.L = L2; else if (w.L !== L2) W[L2.c.u] = { L: L2, c: L2.c }; }
-  if (ev.type === 'move' && ev.reason === 'activate' && isSpell(ev.c) && !W[ev.c.u]) W[ev.c.u] = { L: null, c: ev.c, seq: ev.seq };
-  for (const k of Object.keys(W)) {
-    const w = W[k];
-    if (w.L) { if (g.chain.includes(w.L) || g.resolvingL === w.L) continue; delete W[k]; if (!w.L.negated) n++; continue; }
-    if (ev.type === 'move' && ev.c === w.c && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule') { delete W[k]; n++; continue; }
-    if (ev.seq > w.seq && !g.chain.length && !g.resolvingL) { delete W[k]; if (onField(w.c) && faceUp(w.c)) n++; }
-  }
-  return n;
-}
+// Spell resolutions a face-up monster sees (Mythical Beast Cerberus): 1 for each resolved Spell Card activation.
+function spellsResolved(g, ev, c) { return L.spellCtrEv(g, ev, c) >= 0 ? 1 : 0; }   // the engine's spellResolved event (2026-11-27 audit)
 
 E.addScripts({
   'Magnetic Mosquito': { effs: [flip('Destroy all face-up Machine monsters', { tags: { destroy: 1 },
@@ -96,7 +80,7 @@ E.addScripts({
   // Main Phase 1 only (ruling); the Battle Phase lock applies on activation
   'Makiu, the Magical Mist': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => g.phase === 'main1' && monsOf(g, p).some(m => faceUp(m) && (named(m, 'Summoned Skull (Archfiend)') || name(m) === 'Summoned Skull' || race(m) === 'Thunder')),
-    after: (g, c, p) => { g.noBP[p] = true; log(g, `${PN(g, p)} can't conduct the Battle Phase this turn.`); },
+    after: (g, c, p) => { E.lib.lockBP(g, p); log(g, `${PN(g, p)} can't conduct the Battle Phase this turn.`); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target which Summoned Skull or Thunder monster?', monsOf(g, p).filter(m => faceUp(m) && (named(m, 'Summoned Skull (Archfiend)') || name(m) === 'Summoned Skull' || race(m) === 'Thunder')), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const n = atk(g, t);
       const xs = monsOf(g, opp(p)).filter(m => def(g, m) <= n); if (xs.length) destroy(g, xs, { by: p, src: c }); } }] },
@@ -127,7 +111,9 @@ E.addScripts({
       if (g.chain.length >= 2 || (g.resolvingL && g.resolvingL.link >= 2)) c.flags.f41chain = true;
       // a resolved Spell/Trap link leaving for the GY while another link still waits: the chain had 2 or more links
       else if (g.chain.length >= 1 && ev.type === 'move' && ev.reason === 'rule' && ev.from === 'st' && ev.to === 'gy') c.flags.f41chain = true;
-      else if (c.flags.f41chain && !g.chain.length && !g.resolvingL) { c.flags.f41chain = false; addMod(g, c, { atk: 500 }); log(g, 'Man Beast of Ares gained 500 ATK.'); }
+      // resolved cards leave at the chain's end (engine): the first of them marks a 2+ link chain, once per chain
+      else if (ev.chainEnd && ev.chainLinks.length >= 2 && !(ev.chainLinks.f41 || (ev.chainLinks.f41 = new Set())).has(c.u)) { ev.chainLinks.f41.add(c.u); c.flags.f41chain = true; }
+      else if (c.flags.f41chain && !g.chain.length && !g.resolvingL) { c.flags.f41chain = false; addMod(g, c, { atk: 500, own: true }); log(g, 'Man Beast of Ares gained 500 ATK.'); }
       return false; } }] },
 
   // ENGINE: no Standby Phase response window, so this is offered as an optional trigger at the start of the opponent's Standby Phase
@@ -172,7 +158,7 @@ E.addScripts({
 
   'Maximum Six': { effs: [{ type: 'trig', mand: true, label: 'Roll a die: gain ATK',
     on: (g, ev, c) => evSummoned(ev, c, ['tribute']),
-    res: function* (g, c, p) { const n = L.dice(g, p); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200 * n }); log(g, `Maximum Six gained ${200 * n} ATK.`); } } }] },
+    res: function* (g, c, p) { const n = L.dice(g, p); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200 * n, own: true }); log(g, `Maximum Six gained ${200 * n} ATK.`); } } }] },
 
   'Mecha Bunny': { effs: [flip('500 damage to a card\'s controller', {
     cond: g => allField(g).length > 0,

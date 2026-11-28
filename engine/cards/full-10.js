@@ -10,7 +10,7 @@ const { pick, tgt, yn, choose, move, destroy, ss, draw, damage, gain, pay, mill,
   equip, equippedTo, addCtr, ctr, negateAttack, addRule, tokens, dice,
   name, D, isMon, isST, isSpell, isTrap, onField, faceUp, attr, race, lv, baseAtk, monsOf, stOf, fieldOf, allField, fieldMons,
   freeM, freeST, nFreeM, allCards, shuffleDeck, log, PN, live, opp, oppFaceUp, stOnField, spellTrapAct, evSummoned,
-  battleKill, isGemini, stat, num, emit, forbid, isExtraD } = L;
+  battleKill, isGemini, stat, num, emit, forbid, isExtraD, negd } = L;
 const atk = L.atk, def = L.def;
 
 /* ----- helpers ----- */
@@ -53,9 +53,8 @@ const tributeToAttack = {
 const spellCounter = { type: 'trig', on: (g, ev, c) => {
   // a Spell already face-up when this card arrives (the Ritual Spell that summoned it) was activated before it was on the field
   if (ev.type === 'move' && ev.c === c && ev.to === 'm') { c.f10skip = allField(g).filter(x => isSpell(x) && faceUp(x)).map(x => x.u); return false; }
-  if (ev.type !== 'move' || !isSpell(ev.c) || (c.f10skip || []).includes(ev.c.u)) return false;
-  const stays = ['Continuous', 'Equip', 'Field'].includes(D(ev.c).sub);
-  if ((!stays && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule') || (stays && ev.from === 'hand' && ev.reason === 'activate')) { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
+  if (L.spellCtrEv(g, ev, c) < 0) return false;   // a Spell Card activation resolved while this card was face-up (engine event, 2026-11-27 audit)
+  { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
   return false; }, res: noop };
 // monsters destroyed by battle this turn (Lady Panther): stamped on the card object, which keeps it after it leaves the field
 const bkMark = { type: 'trig', loc: 'any', res: noop, on: (g, ev) => { if (ev.type === 'move' && ev.battle && ev.destroyed && ev.to === 'gy') ev.c.f10bk = g.turnNo; return false; } };
@@ -151,7 +150,7 @@ E.addScripts({
   'Inferno Hammer': { effs: [{ type: 'trig', when: true, label: 'Turn a monster face-down',
     on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
     cond: (g, c, p) => oppFaceUp(g, p).length > 0,
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Turn which face-up monster face-down?', oppFaceUp(g, p), 1, 1, 'bad'); },
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Turn which face-up monster face-down?', oppFaceUp(g, p).filter(L.canFaceDown), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && t.zone === 'm') setFaceDown(g, t); } }] },
   // Quick-Play: right after exactly 1 face-up monster with 1500 or less ATK is Special Summoned to your field (not a Token).
   'Inferno Reckless Summon': { effs: [{ type: 'act', tags: { ss: 1 },
@@ -190,7 +189,7 @@ E.addScripts({
   'Insect Princess': { effs: [
     { type: 'trig', res: noop, on: (g, ev, c) => { for (const m of monsOf(g, opp(c.ctrl))) if (m.pos === 'def' && race(m) === 'Insect') { m.pos = 'atk'; g.seq++; log(g, `${name(m)} was changed to Attack Position.`); } return false; } },
     { type: 'trig', mand: true, label: 'Gain 500 ATK', on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c && ev.snap && ev.snap.race === 'Insect',
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500 }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, own: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
   // Port of classic-3.js. One token in the End Phase if it destroyed an opponent's monster by battle this turn.
   'Insect Queen': {
     self: { ...tributeToAttack.self, atk: g => 200 * fieldMons(g).filter(x => faceUp(x) && race(x) === 'Insect').length },
@@ -325,7 +324,7 @@ E.addScripts({
   /* ----- King ----- */
   // Port of goat-5.js (same Edison text). PARTIAL: other Dragons are untargetable for both players.
   'King Dragun': {
-    self: { targetFilter: (g, x, L2) => fieldMons(g).some(k => k.zone === 'm' && faceUp(k) && named(k, 'King Dragun') && !k.flags.negated && L2.p !== k.ctrl) },
+    self: { targetFilter: (g, x, L2) => fieldMons(g).some(k => k.zone === 'm' && faceUp(k) && named(k, 'King Dragun') && !negd(g, k) && L2.p !== k.ctrl) },
     cont: { grant: (g, src, c, flag) => flag === 'cantBeTargeted' && c.zone === 'm' && faceUp(c) && race(c) === 'Dragon' },
     effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Summon a Dragon from your hand',
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && race(x) === 'Dragon' && !forbid(g, { type: 'ss', c: x, p, how: 'special' })),
@@ -462,7 +461,7 @@ E.addScripts({
     cont: { ...eqBonus(200, 200), replaceDestroy: (g, src, c, o) => { if (!onField(src) || src.equipTo !== c.u) return false; return destroy(g, [src], { by: o.by }).length > 0; } },
     effs: [spellAct(isSixSam, 'Equip to which Six Samurai monster?')] },
   'Legendary Fiend': { effs: [{ type: 'trig', mand: true, opt: true, label: 'Gain 700 ATK', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 700 }); log(g, `${name(c)} gained 700 ATK.`); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 700, own: true }); log(g, `${name(c)} gained 700 ATK.`); } } }] },
   'Legendary Flame Lord': { effs: [spellCounter,
     { type: 'ign', tags: { destroy: 1 }, label: 'Remove 3 Spell Counters: destroy all other monsters',
       cond: (g, c) => ctr(c, 'spell') >= 3 && fieldMons(g).some(x => x !== c),

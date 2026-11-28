@@ -25,10 +25,10 @@ const flip = (label, more) => ({ type: 'trig', mand: true, faceDownOk: true, lab
 const isSpecialHow = how => !['normal', 'tribute', 'flip', 'gemini'].includes(how);
 // "by an effect of a card controlled by your opponent" (as full-26.js): the move's own `by` when given, else the turn player.
 const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
-// Dark World: discarded from the hand to the GY by a card effect (a cost discard counts). The hand size limit doesn't (as full-36.js).
-// PARTIAL: a script that sends a hand card to the GY for a cost with reason 'cost' (not a discard) also counts.
+// Dark World: discarded from the hand to the GY by a resolving card effect; a discard paid as a cost doesn't count (Edison archive:
+// "DO NOT activate when: discarded as a cost"; ev.asCost from the engine), nor the hand size limit (as full-36.js).
 const dwDiscard = (g, ev, c) => {
-  if (!(ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ['discard', 'cost'].includes(ev.reason))) return false;
+  if (!(ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ev.reason === 'discard' && !ev.asCost)) return false;
   if (g.phase === 'end' && ev.by == null && g.tp === c.owner && g.p[c.owner].hand.length >= 6 && !g.chain.length) return false;
   return true; };
 // Spirit return: during the End Phase of the turn it was Normal Summoned or flipped face-up (as full-23.js)
@@ -63,7 +63,6 @@ const equipAct = (filter = () => true, text = 'Equip to which face-up monster?')
   target: function* (g, c, p, L2) { yield* tgt(g, p, L2, text, fieldMons(g).filter(m => faceUp(m) && filter(m)), 1, 1, 'good'); },
   res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && filter(t) && onField(c)) equip(g, c, t); } });
 // Gemini "attack all monsters once each" (as full-19.js), only while Gemini Summoned
-function hitThisTurn(g, c) { return new Set(g.events.filter(e => e.type === 'attack' && e.a === c && e.turn === g.turnNo && e.t).map(e => e.t.u)); }
 const isHarpieLady = x => isMon(x) && (named(x, 'Harpie Lady') || /name is (always )?treated as "Harpie Lady"/.test(D(x).ps || D(x).tx || ''));
 const isLS = x => isMon(x) && /Lightsworn/.test(D(x).n);
 const isGB = x => /Gladiator Beast/.test(D(x).n);
@@ -75,7 +74,7 @@ E.addScripts({
   'Gigantic Cephalotus': { effs: [{ type: 'trig', res: noop,
     on: (g, ev, c) => {
       if (ev.type === 'move' && ev.c !== c && ev.wasField && ev.to === 'gy' && ev.c.zone === 'gy' && ev.snap && ev.snap.mon && ev.snap.race === 'Plant' && race(ev.c) === 'Plant') {
-        addMod(g, c, { atk: 200 }); log(g, 'Gigantic Cephalotus gained 200 ATK.'); }
+        addMod(g, c, { atk: 200, own: true }); log(g, 'Gigantic Cephalotus gained 200 ATK.'); }
       return false; } }] },
   'Gigastone Omega': {
     proc: { label: 'Special Summon (banish 2 EARTHs from your GY)',
@@ -151,7 +150,7 @@ E.addScripts({
       { type: 'ign', label: 'Tribute a FIRE: +500 ATK',
         cond: (g, c, p) => monsOf(g, p).some(x => x !== c && attr(x) === 'FIRE'),
         cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which FIRE monster?', monsOf(g, p).filter(x => x !== c && attr(x) === 'FIRE'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
-        res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
+        res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true, own: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
   // Only when an opponent's card effect discards it: Special Summon it, then destroy up to 2 targeted cards.
   'Goldd, Wu-Lord of Dark World': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1, destroy: 1 }, label: 'Special Summon it and destroy up to 2 cards',
     on: (g, ev, c) => dwDiscard(g, ev, c) && byOpp(g, ev, c),
@@ -210,8 +209,8 @@ E.addScripts({
       { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => { for (const m of fieldMons(g)) if (m.flags.f39gb === c.u && !(faceUp(c) && c.zone === 'm' && c.flags.f39gt === m.u)) { delete m.flags.f39gb; delete m.flags.noTribute; } return false; } }] },
   'Grass Phantom': { self: { atk: (g, c) => 500 * g.p[c.ctrl].gy.filter(x => named(x, 'Grass Phantom')).length } },
   'Grasschopper': { self: {
-    maxAttacks: (g, c) => { if (!c.flags.gemini) return 1; const hit = hitThisTurn(g, c); const rest = monsOf(g, opp(c.ctrl)).filter(m => !hit.has(m.u)).length; return c.attacks + (rest || (c.attacks ? 0 : 1)); },
-    attackOk: (g, c, t) => !c.flags.gemini || !hitThisTurn(g, c).has(t.u) } },
+    maxAttacks: (g, c) => c.flags.gemini ? L.attackEach.maxAttacks(g, c) : 1,
+    attackOk: (g, c, t) => !c.flags.gemini || L.attackEach.attackOk(g, c, t) } },
   'Gravi-Crush Dragon': { effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Send a Continuous Spell: destroy a monster',
     cond: (g, c, p) => stOf(g, p).some(x => faceUp(x) && isSpell(x) && D(x).sub === 'Continuous') && monsOf(g, opp(p)).length > 0,
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which face-up Continuous Spell to the GY?', stOf(g, p).filter(x => faceUp(x) && isSpell(x) && D(x).sub === 'Continuous'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
@@ -293,7 +292,7 @@ E.addScripts({
         const o = opp(p); const ms = monsOf(g, o).filter(faceUp);
         const i = ms.length ? yield* choose(g, o, 'Half or Nothing: choose one', ['Halve the ATK of all your monsters', 'End the Battle Phase']) : 1;
         if (i === 1) { endBattle(g); return; }
-        for (const m of ms) { const A = ATK(g, m); addMod(g, m, { atk: -(A - Math.floor(A / 2)), end: true, f39hon: true }); }
+        for (const m of ms) { const A = ATK(g, m); addMod(g, m, { set: Math.floor(A / 2), which: 'atk', end: true, f39hon: true }); }
         log(g, `${PN(g, o)}'s monsters had their ATK halved until the end of the Battle Phase.`); } },
     { type: 'trig', loc: 'any', res: noop, on: (g, ev) => { if (ev.type === 'phase' && ev.ph === 'bpEnd') for (const m of fieldMons(g)) if (m.mods.some(x => x.f39hon)) m.mods = m.mods.filter(x => !x.f39hon); return false; } }] },
   // PARTIAL: face-down monsters can still be attacked while it is in Defense Position (ENGINE: no attack-target rule for them).

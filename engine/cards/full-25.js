@@ -38,7 +38,7 @@ const spiritReturn = { type: 'trig', mand: true, label: 'Return to the hand',
     if ((ev.type === 'summon' && ev.cs.includes(c) && ['normal', 'tribute'].includes(ev.how)) || (ev.type === 'flip' && ev.c === c)) c.flags.spirit = g.turnNo;
     return ev.type === 'phase' && ev.ph === 'end' && c.flags.spirit === g.turnNo; },
   res: function* (g, c) { if (onField(c) && faceUp(c)) { move(g, c, 'hand', { reason: 'effect' }); log(g, `${name(c)} returned to the hand.`); } } };
-const kycooOn = (g, p) => monsOf(g, opp(p)).some(x => faceUp(x) && named(x, 'Kycoo the Ghost Destroyer') && !x.flags.negated);
+const kycooOn = (g, p) => monsOf(g, opp(p)).some(x => faceUp(x) && named(x, 'Kycoo the Ghost Destroyer') && !negd(g, x));
 // "Archfiend" monsters (as full-02.js: Summoned Skull and Fiend Skull Dragon are Archfiends by their OCG names)
 const isArchName = n => /Archfiend/.test(n) || ['Summoned Skull', 'Fiend Skull Dragon'].includes(n);
 const isArchfiend = c => isMon(c) && isArchName(name(c));

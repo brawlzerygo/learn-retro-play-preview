@@ -131,7 +131,7 @@ E.addScripts({
       { type: 'ign', opt: true, label: 'Tribute a monster: gain its ATK', cond: (g, c, p) => monsOf(g, p).some(x => x !== c),
         cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p).filter(x => x !== c), 1, 1, 'cost');
           if (!x) return; L2.data.n = baseAtk(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
-        res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: L2.data.n || 0, end: true }); log(g, `${name(c)} gained ${L2.data.n || 0} ATK.`); } }] },
+        res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: L2.data.n || 0, end: true, own: true }); log(g, `${name(c)} gained ${L2.data.n || 0} ATK.`); } }] },
   // Destroyed at the start of the Damage Step, before it is flipped, so there is no damage calculation.
   'Razor Lizard': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy the face-down monster',
     on: (g, ev, c) => ev.type === 'dsStart' && ev.a === c && !!ev.t && ev.t.pos === 'set' && monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && race(x) === 'Reptile'),
@@ -185,8 +185,8 @@ E.addScripts({
     cond: (g, c, p) => usedN(g, c, 'f43borg') < 2 && g.p[p].gy.some(x => isMon(x) && race(x) === 'Psychic'),
     cost: function* (g, c, p) { useN(g, c, 'f43borg'); const [x] = yield* pick(g, p, 'Banish which Psychic monster from your GY?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Psychic'), 1, 1, 'cost');
       if (x) { move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${D(x).n}.`); } },
-    res: function* (g, c, p) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500 }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
-  'Relieve Monster': { effs: [{ type: 'act',
+    res: function* (g, c, p) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, own: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
+  'Relieve Monster': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && monsOf(g, p).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which monster you control to the hand?', monsOf(g, p), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || t.ctrl !== p) return;
@@ -356,7 +356,7 @@ E.addScripts({
   'Satellite Cannon': {
     self: { noBattleDestroy: (g, c) => { const f = foeOf(g, c); return !!f && lv(f) <= 7; } },
     effs: [{ type: 'trig', mand: true, label: 'Gain 1000 ATK', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, sat: true }); log(g, `${name(c)} gained 1000 ATK.`); } } },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, sat: true, own: true }); log(g, `${name(c)} gained 1000 ATK.`); } } },
     { type: 'trig', mand: true, label: 'The gained ATK returns to 0', on: (g, ev, c) => ev.type === 'afterCalc' && ev.a === c && c.mods.some(m => m.sat),
       res: function* (g, c) { c.mods = c.mods.filter(m => !m.sat); g.seq++; log(g, `${name(c)}'s gained ATK returned to 0.`); } }] },
   // PARTIAL: "Tribute 1 Dinosaur" lets any 1 monster be the Tribute when you control a Dinosaur, and a Set with 1 Tribute is

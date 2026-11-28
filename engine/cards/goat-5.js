@@ -9,7 +9,7 @@
 const E = window.EdisonEngine, L = E.lib;
 const { pick, tgt, choose, move, destroy, ss, damage, gain, mill, search, setFaceDown, addRule, negate, tokens, equip,
   name, D, isMon, isSpell, isTrap, onField, faceUp, attr, race, lv, monsOf, allField, fieldMons, freeM, stOnField,
-  log, PN, live, opp, oppFaceUp, emit, forbid, stat, evSummoned, fromFieldToGY, spellTrapAct } = L;
+  log, PN, live, opp, oppFaceUp, emit, forbid, stat, evSummoned, fromFieldToGY, spellTrapAct, negd } = L;
 
 const named = (c, n) => D(c).n === n;
 const vanilla = { effs: [] }; // a Fusion Monster with no effect
@@ -17,7 +17,7 @@ function* discardPick(g, p, n, text, not) { const h = g.p[p].hand.filter(x => x 
 const waterGY = (g, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WATER');
 // Equip Cards equipped to monster c (Equip Spells, Snatch Steal, monsters used as Equip Cards)
 const equipsOn = (g, c) => allField(g).filter(x => x.zone === 'st' && x.equipTo === c.u);
-const isKingDragun = (g, x) => x.zone === 'm' && faceUp(x) && named(x, 'King Dragun') && !x.flags.negated;
+const isKingDragun = (g, x) => x.zone === 'm' && faceUp(x) && named(x, 'King Dragun') && !negd(g, x);
 // "Once per turn, you can change this card to face-down Defense Position" (same limits as Stealth Bird in goat-2.js).
 const selfFaceDown = { type: 'ign', opt: true, label: 'Turn face-down', cond: (g, c) => c.turnIn !== g.turnNo && !c.posChanged,
   res: function* (g, c) { if (onField(c) && faceUp(c)) { setFaceDown(g, c); c.posChanged = true; } } };

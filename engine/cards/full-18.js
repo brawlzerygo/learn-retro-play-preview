@@ -192,7 +192,7 @@ E.addScripts({
     cond: (g, c, p) => g.p[opp(p)].gy.some(isSpell),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish up to 5 Spell Cards from their GY', g.p[opp(p)].gy.filter(isSpell), 1, 5, 'bad'); },
     res: function* (g, c, p, L2) { const xs = L2.t.filter(x => x.zone === 'gy'); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (!xs.length) return;
-      log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300 * xs.length }); log(g, `${name(c)} gained ${300 * xs.length} ATK.`); } } }] },
+      log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')}.`); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300 * xs.length, own: true }); log(g, `${name(c)} gained ${300 * xs.length} ATK.`); } } }] },
   // The card sent from the hand is a cost (not a discard). Monsters it destroys by battle can't activate their effects
   // while they stay in the GY.
   'Wicked-Breaking Flamberge - Baou': {

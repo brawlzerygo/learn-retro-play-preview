@@ -26,7 +26,7 @@ const equipAct = (filter = () => true, text = 'Equip to which face-up monster?')
 const byOpp = (g, ev, c) => ev.by != null ? ev.by !== c.owner : g.tp !== c.owner;
 // Dark World: discarded from the hand to the GY by a card effect (as full-39.js). The hand size limit doesn't count.
 const dwDiscard = (g, ev, c) => {
-  if (!(ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ['discard', 'cost'].includes(ev.reason))) return false;
+  if (!(ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ev.reason === 'discard' && !ev.asCost)) return false;
   if (g.phase === 'end' && ev.by == null && g.tp === c.owner && g.p[c.owner].hand.length >= 6 && !g.chain.length) return false;
   return true; };
 // once per turn, it can't be destroyed by battle (Sphere of Chaos, Stardust Xiaolong)
@@ -331,7 +331,7 @@ E.addScripts({
   'Speed Warrior': { effs: [
     { type: 'quick', opt: true, label: 'Double its ATK',
       cond: (g, c, p) => g.phase === 'battle' && g.tp === p && !g.inDS && c.summonType === 'normal' && c.turnIn === g.turnNo,
-      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { set: 2 * baseAtk(c), which: 'atk', end: true, f44sw: true }); log(g, `${name(c)}'s ATK became ${2 * baseAtk(c)}.`); } },
+      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { set: 2 * baseAtk(c), which: 'atk', end: true, f44sw: true, own: true }); log(g, `${name(c)}'s ATK became ${2 * baseAtk(c)}.`); } },
     { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'bpEnd' && c.mods.some(m => m.f44sw)) { c.mods = c.mods.filter(m => !m.f44sw); g.seq++; } return false; } }] },
   // ENGINE: no Attribute override, so it stays DARK only (it should also be LIGHT on the field).
   'Sphere of Chaos': { self: oncePerTurnBattle,
@@ -457,7 +457,7 @@ E.addScripts({
     effs: [{ type: 'trig', mand: true, label: 'Gain half the Tributed Dragon\'s ATK',
       on: (g, ev, c) => evSummoned(ev, c, ['tribute']) && (ev.tribs || []).some(t => race(t) === 'Dragon'),
       res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; const n = L2.ev.tribs.filter(t => race(t) === 'Dragon').reduce((s, t) => s + Math.floor(num(D(t).atk) / 2), 0);
-        if (n) { addMod(g, c, { atk: n }); log(g, `${name(c)} gained ${n} ATK.`); } } }] },
+        if (n) { addMod(g, c, { atk: n, own: true }); log(g, `${name(c)} gained ${n} ATK.`); } } }] },
   // Trap Monster (Machine/EARTH/Level 4/0/2000); +3000 ATK while you control face-up Green, Red and Yellow Gadget.
   'Stronghold the Moving Fortress': {
     self: { atk: (g, c) => ['Green Gadget', 'Red Gadget', 'Yellow Gadget'].every(n => monsOf(g, c.ctrl).some(x => faceUp(x) && named(x, n))) ? 3000 : 0 },

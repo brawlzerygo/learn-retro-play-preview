@@ -22,7 +22,8 @@ const resolving = (g, p, n) => stOf(g, p).some(x => faceUp(x) && named(x, n));
 // from the ps line, which here says "No Edison-Accurate PSCT", so these locks are one duel-long rule, installed by the
 // first event any of these cards sees (a trig that never fires).
 const LOCKS = {
-  // must first be Special Summoned from the hand by its own rule; once properly summoned it can be revived (c.f04nomi)
+  // must first be Special Summoned from the hand by its own rule; once properly summoned it can be revived (c.f04nomi; the engine's
+  // summoning-condition check treats it the same way, SS_AS_FIRST)
   // PARTIAL: an effect that Special Summons it from the hand is not stopped.
   'Chaos Emperor Dragon - Envoy of the End': (g, a) => a.type !== 'ss' || ['deck', 'extra'].includes(a.c.zone) || (['gy', 'ban'].includes(a.c.zone) && !a.c.f04nomi),
   'Cyber Barrier Dragon': (g, a) => a.type !== 'ss' || !resolving(g, a.p, 'Attack Reflector Unit'),

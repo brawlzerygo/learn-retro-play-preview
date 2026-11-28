@@ -26,11 +26,10 @@ const eqOf = (g, c) => c.equipTo ? fieldMons(g).find(x => x.u === c.equipTo) || 
 const noop = { type: 'act', res: function* () {} };
 // Spell Counters each time a Spell Card resolves (as goat-7.js): a Normal or Quick-Play Spell as it leaves for the GY after
 // resolving; Continuous, Equip and Field Spells as they are activated from the hand.
-// PARTIAL: a Set Continuous/Equip/Field Spell flipped up adds none, and a negated Normal Spell still adds one.
+// Read from the engine's spellResolved event (L.spellCtrEv): Set Spells flipped up count, a negated activation doesn't.
 const spellCtr = (n = 1, loc) => ({ type: 'trig', loc, res: function* () {}, on: (g, ev, c) => {
-  if (ev.type !== 'move' || ev.c === c || !isSpell(ev.c)) return false;
-  const stays = ['Continuous', 'Equip', 'Field'].includes(D(ev.c).sub);
-  if ((!stays && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule') || (stays && ev.from === 'hand' && ev.reason === 'activate')) { addCtr(g, c, 'spell', n); log(g, `${name(c)} got ${n > 1 ? n + ' Spell Counters' : 'a Spell Counter'} (${ctr(c, 'spell')}).`); }
+  if (L.spellCtrEv(g, ev, c) < 0) return false;   // a Spell Card activation resolved while this card was face-up (engine event, 2026-11-27 audit)
+  { addCtr(g, c, 'spell', n); log(g, `${name(c)} got ${n > 1 ? n + ' Spell Counters' : 'a Spell Counter'} (${ctr(c, 'spell')}).`); }
   return false; } });
 // Can this face-up card hold a Spell Counter? (read from its text: "place ... Spell Counter ... on this card / on it", with its max)
 function spellRoom(c) {
@@ -40,7 +39,7 @@ function spellRoom(c) {
 }
 // Synchro Summons with material rules the engine's reader doesn't know (as batch-2.js).
 function synMats(g, p, sx, o) {
-  const mons = monsOf(g, p).filter(c => faceUp(c) && !(D(c).n === 'Blackwing - Vayu the Emblem of Honor' && !c.flags.negated));
+  const mons = monsOf(g, p).filter(c => faceUp(c) && !(D(c).n === 'Blackwing - Vayu the Emblem of Honor' && !negd(g, c)));
   const Lv = lv(sx), out = [], n = mons.length;
   for (let mask = 1; mask < (1 << n) && out.length < 12; mask++) {
     const mats = mons.filter((_, i) => mask & (1 << i)); if (mats.length < 2) continue;
@@ -128,7 +127,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'attack' && ((ev.a === c && !!ev.t) || ev.t === c),
       cond: (g, c) => stat(g, c, 'atk') >= 500 && stat(g, c, 'def') >= 500,
       res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c) || stat(g, c, 'atk') < 500 || stat(g, c, 'def') < 500) return;
-        addMod(g, c, { atk: -500, def: -500 }); log(g, `${name(c)} lost 500 ATK and DEF.`);
+        addMod(g, c, { atk: -500, def: -500, own: true }); log(g, `${name(c)} lost 500 ATK and DEF.`);
         const o = L2.ev.a === c ? L2.ev.t : L2.ev.a; if (o && onField(o) && faceUp(o)) { addMod(g, o, { atk: -1500, def: -1500, end: true }); log(g, `${name(o)} lost 1500 ATK and DEF.`); } } }] },
   'Light Laser': { effs: [equipAct(m => attr(m) === 'LIGHT' && race(m) === 'Warrior', 'Equip to which face-up LIGHT Warrior?'),
     { type: 'trig', loc: 'st', mand: true, label: 'Banish the monster it battled',
@@ -203,7 +202,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which of your face-up monsters?', monsOf(g, p).filter(faceUp), 1, 1, 'good'); },
     // "only the selected monster can attack" applies from activation; 2 Golems on different monsters stop both.
     after: (g, c, p, L2) => { const u = L2.t[0] && L2.t[0].u; g.onlyAttacker[p] = g.onlyAttacker[p] && g.onlyAttacker[p] !== u ? -1 : u; },
-    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const A = stat(g, t, 'atk'); addMod(g, t, { atk: -(A - Math.floor(A / 2)), end: true });
+    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const A = stat(g, t, 'atk'); addMod(g, t, { set: Math.floor(A / 2), which: 'atk', end: true });
       t.flags.directAttack = true; t.flags.golemDA = g.turnNo; log(g, `${name(t)}'s ATK was halved and it can attack directly this turn.`); } },
     { type: 'trig', loc: 'any', on: (g, ev) => { if (ev.type === 'phase' && ev.ph === 'end') for (const m of fieldMons(g)) if (m.flags.golemDA) { m.flags.golemDA = 0; m.flags.directAttack = false; } return false; }, res: function* () {} }] },
   'Magic Jammer': { effs: [{ type: 'act',

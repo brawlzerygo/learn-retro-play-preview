@@ -89,11 +89,10 @@ const lockEff = { type: 'trig', loc: 'any', res: function* () {},
 
 /* Spell Counter each time a Spell is activated and resolves (as goat-7.js): a Normal or Quick-Play Spell as it leaves for
  the GY after resolving; Continuous, Equip and Field Spells as they are activated from the hand.
- PARTIAL: a Set Continuous/Equip/Field Spell flipped up adds no counter. */
+ Read from the engine's spellResolved event (L.spellCtrEv). */
 const spellCounterAny = { type: 'trig', res: function* () {}, on: (g, ev, c) => {
-  if (ev.type !== 'move' || !isSpell(ev.c)) return false;
-  const stays = ['Continuous', 'Equip', 'Field'].includes(D(ev.c).sub);
-  if ((!stays && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule') || (stays && ev.from === 'hand' && ev.reason === 'activate')) { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
+  if (L.spellCtrEv(g, ev, c) < 0) return false;   // a Spell Card activation resolved while this card was face-up (engine event, 2026-11-27 audit)
+  { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
   return false; } };
 
 const DSC = ['Don Zaloog', 'Dark Scorpion - Cliff the Trap Remover', 'Dark Scorpion - Chick the Yellow', 'Dark Scorpion - Gorg the Strong', 'Dark Scorpion - Meanae the Thorn'];
@@ -164,7 +163,7 @@ E.addScripts({
   'Dark Crusader': { effs: [{ type: 'ign', label: 'Send a DARK: +400 ATK',
     cond: (g, c, p) => g.p[p].hand.some(darkMon),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send a DARK monster from your hand to the GY', g.p[p].hand.filter(darkMon), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${name(x)} to the GY.`); } },
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 400 }); log(g, `${name(c)} gained 400 ATK.`); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 400, own: true }); log(g, `${name(c)} gained 400 ATK.`); } } }] },
   'Dark Driceratops': { self: { piercing: true } },
   // PARTIAL: the engine's Tribute hook only changes how many Tributes are needed, so with a face-up Dark Effigy a Level 7+
   // DARK Normal Monster can be Tribute Summoned with any 1 monster, not only Dark Effigy.
@@ -240,17 +239,20 @@ E.addScripts({
       cond: (g, c, p) => g.p[p].gy.some(isSpell),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which Spell from your GY to your hand?', g.p[p].gy.filter(isSpell), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } },
-    { type: 'trig', mand: true, label: 'Banish the destroyed monster', on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
-      res: function* (g, c, p, L2) { const t = L2.ev.c; if (t.zone === 'gy') { move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${name(t)} was banished.`); } } }] },
+    // "If this card destroys an opponent's monster by battle, after damage calculation: Banish that opponent's monster" (Edison text): banished
+    // from the field after damage calculation, so it never goes to the GY (2026-11-28 audit: Sangan searched; a face-down Fiber Jar is
+    // banished and its Flip effect still activates, and with equal ATK both are banished: site rulings)
+    { type: 'trig', mand: true, label: 'Banish the destroyed monster', on: (g, ev, c) => { if (ev.type !== 'afterCalc' || !(ev.a === c || ev.t === c)) return false; const o = ev.a === c ? ev.t : ev.a; return !!o && o.ctrl !== c.ctrl && !!o.flags.battleDoomed; },
+      res: function* (g, c, p, L2) { const t = L2.ev.a === c ? L2.ev.t : L2.ev.a; if (t && onField(t) && t.flags.battleDoomed && move(g, t, 'ban', { reason: 'effect', by: p })) log(g, `${name(t)} was banished.`); } }] },
   'Dark Mimic LV1': { effs: [
     { type: 'trig', mand: true, faceDownOk: true, label: 'Draw 1 card', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
-      res: function* (g, c, p) { if (g.p[p].deck.length) draw(g, p, 1); } },
+      res: function* (g, c, p) { draw(g, p, 1); } },
     { type: 'trig', opt: true, tags: { ss: 1 }, label: 'Send it: summon Dark Mimic LV3', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       cond: (g, c, p) => fromHandDeck(g, p, 'Dark Mimic LV3').length > 0,
       cost: function* (g, c) { move(g, c, 'gy', { reason: 'cost' }); },
       res: function* (g, c, p) { const x = yield* ssFromHandDeck(g, p, 'Dark Mimic LV3', 'Special Summon Dark Mimic LV3'); if (x) x.flags.mimic = true; } }] },
   'Dark Mimic LV3': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Draw', on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    res: function* (g, c, p, L2) { const n = L2.ev.snap && L2.ev.snap.flags && L2.ev.snap.flags.mimic ? 2 : 1; draw(g, p, Math.min(n, g.p[p].deck.length) || 1); } }] },
+    res: function* (g, c, p, L2) { const n = L2.ev.snap && L2.ev.snap.flags && L2.ev.snap.flags.mimic ? 2 : 1; draw(g, p, n); } }] },
   'Dark Necrofear': {
     proc: { label: 'Special Summon (banish 3 Fiends from your GY)',
       cond: (g, c, p) => c.zone === 'hand' && g.p[p].gy.filter(x => isMon(x) && race(x) === 'Fiend').length >= 3,
@@ -427,13 +429,12 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       res: function* (g, c, p) { if (!onField(c)) return; const k = c.flags.snake || 0; c.flags.snake = k + 1; const n = 200 * Math.pow(2, k);
         // both players take it at once: if both would hit 0, the duel is a draw
-        if (g.p[0].lp <= n && g.p[1].lp <= n) { g.p[opp(p)].lp -= n; log(g, `${PN(g, opp(p))} took ${n} damage.`); damage(g, p, n, { src: c, srcP: p }); }
-        else { damage(g, opp(p), n, { src: c, srcP: p }); damage(g, p, n, { src: c, srcP: p }); } } }] },
+        L.damageMany(g, [[opp(p), n], [p, n]], { src: c, srcP: p }); } }] },
   'Dark World Dealings': { effs: [{ type: 'act', cond: g => g.p[0].deck.length > 0 && g.p[1].deck.length > 0,
     res: function* (g, c, p) { draw(g, p, 1); draw(g, opp(p), 1); for (const q of [p, opp(p)]) yield* discardPick(g, q, 1, 'Discard 1 card'); } }] },
   // PARTIAL: any discard of a monster during your End Phase counts, not only the hand size discard.
   'Dark World Grimoire': { effs: [{ type: 'act', res: function* () {} },
-    { type: 'trig', loc: 'st', label: 'Special Summon a discarded monster',
+    { type: 'trig', loc: 'st', tags: { ss: 1 }, label: 'Special Summon a discarded monster',
       on: (g, ev, c) => { if (ev.type === 'move' && ev.from === 'hand' && ev.to === 'gy' && ev.reason === 'discard' && g.phase === 'end' && g.tp === c.ctrl && ev.c.owner === c.ctrl && isMon(ev.c)) { if (!c.flags.grim || c.flags.grim.t !== g.turnNo) c.flags.grim = { t: g.turnNo, us: [] }; c.flags.grim.us.push(ev.c.u); return true; } return false; },
       cond: (g, c, p) => freeM(g, p) >= 0 && c.flags.grim && g.p[p].gy.some(x => c.flags.grim.us.includes(x.u)),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which discarded monster?', g.p[p].gy.filter(x => c.flags.grim.us.includes(x.u)), 1, 1, 'good'); },

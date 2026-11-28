@@ -21,10 +21,7 @@ const canSS = (g, p, x) => !forbid(g, { type: 'ss', c: x, p, how: 'special' });
 // "lose LP" is not damage: no damage hooks, and the duel ends at 0
 function loseLP(g, p, n) { g.p[p].lp = Math.max(0, g.p[p].lp - n); log(g, `${PN(g, p)} lost ${n} LP.`); if (g.p[p].lp <= 0) winDuel(g, opp(p), `${PN(g, p)} hit 0 LP`); }
 // both players take the same damage at once (a draw if both hit 0)
-function bothDamage(g, n, src, srcP) {
-  if (g.p[0].lp <= n && g.p[1].lp <= n) { g.p[1].lp -= n; log(g, `${PN(g, 1)} took ${n} damage.`); damage(g, 0, n, { src, srcP }); return; }
-  damage(g, srcP, n, { src, srcP }); damage(g, opp(srcP), n, { src, srcP });
-}
+function bothDamage(g, n, src, srcP) { L.damageMany(g, [[srcP, n], [opp(srcP), n]], { src, srcP }); }
 const tribute = (g, p, x, why) => { const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}${why ? ' ' + why : ''}.`); };
 function* discard1(g, p, not, text = 'Discard 1 card') { const h = g.p[p].hand.filter(x => x !== not); if (!h.length) return null; const [x] = yield* pick(g, p, text, h, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } return x; }
 // Effect Monsters (same reading as full-04.js): Effect, Flip and the rest, Fusions/Synchros with text past the materials, Rituals with text past their summon line
@@ -87,8 +84,7 @@ const holidayOff = which => (g, src, m) => {
   if (hs[0] !== src) return 0;
   let v = 0; EH++;
   try { for (const x of allField(g)) { if (x.zone !== 'st' || !faceUp(x) || !x.equipTo) continue; const sc = E.SCRIPTS[D(x).n];
-    if (sc && sc.cont && !sc.cont.loc && sc.cont[which]) v -= sc.cont[which](g, x, m) || 0;
-    if (which === 'atk' && named(x, 'Armory Arm') && x.equipTo === m.u) v -= 1000; } } finally { EH--; }
+    if (sc && sc.cont && !sc.cont.loc && sc.cont[which]) v -= sc.cont[which](g, x, m) || 0; } } finally { EH--; }
   return v;
 };
 // A Trap that answers a moment with no response window in the engine (same as classic-5.js trapTrig): an optional trigger
@@ -302,7 +298,7 @@ E.addScripts({
   'The Big Saturn': { effs: [lockInstall,
     { type: 'ign', opt: true, label: 'Discard 1 and pay 1000: +1000 ATK', cond: (g, c, p) => g.p[p].hand.length > 0 && g.p[p].lp > 1000,
       cost: function* (g, c, p) { yield* discard1(g, p, null); pay(g, p, 1000); },
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, end: true }); log(g, `${name(c)} gained 1000 ATK until the End Phase.`); } } },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, end: true, own: true }); log(g, `${name(c)} gained 1000 ATK until the End Phase.`); } } },
     // only while its owner controls it (rulings); the damage is its original ATK
     { type: 'trig', loc: 'gy', mand: true, label: 'Both players take 2800 damage',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'gy' && ev.wasField && ev.destroyed && !ev.battle && ev.by === opp(c.owner) && ev.prevCtrl === c.owner,
@@ -373,7 +369,7 @@ E.addScripts({
   'The Legendary Fisherman': { self: { unaffectedSpells: g => umiOn(g), noAttackTarget: g => umiOn(g) } },
   'The Little Swordsman of Aile': { effs: [{ type: 'ign', label: 'Tribute 1: +700 ATK', cond: (g, c, p) => monsOf(g, p).some(x => x !== c),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p).filter(x => x !== c), 1, 1, 'cost'); if (x) tribute(g, p, x); },
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 700, end: true }); log(g, `${name(c)} gained 700 ATK until the end of the turn.`); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 700, end: true, own: true }); log(g, `${name(c)} gained 700 ATK until the end of the turn.`); } } }] },
   // Ritual Monster: Curse of the Masked Beast (scripted in full-04.js) summons it.
   'The Masked Beast': { effs: [] },
   'The Rock Spirit': { self: { atk: (g, c) => g.phase === 'battle' && g.tp !== c.ctrl ? 300 : 0 },

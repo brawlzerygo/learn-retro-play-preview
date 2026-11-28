@@ -90,11 +90,7 @@ const trapTrig = o => ({ type: 'trig', loc: 'any', label: o.label,
   res: function* (g, c, p, L2) { if (onField(c)) yield* o.res(g, c, p, L2); if (onField(c) && c.zone === 'st') move(g, c, 'gy', { reason: 'rule' }); } });
 
 // damage to both players at once (a draw if both reach 0)
-function dmgBoth(g, p, n, src) {
-  if (g.p[p].lp > n) { damage(g, p, n, { src, srcP: p }); damage(g, opp(p), n, { src, srcP: p }); return; }
-  g.p[p].lp -= n; log(g, `${PN(g, p)} took ${n} damage.`); damage(g, opp(p), n, { src, srcP: p });
-  if (g.p[p].lp <= 0) damage(g, p, 1, { src, srcP: p }); // the opponent survived: the duel ends on this player's 0 LP
-}
+function dmgBoth(g, p, n, src) { L.damageMany(g, [[p, n], [opp(p), n]], { src, srcP: p }); }
 function* ssFrom(g, p, filter, text, zones) {
   const cands = zones.flatMap(z => g.p[p][z]).filter(x => x && filter(x)); if (!cands.length || freeM(g, p) < 0) { if (zones.includes('deck')) shuffleDeck(g, p); return null; }
   const [x] = yield* pick(g, p, text, cands, 1, 1, 'good'); const fromDeck = x && x.zone === 'deck';
@@ -105,7 +101,7 @@ let GLASS_DEPTH = 0;
 function eqSum(g, m, which) {
   if (GLASS_DEPTH) return 0; GLASS_DEPTH++;
   try { let s = 0; for (const e of allField(g)) { if (e.zone !== 'st' || e.equipTo !== m.u || !faceUp(e)) continue; const sc = E.SCRIPTS[D(e).n];
-    if (sc && sc.cont && sc.cont[which]) s += sc.cont[which](g, e, m) || 0; if (which === 'atk' && D(e).n === 'Armory Arm') s += 1000; } return s; }
+    if (sc && sc.cont && sc.cont[which]) s += sc.cont[which](g, e, m) || 0; } return s; }
   finally { GLASS_DEPTH--; }
 }
 
@@ -165,7 +161,7 @@ E.addScripts({
       cond: (g, c, p) => [...g.p[p].hand, ...g.p[p].deck].some(x => named(x, 'Armed Dragon LV7')),
       cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent Armed Dragon LV5 to the GY.`); },
       res: function* (g, c, p) { yield* ssFrom(g, p, x => named(x, 'Armed Dragon LV7'), 'Special Summon Armed Dragon LV7', ['hand', 'deck']); } }] },
-  // PARTIAL: "Must be Special Summoned by Armed Dragon LV5" is enforced as no Normal Summon and no revival from the GY/banished.
+  // "Must be Special Summoned by Armed Dragon LV5": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere.
   'Armed Dragon LV7': { effs: [nomiRule, { type: 'ign', tags: { destroy: 1 }, label: 'Send a monster: destroy monsters',
     cond: (g, c, p) => g.p[p].hand.some(isMon) && oppFaceUp(g, p).length > 0,
     cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Send 1 monster from your hand to the GY', g.p[p].hand.filter(isMon), 1, 1, 'cost'); L2.data.a = baseAtk(x); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${name(x)} to the GY.`); },
@@ -337,7 +333,7 @@ E.addScripts({
   // of the Battle Phase, give control of it to your opponent."
   'Battle Teleportation': {
     cont: { loc: 'gy', grant: (g, src, m, flag) => { const b = ST(g).bt[src.u]; return flag === 'directAttack' && !!b && b.turn === g.turnNo && b.u === m.u; } },
-    effs: [{ type: 'act', cond: (g, c, p) => g.tp === p && ['draw', 'standby', 'main1', 'battle'].includes(g.phase) && !g.noBP[p] && !g.inDS && monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Psychic').length === 1,
+    effs: [{ type: 'act', cond: (g, c, p) => g.tp === p && ['draw', 'standby', 'main1', 'battle'].includes(g.phase) && !E.lib.bpLocked(g, p) && !g.inDS && monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Psychic').length === 1,
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Select your Psychic monster', monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Psychic'), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || t.ctrl !== p) return; ST(g).bt[c.u] = { u: t.u, turn: g.turnNo, p }; log(g, `${name(t)} can attack directly this turn.`); } },
     { type: 'trig', loc: 'gy', mand: true, label: 'Give control away',

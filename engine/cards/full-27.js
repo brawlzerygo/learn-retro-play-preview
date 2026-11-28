@@ -49,9 +49,8 @@ function* tossCoins(g, p, n) {
 // PARTIAL: Continuous, Equip and Field Spells stay on the field, so their counter is placed when they are activated from
 // the hand (not when they resolve, and not for a Set one turned face-up).
 const spellCounter3 = { type: 'trig', res: noop, on: (g, ev, c) => {
-  if (ev.type !== 'move' || !isSpell(ev.c) || ctr(c, 'spell') >= 3) return false;
-  const lasting = ['Continuous', 'Equip', 'Field'].includes(D(ev.c).sub);
-  if ((ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule' && !lasting) || (ev.from === 'hand' && ev.reason === 'activate' && lasting)) {
+  if (L.spellCtrEv(g, ev, c) < 0 || ctr(c, 'spell') >= 3) return false;   // a Spell Card activation resolved while this card was face-up (engine event, 2026-11-27 audit)
+  {
     addCtr(g, c, 'spell', 1); g.seq++; log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
   return false; } };
 const skilled = (target) => ({ effs: [spellCounter3,
@@ -130,9 +129,9 @@ E.addScripts({
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, 'Dark Magician') && canSS(g, p, x)); if (!cs.length) return;
       const [x] = yield* pick(g, p, 'Special Summon Dark Magician from your hand or Deck', cs, 1, 1, 'good'); if (x) { const fromDeck = x.zone === 'deck'; ss(g, p, x, 'atk'); if (fromDeck) shuffleDeck(g, p); } } }] },
   // Targets the attacker; a face-down attacker (Book of Moon chained) is not destroyed (ruling).
-  'Sakuretsu Armor': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p,
-    target: function* (g, c, p, L2) { L2.t = [g.aw.a]; },
-    res: function* (g, c, p, L2) { destroy(g, live(L2).filter(faceUp), { by: p, src: c }); } }] },
+  'Sakuretsu Armor': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && L.canTarget(g, g.aw.a, { c, p }),
+    target: function* (g, c, p, L2) { yield* L.tgt(g, p, L2, 'Target the attacking monster', [g.aw.a], 1, 1, 'bad'); },
+    res: function* (g, c, p, L2) { destroy(g, live(L2).filter(t => L.attackingNow(g, t)), { by: p, src: c }); } }] },
   'Salamandra': { cont: eqBonus(700, 0), effs: [equipAct(m => attr(m) === 'FIRE', 'Equip to which face-up FIRE monster?')] },
   // Ignition, once per turn: 3 coins. All Heads: destroy all the opponent's monsters; all Tails: destroy all of yours.
   'Sand Gambler': { effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Toss 3 coins',
@@ -271,12 +270,12 @@ E.addScripts({
   'Snatch Steal': { effs: [
     { type: 'act', cond: (g, c, p) => oppFaceUp(g, p).length > 0 && freeM(g, p) >= 0,
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Take control of which monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
-      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || t.ctrl === p || !onField(c)) return; const from = t.ctrl; if (!takeControl(g, p, t, false)) return; c.equipTo = t.u; c.flags.snatch = { u: t.u, from }; log(g, `Snatch Steal was equipped to ${name(t)}.`); } },
+      res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || t.ctrl === p || !onField(c)) return; const from = t.ctrl; if (!takeControl(g, p, t, false)) { if (freeM(g, p) < 0) destroy(g, [t], { by: p, src: c }); return; } c.equipTo = t.u; c.flags.snatch = { u: t.u, from }; log(g, `Snatch Steal was equipped to ${name(t)}.`); } },
     { type: 'trig', loc: 'st', mand: true, label: 'Opponent gains 1000 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp !== c.ctrl && !!c.equipTo,
       res: function* (g, c, p) { gain(g, opp(p), 1000); } },
-    { type: 'trig', loc: 'any', mand: true, label: 'Control returns', on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.snap && ev.snap.flags && ev.snap.flags.snatch,
+    { type: 'trig', loc: 'any', mand: true, label: 'Control returns', on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && !ev.lostTarget && ev.snap && ev.snap.flags && ev.snap.flags.snatch,   // turned face-down: control stays (ruling)
       res: function* (g, c, p, L2) { const s = L2.ev.snap.flags.snatch; const t = fieldMons(g).find(x => x.u === s.u); if (!t || t.ctrl === s.from) return;
-        if (freeM(g, s.from) >= 0) takeControl(g, s.from, t, false); else move(g, t, 'gy', { reason: 'rule' }); } }] },
+        if (freeM(g, s.from) >= 0) takeControl(g, s.from, t, false); else move(g, t, 'gy', { reason: 'rule', destroyed: true }); } }] },   // no room: destroyed (as goat-1.js)
   /* ----- So ----- */
   'Sogen': { cont: { atk: (g, src, m) => ['Warrior', 'Beast-Warrior'].includes(race(m)) ? 200 : 0, def: (g, src, m) => ['Warrior', 'Beast-Warrior'].includes(race(m)) ? 200 : 0 }, effs: [actNoop] },
   'Solar Flare Dragon': { self: { noAttackTarget: (g, c) => monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && race(x) === 'Pyro') },

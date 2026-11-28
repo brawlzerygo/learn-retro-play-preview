@@ -176,7 +176,7 @@ E.addScripts({
     { type: 'trig', mand: true, label: 'Gain ATK', on: (g, ev, c) => evSummoned(ev, c) && SPECIAL(ev),
       cond: (g, c, p) => g.p[p].gy.some(isMon),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target which monster in your GY?', g.p[p].gy.filter(isMon), 1, 1, 'good'); },
-      res: function* (g, c, p, L2) { const t = L2.t[0]; if (!t || t.zone !== 'gy' || !onField(c) || !faceUp(c)) return; addMod(g, c, { atk: lv(t) * 200 }); log(g, `Felgrand Dragon gained ${lv(t) * 200} ATK.`); } }] },
+      res: function* (g, c, p, L2) { const t = L2.t[0]; if (!t || t.zone !== 'gy' || !onField(c) || !faceUp(c)) return; addMod(g, c, { atk: lv(t) * 200, own: true }); log(g, `Felgrand Dragon gained ${lv(t) * 200} ATK.`); } }] },
   // PARTIAL: a Spell/Trap that targets a Field Spell can still be activated (it just won't destroy it).
   'Field Barrier': {
     cont: { grant: (g, src, c, flag) => flag === 'noEffectDestroy' && c.zone === 'fz',
@@ -212,7 +212,7 @@ E.addScripts({
       cond: (g, c, p) => freeM(g, p) >= 0,
       res: function* (g, c, p) { tokens(g, p, { n: 'Engine Token', a: 'EARTH', r: 'Machine', lv: 1, atk: 200, def: 200 }, 1, 'atk'); } },
     { type: 'ign', opt: true, label: 'Gain 1000 ATK (destroyed in the End Phase)',
-      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: 1000, end: true }); c.flags.f38omega = g.turnNo; log(g, 'Fiendish Engine Omega gained 1000 ATK.'); } },
+      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: 1000, end: true, own: true }); c.flags.f38omega = g.turnNo; log(g, 'Fiendish Engine Omega gained 1000 ATK.'); } },
     { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.f38omega === g.turnNo,
       res: function* (g, c, p) { if (onField(c)) destroy(g, [c], { by: p }); } }] },
   // PARTIAL: it draws only if all 5 targets were shuffled in.
@@ -389,14 +389,14 @@ E.addScripts({
     { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c) && ['normal', 'tribute', 'flip'].includes(ev.how)) c.flags.f38gand = g.turnNo; return false; } },
     { type: 'ign', tags: { destroy: 1 }, label: 'Pay half your LP: destroy and banish all other cards', cond: (g, c) => allField(g).some(x => x !== c),
       cost: function* (g, c, p) { pay(g, p, Math.floor(g.p[p].lp / 2)); },
-      res: function* (g, c, p) { const out = destroy(g, allField(g).filter(x => x !== c), { by: p, banish: true }); if (out.length && onField(c) && faceUp(c)) { addMod(g, c, { atk: 300 * out.length }); log(g, `Gandora gained ${300 * out.length} ATK.`); } } },
+      res: function* (g, c, p) { const out = destroy(g, allField(g).filter(x => x !== c), { by: p, banish: true }); if (out.length && onField(c) && faceUp(c)) { addMod(g, c, { atk: 300 * out.length, own: true }); log(g, `Gandora gained ${300 * out.length} ATK.`); } } },
     { type: 'trig', mand: true, opt: true, label: 'Send this card to the GY', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.f38gand === g.turnNo,
       res: function* (g, c, p) { if (onField(c)) { move(g, c, 'gy', { reason: 'effect', by: p }); log(g, 'Gandora was sent to the GY.'); } } }] },
   'Garlandolf, King of Destruction': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy monsters with lower DEF',
     on: (g, ev, c) => evSummoned(ev, c, ['ritual']),
     res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; const A = atk(g, c);
       const out = destroy(g, fieldMons(g).filter(x => x !== c && faceUp(x) && def(g, x) <= A), { by: p });
-      if (out.length && onField(c)) { addMod(g, c, { atk: 100 * out.length }); log(g, `Garlandolf gained ${100 * out.length} ATK.`); } } }] },
+      if (out.length && onField(c)) { addMod(g, c, { atk: 100 * out.length, own: true }); log(g, `Garlandolf gained ${100 * out.length} ATK.`); } } }] },
   'Garma Sword': { effs: [] },
   'Garma Sword Oath': { effs: ritualEffs('Garma Sword') },
   // PARTIAL: Flip Summons aren't blocked by the "can't Summon" lock.

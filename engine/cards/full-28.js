@@ -54,7 +54,7 @@ const spiritReturn = { type: 'trig', mand: true, label: 'Return to the hand',
   },
   res: function* (g, c, p) { if (onField(c) && faceUp(c)) { move(g, c, 'hand', { reason: 'effect' }); log(g, `${name(c)} returned to the hand.`); } } };
 // "Cannot be Special Summoned" (Susa Soldier, Tsukuyomi) and "only by its own effect" (Theinen): one duel-long rule installed
-// by the first event any of these cards sees (as full-04.js). ENGINE: no general "can't be Special Summoned" flag yet.
+// by the first event any of these cards sees (as full-04.js). (Kept from before the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere.)
 const LOCKS = {
   'Susa Soldier': () => true,
   'Tsukuyomi': () => true,
@@ -322,7 +322,7 @@ E.addScripts({
       res: function* (g, c, p) { if (!['hand', 'deck'].includes(c.zone)) return; const fromDeck = c.zone === 'deck'; c.f28own = true; ss(g, p, c, 'atk'); c.f28own = false; if (fromDeck) shuffleDeck(g, p); } },
     { type: 'trig', when: true, label: 'Pay 500 LP: +3000 ATK', on: (g, ev, c) => evSummoned(ev, c, ['special']), cond: (g, c, p) => g.p[p].lp > 500,
       cost: function* (g, c, p) { pay(g, p, 500); },
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 3000, end: true }); log(g, `${name(c)} gained 3000 ATK until the End Phase.`); } } }] },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 3000, end: true, own: true }); log(g, `${name(c)} gained 3000 ATK until the End Phase.`); } } }] },
   'Thestalos the Firestorm Monarch': { effs: [{ type: 'trig', mand: true, label: 'Random discard', on: (g, ev, c) => evSummoned(ev, c, ['tribute']),
     res: function* (g, c, p) { const x = discardRandom(g, opp(p), p); if (x && isMon(x)) damage(g, opp(p), lv(x) * 100, { src: c, srcP: p }); } }] },
   // Tribute 1 Warrior (itself is allowed) to destroy a face-up monster whose DEF is at most this card's ATK.
@@ -350,8 +350,8 @@ E.addScripts({
   'Tsukuyomi': { effs: [lockInstall,
     { type: 'trig', mand: true, label: 'Turn a monster face-down',
       on: (g, ev, c) => (ev.type === 'summon' && ev.cs.includes(c) && ['normal', 'tribute'].includes(ev.how)) || (ev.type === 'flip' && ev.c === c),
-      cond: g => fieldMons(g).some(faceUp),
-      target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Change which face-up monster to face-down Defense Position?', fieldMons(g).filter(faceUp), 1, 1, 'bad'); },
+      cond: (g, c) => fieldMons(g).some(x => L.canFaceDown(x) && !(x === c && c.flags.battleDoomed)),   // Tokens can't be turned face-down (2026-11-27 audit)
+      target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Change which face-up monster to face-down Defense Position?', fieldMons(g).filter(x => L.canFaceDown(x) && !(x === c && c.flags.battleDoomed)), 1, 1, 'bad'); },   // not itself once destroyed by the attack that flipped it (ruling)
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && t.zone === 'm') setFaceDown(g, t); } },
     spiritReturn] },
   'Twinheaded Beast': { self: { maxAttacks: () => 2 } },

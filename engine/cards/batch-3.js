@@ -80,14 +80,6 @@ function synProc(tuners) {
 const cantSSFromGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src }; // PARTIAL: only blocks a Special Summon from the GY
 const skyUp = g => [g.p[0].fz, g.p[1].fz].some(f => f && f.pos !== 'set' && nm(f) === 'Skyscraper');
 const atkLock = { forbid: (g, src, a) => a.type === 'activate' && a.eff.type === 'act' && isST(a.c) && a.p !== src.ctrl && ((g.aw && g.aw.a === src) || (g.battle && g.battle.a === src)) };
-/* "Sent to the GY is banished instead" as a follow-up chain link. ENGINE: a replacement rule in move(). */
-function banishInstead(test) {
-  return { type: 'trig', mand: true,
-    on: (g, ev, c) => { if (faceUp(c) && ev.type === 'move' && ev.to === 'gy' && ev.c !== c && test(ev.c)) { (g._toBan = g._toBan || []).push(ev.c); return true; } return false; },
-    cond: (g, c) => faceUp(c) && (g._toBan || []).some(x => x.zone === 'gy'),
-    res: function* (g, c, p) { const xs = (g._toBan || []).filter(x => x.zone === 'gy'); g._toBan = []; for (const x of xs) move(g, x, 'ban', { reason: 'effect' }); if (xs.length) log(g, `${xs.map(nm).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished instead (${nm(c)}).`); } };
-}
-
 E.addScripts({
   /* ===== Fish OTK ===== */
   // ENGINE: Synchro material condition (all other materials must be WATER) is not checked by synCombos.
@@ -132,19 +124,19 @@ E.addScripts({
   'Salvage': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WATER' && baseAtk(x) <= 1500).length >= 2,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Add which 2 WATER monsters to your hand?', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'WATER' && baseAtk(x) <= 1500), 2, 2, 'good'); },
     res: function* (g, c, p, L) { const ts = L.t.filter(x => x.zone === 'gy'); for (const t of ts) move(g, t, 'hand', { reason: 'effect' }); if (ts.length) log(g, `${PN(g, p)} added ${ts.map(nm).join(', ')} to the hand.`); } }] },
-  // PARTIAL: "Cannot be Special Summoned" only blocks a Special Summon from the GY.
+  // "Cannot be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere.
   'Dark Dust Spirit': { cont: cantSSFromGY, effs: [
     { type: 'trig', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => { const hit = evSummoned(ev, c, ['normal', 'tribute']) || (ev.type === 'flip' && ev.c === c); if (hit) c.flags.spirit = g.turnNo; return hit; },
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x !== c && faceUp(x)), { by: p }); } },
     { type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.spirit === g.turnNo,
       res: function* (g, c) { if (onField(c) && faceUp(c)) { move(g, c, 'hand', { reason: 'effect' }); log(g, 'Dark Dust Spirit returned to the hand.'); } } }] },
   // PARTIAL: "also DARK" needs attr() to read the field (ENGINE). The mandatory negation is offered as an optional Quick Effect
-  // (ENGINE: mandatory Quick Effects). "Cannot be Special Summoned" only blocks a Special Summon from the GY.
+  // (ENGINE: mandatory Quick Effects). "Cannot be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere.
   'Light and Darkness Dragon': { cont: cantSSFromGY, effs: [
     { type: 'quick', ds: true, label: 'Negate (lose 500 ATK/DEF)',
       cond: (g, c, p, x) => x.top && !x.top.negated && (spellTrapAct(x.top) || (!x.top.cardAct && isMon(x.top.c))) && !g.chain.some(l => l.c === c) && atk(g, c) >= 500 && def(g, c) >= 500,
       cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; },
-      res: function* (g, c, p, L) { if (!onField(c) || !faceUp(c) || atk(g, c) < 500 || def(g, c) < 500) return; addMod(g, c, { atk: -500, def: -500 }); log(g, 'Light and Darkness Dragon lost 500 ATK and DEF.'); L.data.L.negBy = p; negate(g, L.data.L, false); } },
+      res: function* (g, c, p, L) { if (!onField(c) || !faceUp(c) || atk(g, c) < 500 || def(g, c) < 500) return; addMod(g, c, { atk: -500, def: -500, own: true }); log(g, 'Light and Darkness Dragon lost 500 ATK and DEF.'); L.data.L.negBy = p; negate(g, L.data.L, false); } },
     { type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.to === 'gy',
       target: function* (g, c, p, L) { const cs = g.p[p].gy.filter(x => x !== c && isMon(x)); if (cs.length) yield* tgt(g, p, L, 'Special Summon which monster from your GY?', cs, 1, 1, 'good'); },
       res: function* (g, c, p, L) { destroy(g, fieldOf(g, p), { by: p }); const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
@@ -225,7 +217,10 @@ E.addScripts({
   // Shrink: the original ATK becomes half, then other changes apply on top. A second Shrink does nothing more.
   'Shrink': { effs: [{ type: 'act', cond: g => fieldMons(g).some(faceUp),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Halve the original ATK of which monster?', fieldMons(g).filter(faceUp), 1, 1, 'bad'); },
-    res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t) || t.mods.some(m => m.shrink)) return; const b = baseAtk(t) + (t.flags.gb && nm(t) === 'Gladiator Beast Laquari' ? 300 : 0); addMod(g, t, { atk: -(b - Math.ceil(b / 2)), end: true, shrink: true }); log(g, `${name(t)}'s original ATK became ${Math.ceil(b / 2)}.`); } }] },
+    res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t) || t.mods.some(m => m.shrink)) return; const b = baseAtk(t) + (t.flags.gb && nm(t) === 'Gladiator Beast Laquari' ? 300 : 0);
+      // a Token whose "?" ATK is the amount its effect gave (Emissary of Darkness Token): its original ATK is 0, so it becomes 0 (Gorz archive)
+      if (t.flags.tokAtk != null && isNaN(parseInt(D(t).atk, 10))) { addMod(g, t, { set: 0, which: 'atk', end: true, shrink: true }); log(g, `${name(t)}'s ATK became 0.`); return; }
+      addMod(g, t, { atk: -(b - Math.ceil(b / 2)), end: true, shrink: true }); log(g, `${name(t)}'s original ATK became ${Math.ceil(b / 2)}.`); } }] },
   'Gladiator Beast War Chariot': { effs: [{ type: 'act',
     cond: (g, c, p, x) => x.top && !x.top.negated && !x.top.cardAct && isMon(x.top.c) && monsOf(g, p).some(y => faceUp(y) && gbMon(y)),
     target: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; },
@@ -265,8 +260,8 @@ E.addScripts({
     { type: 'act', res: function* (g, c, p) { for (const m of fieldMons(g)) if (m.pos !== 'atk') { if (m.pos === 'set') log(g, `The face-down monster was ${nm(m)}.`); m.pos = 'atk'; } log(g, 'All Defense Position monsters changed to Attack Position.'); } },
     { type: 'trig', loc: 'fz', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.declared),
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.declared), { by: p }); } }] },
-  // ENGINE: a replacement rule in move(); here a follow-up chain link banishes monsters that reached the GY.
-  'Dimensional Fissure': { effs: [{ type: 'act', res: function* () {} }, { ...banishInstead(isMon), loc: 'st' }] },
+  // "Any monster sent to the GY is banished instead": a replacement in move() (cont.gyBan), no chain link (2026-11-28 audit)
+  'Dimensional Fissure': { effs: [{ type: 'act', res: function* (g) { g.seq++; } }], cont: { gyBan: 'mon' } },
   'Trap Hole': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => !!g.sw && g.events.length && g.events[g.events.length - 1].group === g.sw.group && g.sw.p !== p && ['normal', 'tribute', 'flip'].includes(g.sw.how) && g.sw.cs.length === 1 && onField(g.sw.cs[0]) && faceUp(g.sw.cs[0]) && atk(g, g.sw.cs[0]) >= 1000,
     target: function* (g, c, p, L) { L.t = g.sw ? [g.sw.cs[0]] : []; },
@@ -399,7 +394,7 @@ E.addScripts({
       { type: 'trig', on: (g, ev, c) => { if (evSummoned(ev, c, ['tribute']) && ev.tribs) for (const t of ev.tribs) { const n = nm(t); if (n === 'Green Gadget') c.flags.green = true; if (n === 'Red Gadget') c.flags.red = true; if (n === 'Yellow Gadget') c.flags.yellow = true; } return false; }, res: function* () {} },
       { type: 'trig', mand: true, on: (g, ev, c) => c.flags.red && ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl, res: function* (g, c, p) { damage(g, opp(p), 400, { src: c, srcP: p }); } },
       { type: 'trig', mand: true, on: (g, ev, c) => c.flags.yellow && battleKill(ev, c) && ev.c.owner !== c.ctrl, res: function* (g, c, p) { damage(g, opp(p), 600, { src: c, srcP: p }); } }] },
-  // PARTIAL: "Cannot be Special Summoned" is not enforced (its field effect uses the card's one static slot); negation of a
+  // "Cannot be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere. PARTIAL: negation of a
   // destroyed monster's GY Trigger Effects needs the engine (ENGINE: negating triggers in the GY). Flip effects are negated.
   'Ancient Gear Beast': {
     cont: { forbid: (g, src, a) => atkLock.forbid(g, src, a) || (a.type === 'activate' && a.c.zone === 'gy' && (g._agbNeg || []).includes(a.c.u)) },
@@ -424,8 +419,8 @@ E.addScripts({
     // PARTIAL: the End Phase destruction runs from Limiter Removal in the GY, so it is skipped if the card left the GY.
     { type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.limiterBy === c.u && x.flags.limiterTurn === g.turnNo),
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.flags.limiterBy === c.u && x.flags.limiterTurn === g.turnNo), { by: p }); } }] },
-  // ENGINE: a replacement rule in move(); here a follow-up chain link banishes cards that reached the GY.
-  'Banisher of the Radiance': { effs: [banishInstead(() => true)] },
+  // "Any card that would be sent to the GY is banished instead": a replacement in move() (cont.gyBan)
+  'Banisher of the Radiance': { cont: { gyBan: 'all' } },
 });
 
 function fusionNames(f) { const first = (D(f).tx || D(f).ps || '').split('\n')[0]; return [...first.matchAll(/"([^"]+)"/g)].map(m => m[1]); }

@@ -511,7 +511,7 @@ E.addScripts({
       res: function* (g, c, p) { c.f45vc = null; if (c.zone !== 'gy') return; c.f45vcSS = true; if (!ss(g, p, c, 'atk')) c.f45vcSS = false; } },
     { type: 'trig', mand: true, label: '+500 ATK',
       on: (g, ev, c) => evSummoned(ev, c) && !!c.f45vcSS,
-      res: function* (g, c) { c.f45vcSS = false; if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500 }); log(g, "Vampire's Curse gained 500 ATK."); } } }] },
+      res: function* (g, c) { c.f45vcSS = false; if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, own: true }); log(g, "Vampire's Curse gained 500 ATK."); } } }] },
 });
 
 // Tuners sent to the opponent's GY for the Synchro Summon that is the last summon (Tuner Capture)

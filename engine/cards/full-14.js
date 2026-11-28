@@ -332,7 +332,7 @@ E.addScripts({
   'Skull Flame': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Special Summon Burning Skull Head',
       cond: (g, c, p) => g.phase === 'main1' && freeM(g, p) >= 0 && g.p[p].hand.some(x => named(x, 'Burning Skull Head')),
-      after: (g, c, p) => { g.noBP[p] = true; },
+      after: (g, c, p) => { E.lib.lockBP(g, p); },
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => named(x, 'Burning Skull Head')); if (!cs.length) return; const [x] = yield* pick(g, p, 'Special Summon Burning Skull Head', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } },
     { type: 'trig', label: 'Add Burning Skull Head instead of drawing',
       on: (g, ev, c) => ev.type === 'move' && ev.reason === 'draw' && ev.phase === 'draw' && ev.c.owner === c.ctrl && g.tp === c.ctrl,
@@ -427,7 +427,7 @@ E.addScripts({
       res: function* (g, c, p) { if (onField(c)) destroy(g, [c], { by: p }); } }] },
   'Soul of Fire': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.some(x => isMon(x) && race(x) === 'Pyro') && !monsOf(g, p).some(m => m.declared),
     after: (g, c, p) => { addRule(g, (g2, a) => a.type === 'attack' && a.c && a.c.ctrl === p, { end: g.turnNo }); },
-    res: function* (g, c, p) { if (g.p[opp(p)].deck.length) draw(g, opp(p), 1);
+    res: function* (g, c, p) { draw(g, opp(p), 1);
       const cs = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Pyro'); if (!cs.length) return;
       const [x] = yield* pick(g, p, 'Banish which Pyro monster from your Deck?', cs, 1, 1, 'good'); if (!x) return;
       move(g, x, 'ban', { reason: 'effect', by: p }); log(g, `${PN(g, p)} banished ${name(x)}.`); shuffleDeck(g, p);

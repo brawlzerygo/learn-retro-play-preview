@@ -250,8 +250,8 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = L2.ev.c; if (t.zone === 'gy' && onField(c) && faceUp(c)) ss(g, p, t, 'def'); } }] },
   'Goddess of Whim': { effs: [{ type: 'ign', opt: true, label: 'Toss a coin',
     res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; const a = atk(g, c);
-      if (callCoin(g, p)) { addMod(g, c, { atk: a, end: true }); log(g, `${name(c)}'s ATK was doubled.`); }
-      else { addMod(g, c, { atk: -(a - Math.floor(a / 2)), end: true }); log(g, `${name(c)}'s ATK was halved.`); } } }] },
+      if (callCoin(g, p)) { addMod(g, c, { atk: a, end: true, own: true }); log(g, `${name(c)}'s ATK was doubled.`); }
+      else { addMod(g, c, { set: Math.floor(a / 2), which: 'atk', end: true, own: true }); log(g, `${name(c)}'s ATK was halved.`); } } }] },
   // ENGINE: no substitute Fusion Material hook; it can't stand in for a Fusion Material yet.
   'Goddess with the Third Eye': { effs: [] },
   // PARTIAL: it can't turn itself face-down the turn it was summoned or changed position (the usual position-change limit).
@@ -309,7 +309,7 @@ E.addScripts({
     effs: unionEffs(m => race(m) === 'Machine', 'Equip Heavy Mech Support Platform to which Machine?') },
   'Helping Robo for Combat': { effs: [{ type: 'trig', mand: true, label: 'Draw 1, then return 1',
     on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c && ev.prevCtrl !== c.ctrl,
-    res: function* (g, c, p) { if (g.p[p].deck.length) draw(g, p, 1); const h = g.p[p].hand; if (!h.length) return;
+    res: function* (g, c, p) { draw(g, p, 1); const h = g.p[p].hand; if (!h.length) return;
       const [x] = yield* pick(g, p, 'Return which card to the bottom of your Deck?', h, 1, 1, 'cost'); if (x) { toBottom(g, x); log(g, `${PN(g, p)} put a card on the bottom of the Deck.`); } } }] },
 
   /* ----- Spells ----- */
@@ -353,18 +353,18 @@ E.addScripts({
     { type: 'trig', loc: 'st', when: true, label: 'Reveal the Normal Monster: draw 1',
       on: (g, ev, c) => ev.type === 'move' && ev.reason === 'draw' && ev.to === 'hand' && g.phase === 'draw' && g.tp === c.ctrl && ev.c.owner === c.ctrl && D(ev.c).k === 'normal',
       cond: (g, c, p) => g.p[p].deck.length > 0,
-      res: function* (g, c, p, L2) { log(g, `${PN(g, p)} revealed ${name(L2.ev.c)}.`); if (g.p[p].deck.length) draw(g, p, 1); } }] },
+      res: function* (g, c, p, L2) { log(g, `${PN(g, p)} revealed ${name(L2.ev.c)}.`); draw(g, p, 1); } }] },
 
   /* ----- Traps ----- */
   // A wrong call: the next turn of the player is skipped (no draw, nothing to do but end it).
   // ENGINE: no real turn skip; that turn still happens, with no draw, no summons, no activations and no Battle Phase.
   'Gamble': { effs: [{ type: 'act', cond: (g, c, p) => g.p[opp(p)].hand.length >= 6 && g.p[p].hand.length <= 2,
-    res: function* (g, c, p) { if (callCoin(g, p)) { const n = Math.max(0, 5 - g.p[p].hand.length); if (n) draw(g, p, Math.min(n, g.p[p].deck.length)); return; }
+    res: function* (g, c, p) { if (callCoin(g, p)) { const n = Math.max(0, 5 - g.p[p].hand.length); if (n) draw(g, p, n); return; }
       const t = g.tp === p ? g.turnNo + 2 : g.turnNo + 1; (g.f22skip || (g.f22skip = [null, null]))[p] = t; log(g, `${PN(g, p)} skips their next turn.`);
       if (!g.f22skipRule) { g.f22skipRule = true; addRule(g, (g2, a) => { const q = a.p != null ? a.p : a.c && a.c.ctrl; return q != null && skipped(g2, q) && ['draw', 'ns', 'set', 'ss', 'activate', 'setST', 'attack', 'pos'].includes(a.type); }); } } },
     { type: 'trig', loc: 'any', res: noop, on: (g, ev) => { if (ev.type === 'phase' && ev.ph === 'standby' && skipped(g, ev.tp)) g.noBP[ev.tp] = true; return false; } }] },
   'Good Goblin Housekeeping': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length > 0,
-    res: function* (g, c, p) { const n = 1 + g.p[p].gy.filter(x => named(x, 'Good Goblin Housekeeping')).length; draw(g, p, Math.min(n, g.p[p].deck.length));
+    res: function* (g, c, p) { const n = 1 + g.p[p].gy.filter(x => named(x, 'Good Goblin Housekeeping')).length; draw(g, p, n);
       const h = g.p[p].hand; if (!h.length) return; const [x] = yield* pick(g, p, 'Return which card to the bottom of your Deck?', h, 1, 1, 'cost'); if (x) { toBottom(g, x); log(g, `${PN(g, p)} put a card on the bottom of the Deck.`); } } }] },
   // The negation lasts the turn (kept on the game; the GY copy carries it). PARTIAL: it ends early if this card leaves the GY.
   "Gorgon's Eye": { cont: { loc: 'gy', negates: (g, src, c) => g.gorgonEye === g.turnNo && c.zone === 'm' && (c.pos === 'def' || c.pos === 'set') },
@@ -405,7 +405,7 @@ E.addScripts({
       cost: function* (g, c, p) { yield* discardOne(g, p, c); },
       res: function* (g, c, p) { g.p[p].noBattleDamage = g.turnNo; (g.f22hlb || (g.f22hlb = [null, null]))[p] = g.turnNo; log(g, `${PN(g, p)} takes no damage from the opponent this turn.`); } }] },
   'Heavy Slump': { effs: [{ type: 'act', cond: (g, c, p) => g.p[opp(p)].hand.length >= 8,
-    res: function* (g, c, p) { const o = opp(p); const h = g.p[o].hand.slice(); if (h.length < 8) return; for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, o); log(g, `${PN(g, o)} shuffled ${h.length} cards into the Deck.`); draw(g, o, Math.min(2, g.p[o].deck.length)); } }] },
+    res: function* (g, c, p) { const o = opp(p); const h = g.p[o].hand.slice(); if (h.length < 8) return; for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, o); log(g, `${PN(g, o)} shuffled ${h.length} cards into the Deck.`); draw(g, o, 2); } }] },
   'Hidden Spellbook': { effs: [{ type: 'act', cond: (g, c, p) => g.tp === p && g.p[p].gy.filter(isSpell).length >= 2,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Shuffle which 2 Spells into your Deck?', g.p[p].gy.filter(isSpell), 2, 2, 'good'); },
     res: function* (g, c, p, L2) { const ts = L2.t.filter(x => x.zone === 'gy'); for (const t of ts) move(g, t, 'deck', { reason: 'effect' }); if (ts.length) log(g, `${ts.map(x => D(x).n).join(' and ')} ${ts.length > 1 ? 'were' : 'was'} shuffled into the Deck.`); } }] },

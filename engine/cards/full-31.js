@@ -49,13 +49,13 @@ const LOCKS = {
   'Flamvell Commando': () => true,
   // only by its own summon rule (an idle action, never a resolving effect)
   'Evil Dragon Ananta': g => !!g.resolvingL,
-  // its own summon rule first; once properly summoned, effects can bring it back
+  // its own summon rule; "Must be Special Summoned" is never revived (the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere; EDOPro: a summon condition)
   'Destiny HERO - Dogma': (g, a) => !!g.resolvingL && !a.c.f31ok,
   'Destiny HERO - Disk Commander': (g, a) => a.c.zone === 'gy' && a.c.f31gyT === g.turnNo,
   'Divine Grace - Northwemko': (g, a) => a.how === 'ritual' && !(g.resolvingL && named(g.resolvingL.c, 'Ritual of Grace')),
 };
-const DFUSION = ['Evil HERO Infernal Sniper', 'Evil HERO Inferno Wing', 'Evil HERO Lightning Golem', 'Evil HERO Wild Cyclone'];
-for (const n of DFUSION) LOCKS[n] = (g, a) => !a.c.f31ok && !(a.c.flags && a.c.flags.darkFusion) && !(g.resolvingL && ['Dark Fusion', 'Dark Calling'].includes(D(g.resolvingL.c).n));
+// The Evil HEROes' "Must be Special Summoned with "Dark Fusion"" is the engine's summoning-condition check now (2026-11-27: it knows the
+// card activating, so Dark Fusion is offered, and Dark Calling's "treated as a Fusion Summon with "Dark Fusion"").
 const lockEff = { type: 'trig', loc: 'any', res: noop, on: (g) => {
   if (!g.f31lock) { g.f31lock = true; addRule(g, (g2, a) => { if (a.type !== 'ss' || !a.c || a.c.id == null) return false; const d = D(a.c); const f = d && LOCKS[d.n]; return !!f && f(g2, a); }); }
   return false; } };
@@ -301,7 +301,7 @@ E.addScripts({
         let n = Math.min(3, g.p[p].gy.filter(x => named(x, 'Divine Dragon - Excelion')).length); const opts = ['Gain 1000 ATK', 'Attack again after destroying a monster by battle', 'Damage equal to the ATK of a monster it destroys'];
         const left = [0, 1, 2];
         while (n-- > 0 && left.length) { const i = left.length > 1 ? yield* choose(g, p, 'Divine Dragon - Excelion: which effect?', left.map(k => opts[k])) : 0; const k = left.splice(i, 1)[0];
-          if (k === 0) addMod(g, c, { atk: 1000 }); else if (k === 1) c.flags.exAgain = true; else c.flags.exBurn = true;
+          if (k === 0) addMod(g, c, { atk: 1000, own: true }); else if (k === 1) c.flags.exAgain = true; else c.flags.exBurn = true;
           log(g, `Divine Dragon - Excelion: ${opts[k]}.`); } } },
     { type: 'trig', res: noop, on: (g, ev, c) => { if (c.flags.exAgain && ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c && ev.c.owner !== c.ctrl) c.flags.extraAttack = g.turnNo; return false; } },
     { type: 'trig', mand: true, label: "Damage equal to the destroyed monster's ATK",
@@ -382,7 +382,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { const xs = live(L2); for (const x of xs) move(g, x, 'deck', { reason: 'effect', by: p }); shuffleDeck(g, p); if (xs.length) log(g, `${PN(g, p)} shuffled ${xs.length} card${xs.length > 1 ? 's' : ''} into the Deck.`);
         const o = opp(p), h = g.p[o].hand; let k = 0;
         for (let i = 0; i < xs.length && h.length; i++) { const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, o)} discarded ${D(x).n} at random.`); k++; }
-        if (k && onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000 * k }); log(g, `${name(c)} gained ${1000 * k} ATK.`); } } }] },
+        if (k && onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000 * k, own: true }); log(g, `${name(c)} gained ${1000 * k} ATK.`); } } }] },
   // Earthbound Immortals can't destroy themselves: their "no Field Spell" self-destruction can't activate, and an Earthbound
   // Immortal's own resolving effect can't destroy it.
   'Earthbound Linewalker': { cont: {
@@ -586,6 +586,6 @@ E.addScripts({
       const xs = yield* pick(g, p, 'Send which Morphtronic monsters from your hand to the GY?', cs, 1, cs.length, 'cost'); let k = 0;
       for (const x of xs) { move(g, x, 'gy', { reason: 'effect', by: p }); if (x.zone === 'gy') k++; }
       if (xs.length) log(g, `${PN(g, p)} sent ${xs.map(x => D(x).n).join(', ')} to the GY.`);
-      if (k && onField(c) && faceUp(c)) { addMod(g, c, { atk: 800 * k }); log(g, `${name(c)} gained ${800 * k} ATK.`); } } }] },
+      if (k && onField(c) && faceUp(c)) { addMod(g, c, { atk: 800 * k, own: true }); log(g, `${name(c)} gained ${800 * k} ATK.`); } } }] },
 });
 })();

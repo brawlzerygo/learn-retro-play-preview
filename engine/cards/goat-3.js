@@ -7,7 +7,7 @@
 const E = window.EdisonEngine, L = E.lib;
 const { pick, tgt, choose, move, destroy, ss, damage, gain, pay, mill, addMod, addCtr, ctr, addRule, name, D, isMon, isSpell,
   onField, faceUp, attr, race, baseAtk, monsOf, fieldMons, allField, freeM, shuffleDeck, log, PN, has, live, opp, stat, evSummoned,
-  battleKill } = L;
+  battleKill, negd } = L;
 
 const named = (c, n) => D(c).n === n;
 const isFlipMon = c => isMon(c) && (!!D(c).flip || /FLIP:/.test(D(c).tx || ''));
@@ -18,13 +18,12 @@ function* discardOne(g, p, filter, text) {
   if (x) { move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } return x;
 }
 const discardRandom = (g, p) => { const h = g.p[p].hand; if (!h.length) return null; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)} at random.`); return x; };
-const kycooOn = (g, p) => monsOf(g, opp(p)).some(x => faceUp(x) && named(x, 'Kycoo the Ghost Destroyer') && !x.flags.negated);
+const kycooOn = (g, p) => monsOf(g, opp(p)).some(x => faceUp(x) && named(x, 'Kycoo the Ghost Destroyer') && !negd(g, x));
 // "Must be Fusion Summoned": blocks a revival from the GY, as in goat-1.js.
 // PARTIAL: works from the GY only (one cont per card; the engine has no general "can't be Special Summoned" flag).
 const noSSFromGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src };
-// Spell Counter on each resolved Spell (seen as it leaves the Spell/Trap Zone for the GY), as Skilled White Magician in goat-1.js.
-// PARTIAL: Continuous, Equip and Field Spells stay on the field after resolving, so they add no counter.
-const spellCounter3 = { type: 'trig', on: (g, ev, c) => { if (ev.type === 'move' && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule' && isSpell(ev.c) && !['Continuous', 'Equip', 'Field'].includes(D(ev.c).sub) && ctr(c, 'spell') < 3) { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); } return false; }, res: function* () {} };
+// Spell Counter on each resolved Spell Card activation (the engine's spellResolved event), as Skilled White Magician in goat-1.js.
+const spellCounter3 = { type: 'trig', on: (g, ev, c) => { if (L.spellCtrEv(g, ev, c) >= 0 && ctr(c, 'spell') < 3) { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); } return false; }, res: function* () {} };
 // "Destroy that monster" at a battle moment (Sasuke, Mystic Swordsman, Ryu Kokki)
 const killFoe = (g, c, p, t) => { if (t && onField(t) && t.zone === 'm') destroy(g, [t], { by: p, src: c }); };
 
@@ -78,7 +77,7 @@ E.addScripts({
   'Zombyra the Dark': {
     self: { cantAttack: (g, c) => !monsOf(g, opp(c.ctrl)).some(t => !(faceUp(t) && has(g, t, 'noAttackTarget'))) },
     effs: [{ type: 'trig', mand: true, label: 'Lose 200 ATK', on: (g, ev, c) => battleKill(ev, c),
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: -200 }); log(g, `${name(c)} lost 200 ATK.`); } } }] },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: -200, own: true }); log(g, `${name(c)} lost 200 ATK.`); } } }] },
   'Skilled Dark Magician': { effs: [spellCounter3,
     { type: 'ign', tags: { ss: 1 }, label: 'Tribute: summon Dark Magician',
       cond: (g, c, p) => ctr(c, 'spell') >= 3 && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].some(x => named(x, 'Dark Magician')),
@@ -194,9 +193,7 @@ E.addScripts({
   // ENGINE: move() has no "banish instead" replacement. Closest: as a card lands in the GY while this card is face-up,
   // it is moved on to the banished pile at once. GY triggers of that card then fail (they check the zone), and "destroyed
   // and sent to the GY" triggers (battleKill) don't fire, as with the real replacement.
-  'Banisher of the Light': { effs: [{ type: 'trig', on: (g, ev, c) => {
-    if (ev.type === 'move' && ev.to === 'gy' && ev.c !== c && ev.c.zone === 'gy' && onField(c) && faceUp(c)) { move(g, ev.c, 'ban', { reason: 'rule', noLater: true }); log(g, `${name(ev.c)} was banished instead.`); }
-    return false; }, res: function* () {} }] },
+  'Banisher of the Light': { cont: { gyBan: 'all' } },   // a replacement in move(): the card never reaches the GY (2026-11-28 audit)
 }, 'goat');
 
 function cipher(g, c) { const o = foeOf(g, c); return g.inDS && o && race(o) === 'Warrior' ? 2000 : 0; }

@@ -15,18 +15,8 @@ const noop = function* () {};
 const txt = c => { const d = D(c); return d.ps && !/^No (?:Edison|rulings)/.test(d.ps) ? d.ps : d.tx || ''; };
 const isSpiritMon = c => isMon(c) && /Spirit/.test(D(c).ab || '');
 const STAYS = ['Continuous', 'Equip', 'Field'];
-// A Spell Card has been activated and resolved, read from the moves (as goat-7.js counts Spell Counters): a Normal or
-// Quick-Play Spell as it leaves the Spell/Trap Zone for the GY after resolving, a Continuous, Equip or Field Spell as it is
-// activated from the hand. Returns the player who activated it, or -1.
-// PARTIAL: a Normal Spell whose activation was negated without destroying it still counts, and a Set Continuous, Equip or
-// Field Spell flipped face-up to activate does not (the engine has no event for either).
-function spellResolvedBy(ev) {
-  if (ev.type !== 'move' || !isSpell(ev.c)) return -1;
-  const stays = STAYS.includes(D(ev.c).sub);
-  if (!stays && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule') return ev.prevCtrl;
-  if (stays && ev.from === 'hand' && ev.reason === 'activate') return ev.c.ctrl;
-  return -1;
-}
+// A Spell Card has been activated and resolved: the player who activated it, or -1.
+function spellResolvedBy(ev) { return L.spellResolvedBy(ev); }   // the engine's spellResolved event (2026-11-27 audit): Set Spells flipped up count, a negated activation doesn't
 // Does this card's effect inflict effect damage? (read from its text, as in full-08.js)
 const dmgText = c => /inflict[^.]*damage|damage[^.]*(?:to your opponent|to you\b|to each player|to both players|to its controller|to the controller)|takes? [^.]*damage/i.test(txt(c).replace(/(?:piercing )?battle damage/gi, ''));
 const dmgLink = L2 => !!L2 && !L2.negated && dmgText(L2.c);
@@ -85,7 +75,7 @@ E.addScripts({
   // A Continuous Effect: the LP is gained with no chain link. It doesn't count its own activation.
   'Spell Absorption': { effs: [{ type: 'act', res: noop },
     { type: 'trig', loc: 'st', res: noop, on: (g, ev, c) => {
-      if (ev.c === c || !faceUp(c)) return false;
+      if (ev.sc === c || !faceUp(c)) return false;
       if (spellResolvedBy(ev) >= 0) gain(g, c.ctrl, 500);
       return false; } }] },
   // No activation of its own: it is Set, and works from the GY once destroyed there by the opponent's Spell or Trap.
@@ -110,7 +100,7 @@ E.addScripts({
         shuffleDeck(g, p); if (xs.length) log(g, `${PN(g, p)} banished ${xs.map(name).join(', ')} face-up.`); if (onField(c)) c.flags.chronOn = true; } },
     // Chronicle Counters and the damage on leaving the field happen with no chain link (rulings).
     { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => {
-      if (onField(c) && faceUp(c) && c.flags.chronOn && ev.c !== c && spellResolvedBy(ev) === opp(c.ctrl)) { addCtr(g, c, 'chronicle', 1); log(g, `${name(c)} got a Chronicle Counter (${ctr(c, 'chronicle')}).`); }
+      if (onField(c) && faceUp(c) && c.flags.chronOn && ev.sc !== c && spellResolvedBy(ev) === opp(c.ctrl)) { addCtr(g, c, 'chronicle', 1); log(g, `${name(c)} got a Chronicle Counter (${ctr(c, 'chronicle')}).`); }
       if (ev.type === 'move' && ev.c === c && ev.wasField && ev.from === 'st' && ev.snap && ev.snap.faceUp && ev.snap.flags.chronOn) {
         const n = g.p[c.owner].ban.filter(x => x.flags.chron === c.u).length;
         if (n) damage(g, ev.prevCtrl, 500 * n, { src: c, srcP: ev.prevCtrl });
@@ -263,10 +253,10 @@ E.addScripts({
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => D(x).k === 'normal' && race(x) === 'Zombie' && lv(x) <= 2),
       target: function* (g, c, p, L2) { const cs = g.p[p].gy.filter(x => D(x).k === 'normal' && race(x) === 'Zombie' && lv(x) <= 2); yield* tgt(g, p, L2, 'Special Summon which Zombie Normal Monsters?', cs, 1, Math.min(4, cs.length, g.p[p].m.filter(z => !z).length), 'good'); },
       res: function* (g, c, p, L2) { for (const t of L2.t) if (t.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, t, 'atk'); } }] },
-  // Activated after Pot of Greed resolves (ruling): seen as Pot of Greed goes to the GY after resolving.
+  // Activated after Pot of Greed resolves (ruling): the engine's spellResolved event.
   'Spirit of the Pot of Greed': { effs: [{ type: 'trig', mand: true, label: 'Draw 1 more card',
-    on: (g, ev, c) => c.pos === 'atk' && ev.type === 'move' && named(ev.c, 'Pot of Greed') && spellResolvedBy(ev) >= 0,
-    res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c) || c.pos !== 'atk') return; const q = L2.ev.prevCtrl;
+    on: (g, ev, c) => c.pos === 'atk' && !!ev.sc && named(ev.sc, 'Pot of Greed') && spellResolvedBy(ev) >= 0,
+    res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c) || c.pos !== 'atk') return; const q = L2.ev.p;
       if (g.p[q].deck.length && (yield* yn(g, q, 'Draw 1 more card (Spirit of the Pot of Greed)?'))) draw(g, q, 1); } }] },
   'Spirit of the Six Samurai': { cont: { replaceDestroy: unionReplace,
       atk: (g, src, m) => src.zone === 'st' && src.flags.union && src.equipTo === m.u ? 500 : 0,
@@ -280,7 +270,7 @@ E.addScripts({
     { type: 'quick', label: 'Discard a Dragon: +1000 ATK/DEF',
       cond: (g, c, p) => g.tp === p && g.phase === 'battle' && !g.inDS && !!g.aw && (g.aw.a === c || g.aw.t === c) && g.p[p].hand.some(x => isMon(x) && race(x) === 'Dragon'),
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard 1 Dragon monster', g.p[p].hand.filter(x => isMon(x) && race(x) === 'Dragon'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } },
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, def: 1000, end: true, ryu: true }); log(g, `${name(c)} gained 1000 ATK and DEF.`); } } },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, def: 1000, end: true, ryu: true, own: true }); log(g, `${name(c)} gained 1000 ATK and DEF.`); } } },
     { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'bpEnd') c.mods = c.mods.filter(m => !m.ryu); return false; } }] },
   // Spirit monsters' End Phase returns (each one's own mandatory trigger) are stopped while this card is face-up.
   // PARTIAL: the return is spotted as a Spirit monster's mandatory trigger in the End Phase of the turn it was summoned or

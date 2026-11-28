@@ -287,8 +287,8 @@ E.addScripts({
     res: function* (g, c, p) { tokens(g, opp(p), { n: 'Plant Token', a: 'EARTH', r: 'Plant', lv: 1, atk: 800, def: 500 }, 2, 'def'); } }] },
   // The bonus is counted once for all copies (the first face-up Batteryman C applies it).
   'Batteryman C': { cont: {
-    atk: (g, src, m) => { const bs = monsOf(g, src.ctrl).filter(x => named(x, 'Batteryman C')); if (bs.find(x => faceUp(x) && !x.flags.negated) !== src || negd(g, src)) return 0; return m.ctrl === src.ctrl && race(m) === 'Machine' && bs.every(x => x.pos === 'atk') ? 500 * bs.length : 0; },
-    def: (g, src, m) => { const bs = monsOf(g, src.ctrl).filter(x => named(x, 'Batteryman C')); if (bs.find(x => faceUp(x) && !x.flags.negated) !== src || negd(g, src)) return 0; return m.ctrl === src.ctrl && race(m) === 'Machine' && bs.every(x => x.pos !== 'atk') ? 500 * bs.length : 0; } } },
+    atk: (g, src, m) => { const bs = monsOf(g, src.ctrl).filter(x => named(x, 'Batteryman C')); if (bs.find(x => faceUp(x) && !negd(g, x)) !== src || negd(g, src)) return 0; return m.ctrl === src.ctrl && race(m) === 'Machine' && bs.every(x => x.pos === 'atk') ? 500 * bs.length : 0; },
+    def: (g, src, m) => { const bs = monsOf(g, src.ctrl).filter(x => named(x, 'Batteryman C')); if (bs.find(x => faceUp(x) && !negd(g, x)) !== src || negd(g, src)) return 0; return m.ctrl === src.ctrl && race(m) === 'Machine' && bs.every(x => x.pos !== 'atk') ? 500 * bs.length : 0; } } },
   'Batteryman D': { cont: { grant: (g, src, m, flag) => flag === 'noAttackTarget' && m !== src && m.zone === 'm' && m.ctrl === src.ctrl && faceUp(m) && race(m) === 'Thunder' && !named(m, 'Batteryman D') && !negd(g, src) } },
   'Battlestorm': { self: { atk: (g, c) => 100 * monsOf(g, c.ctrl).filter(x => faceUp(x) && race(x) === 'Winged Beast').length },
     effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Destroy a Spell/Trap',
@@ -296,10 +296,9 @@ E.addScripts({
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Spell/Trap?', stOf(g, opp(p)), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { if (monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Winged Beast').length < 3) { log(g, 'Battlestorm needs 3 Winged Beast monsters to resolve.'); return; } destroy(g, live(L2), { by: p, src: c }); } }] },
   'Beelze Frog': { self: { atk: (g, c) => 300 * g.p[c.ctrl].gy.filter(x => named(x, 'T.A.D.P.O.L.E.')).length } },
-  // PARTIAL: a discard is told from a cost by the move's reason ('discard' vs 'cost'); a script that discards for a cost
-  // with reason 'discard' still triggers it. The hand size limit doesn't.
+  // a discard paid as a cost doesn't count (Edison archive; the engine marks it ev.asCost), nor the hand size limit
   'Beiige, Vanguard of Dark World': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon it',
-    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ev.reason === 'discard' && !ruleDiscard(g, ev),
+    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ev.reason === 'discard' && !ev.asCost && !ruleDiscard(g, ev),
     cond: (g, c, p) => freeM(g, p) >= 0,
     res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c, 'atk'); } }] },
   'Bending Destiny': { effs: [

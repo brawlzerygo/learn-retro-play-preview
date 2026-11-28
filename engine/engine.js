@@ -25,15 +25,17 @@ let FMT = 'edison'; const FSCRIPTS = {};
 let CARDLIST = [];
 E.init = (cards, opts = {}) => {
   FMT = opts.format || 'edison'; CARDLIST = cards;
-  DATA = new Map(); BYNAME = new Map();
+  DATA = new Map(); BYNAME = new Map(); GEMM.clear();
   // edisonformat.net puts a placeholder ("No Edison-Accurate PSCT available...", "No rulings...") in ps for most cards: drop it, so every
   // reader (Fusion and Synchro materials, summon rules, card scripts) falls back to the real text in tx (2026-11-26)
   for (const c of cards) { if (c.ps && /^No (Edison-Accurate|rulings)/.test(c.ps)) delete c.ps; DATA.set(c.id, c); BYNAME.set(c.n, c); }
   for (const t of TOKENS) { DATA.set(t.id, t); BYNAME.set(t.n, t); }
+  for (const t of SS_PROBES) DATA.set(t.id, t);   // not cards: ssBlanket()'s stand-ins (no BYNAME entry, so no card list shows them)
+  SSC.clear();
 };
 const TOKENS = [
   { id: 'tok-sheep', n: 'Sheep Token', k: 'token', a: 'EARTH', r: 'Beast', lv: 1, atk: '0', def: '0' },
-  { id: 'tok-gorz', n: 'Emissary of Darkness Token', k: 'token', a: 'LIGHT', r: 'Fairy', lv: 7, atk: '0', def: '0' },
+  { id: 'tok-gorz', n: 'Emissary of Darkness Token', k: 'token', a: 'LIGHT', r: 'Fairy', lv: 7, atk: '?', def: '?' },
 ];
 const num = v => { const x = parseInt(v, 10); return isNaN(x) ? 0 : x; };
 function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -54,7 +56,10 @@ const scByName = n => (FMT !== 'edison' && FSCRIPTS[FMT] && FSCRIPTS[FMT][n]) ||
    field only and keep their own conditions; summon rules and continuous effects aren't copied. */
 const effsOf = c => { const sc = SC(c), own = (sc && sc.effs) || []; const n = c && c.flags && c.flags.copyEffs; if (!n) return own;
   const cs = scByName(n); const cp = ((cs && cs.effs) || []).filter(e => e.type !== 'act' && (e.loc || 'm') === 'm'); return cp.length ? own.concat(cp) : own; };
-function name(c) { const d = D(c); if (onField(c) && faceUp(c)) { if (d.n === 'Dupe Frog' && !c.flags.negated) return 'Des Frog'; } return d.n; }
+function name(c) { const d = D(c); if (onField(c) && faceUp(c)) { const ng = () => (c.g ? negd(c.g, c) : c.flags.negated);
+  if (d.n === 'Dupe Frog' && !ng()) return 'Des Frog';
+  if (d.n === 'Elemental HERO Neos Alius' && c.zone === 'm' && c.flags.gemini && !ng()) return 'Elemental HERO Neos';   // its Gemini effect (2026-11-27 audit)
+  } return d.n; }
 const isBW = c => /^Blackwing/.test(name(c));
 const isFrog = c => /Frog/.test(name(c));
 const isHERO = c => /HERO/.test(name(c));
@@ -68,11 +73,14 @@ const race = c => D(c).r || '';
 function lv(c) {
   let L = c.flags.lv || num(D(c).lv); const g = c.g;
   if (!g || !L || !(c.zone === 'hand' || (c.zone === 'm' && c.pos !== 'set'))) return L;
-  if (c.zone === 'm' && !c.flags.negated) { const sc = SC(c); if (sc && sc.self && sc.self.lv) { const v = sc.self.lv(g, c); if (v) L = v; } }
+  if (c.zone === 'm' && !negd(g, c)) { const sc = SC(c); if (sc && sc.self && sc.self.lv) { const v = sc.self.lv(g, c); if (v) L = v; } }
   let d = 0; for (const [s, ct] of statics(g)) if (ct.lv && (c.zone === 'm' || ct.lvHand)) d += ct.lv(g, s, c) || 0;
   return d ? Math.max(1, L + d) : L;
 }
-function baseAtk(c) { if (c.flags.baseAtk != null) return c.flags.baseAtk; return num(D(c).atk); }
+/* c.flags.ownBaseAtk: the base ATK in c.flags.baseAtk comes from the card's own effect (Chimeratech Fortress Dragon's "its original ATK
+ becomes 1000 x the materials"). While its effects are negated the printed ATK counts ("?" = 0), and dropOwnWhenNegated() makes that
+ permanent (2026-11-27 audit: Chimeratech kept 3000 ATK under Skill Drain). */
+function baseAtk(c) { if (c.flags.baseAtk != null && !(c.flags.ownBaseAtk && c.g && onField(c) && negd(c.g, c))) return c.flags.baseAtk; return num(D(c).atk); }
 /* ---------- static effects (scripts' "self" and "cont") ----------
  A script can describe what is always true while its card is face-up:
    self: { piercing, directAttack, noBattleDestroy, noEffectDestroy, cantAttack, noAttackTarget, noBattleDamage,
@@ -84,7 +92,7 @@ function baseAtk(c) { if (c.flags.baseAtk != null) return c.flags.baseAtk; retur
 function statics(g) {
   if (g._st && g._st.seq === g.seq && g._st.turn === g.turnNo) return g._st.list;
   const out = [];
-  for (const c of allField(g)) { if (!faceUp(c)) continue; const sc = SC(c); if (sc && sc.cont && !sc.cont.loc && !(isMon(c) && c.flags.negated)) out.push([c, sc.cont]); }
+  for (const c of allField(g)) { if (!faceUp(c)) continue; const sc = SC(c); if (sc && sc.cont && (!sc.cont.loc || (sc.cont.loc === 'gy' && c.pendLeave)) && !(isMon(c) && c.flags.negated)) out.push([c, sc.cont]); }
   for (const P of g.p) for (const z of ['gy', 'hand']) for (const c of P[z]) { const sc = SC(c); if (sc && sc.cont && sc.cont.loc === z) out.push([c, sc.cont]); }
   g._st = { seq: g.seq, turn: g.turnNo, list: out };
   // a face-up Spell/Trap whose effects are negated (Jinzo on Traps, flags.negated) stops applying its lasting effect too
@@ -108,8 +116,9 @@ function has(g, c, flag) {
   return false;
 }
 function forbid(g, a) {
+  if (a.type === 'ss' && ssLimited(g, a)) return true;
   for (const [s, ct] of statics(g)) if (ct.forbid && ct.forbid(g, s, a)) return true;
-  for (const r of g.rules) if (r.forbid(g, a)) return true;
+  for (const r of g.rules) if (!(r.L && r.L.actNegated) && r.forbid(g, a)) return true;   // a lock from an activation that was negated is gone
   return false;
 }
 function stat(g, c, which) { // current ATK or DEF
@@ -121,11 +130,10 @@ function stat(g, c, which) { // current ATK or DEF
   for (const [s, ct] of statics(g)) if (ct[which]) v += ct[which](g, s, c) || 0;
   if (!neg) {
     if (nm === 'Colossal Fighter' && which === 'atk') v += 100 * allCards(g, 'gy').filter(x => isMon(x) && race(x) === 'Warrior').length;
-    if (nm === 'Elemental HERO Absolute Zero' && which === 'atk') v += 500 * fieldMons(g).filter(x => x !== c && faceUp(x) && attr(x) === 'WATER').length;
+    if (nm === 'Elemental HERO Absolute Zero' && which === 'atk') v += 500 * fieldMons(g).filter(x => faceUp(x) && attr(x) === 'WATER' && D(x).n !== 'Elemental HERO Absolute Zero').length;   // no other Absolute Zero (archive)
     if (nm === 'Tragoedia') v += 600 * g.p[c.ctrl].hand.length;
   }
-  for (const s of g.p[c.ctrl].st) if (s && s.equipTo === c.u && D(s).n === 'Armory Arm' && which === 'atk') v += 1000;
-  for (const m of c.mods) { if (m.set != null && (m.which === which || m.which === 'both')) v = m.set; else if (m[which]) v += m[which]; }
+  for (const m of c.mods) { if (m.own && neg) continue; if (m.set != null && (m.which === which || m.which === 'both')) v = m.set; else if (m[which]) v += m[which]; }
   return Math.max(0, v);
 }
 E.atk = (g, c) => stat(g, c, 'atk'); E.def = (g, c) => stat(g, c, 'def');
@@ -152,19 +160,44 @@ function detach(g, c) {
 function snap(g, c) { return { name: name(c), atk: onField(c) ? stat(g, c, 'atk') : baseAtk(c), def: onField(c) ? stat(g, c, 'def') : num(D(c).def), attr: attr(c), lv: lv(c), race: race(c), pos: c.pos, ctrl: c.ctrl, faceUp: faceUp(c), mon: isMon(c), flags: c.flags }; }
 /* Move a card. to: hand, deck (shuffled in), deckTop, gy, ban, extra, m, st, fz. o: {reason, by (player), destroyed, battle, killer, ctrl, pos, zi, group, faceDown} */
 function move(g, c, to, o = {}) {
-  if (to === 'hand' && !o._hw) { const r = move(g, c, to, { ...o, _hw: true }); handWin(g, c.owner); return r; }
+  // a hand win (Exodia) is checked once the effect adding the card has resolved (2026-11-27 audit, Graceful Charity ruling: drawing the
+  // last pieces, "you must discard 2 cards before a victory can be declared"); a draw outside an effect checks at once
+  if (to === 'hand' && !o._hw) { const r = move(g, c, to, { ...o, _hw: true }); if (g.resolvingL) (g.hwPend || (g.hwPend = [])).push(c.owner); else handWin(g, c.owner); return r; }
   const from = c.zone, wasField = onField(c), s = wasField ? snap(g, c) : null, prevCtrl = c.ctrl;
   if (from === 'gone') return null;
-  if (wasField && c.flags.banishOnLeave && to !== 'ban' && to !== 'm') to = 'ban';
+  // a resolved Normal/Quick-Play Spell or Normal/Counter Trap waiting to leave at the end of the chain (pendLeave) is already treated as
+  // gone: only a destruction (or its own leave) moves it (2026-11-28 audit: Giant Trunade "non-continuous cards chained to this are not
+  // returned to the hand", Raiza site ruling 1; Heavy Storm and Dust Tornado still destroy it)
+  if (c.pendLeave && !o.destroyed && to !== 'gy') return null;
+  // a card in a GY an effect can't move (Goat Necrovalley: "Negate any card effect that would move a card in the Graveyard to a different
+  // place"; not a cost, not the card's own effect from the GY: Sinister Serpent): static cont.gyHold(g, src, c, to, o)
+  if (from === 'gy' && to !== 'gy' && !g.inCost && g.resolvingL) for (const [s2, ct] of statics(g)) if (ct.gyHold && ct.gyHold(g, s2, c, to, o)) { log(g, `${D(s2).n} kept ${D(c).n} in the GY.`); return null; }
+  c.pendLeave = false;
+  if (wasField && c.flags.banishOnLeave && to !== 'ban' && to !== 'm' && !banBlocked(g, c, from, o)) { o = { ...o, insteadOf: o.insteadOf || to }; to = 'ban'; }
   if (wasField && D(c).k === 'token' && to !== 'm') { detach(g, c); c.zone = 'gone'; emit(g, { type: 'move', c, from, to: 'gone', wasField, snap: s, prevCtrl, ...o }, o.group); return null; }
-  if (wasField && isExtraD(D(c)) && ['hand', 'deck', 'deckTop'].includes(to)) to = 'extra';
+  // "Any card sent to the GY is banished instead" (Macro Cosmos, Dimensional Fissure, Banisher of the Light/Radiance): a true replacement,
+  // so the card never touches the GY and nothing "sent to the GY" happens (2026-11-28 audit). Imperial Iron Wall stops it (site ruling:
+  // "Imperial Iron Wall trumps the effect of Macro Cosmos"), and then the card goes to the GY.
+  if (to === 'gy' && !o.noRedirect) { const by = gyBanBy(g, c, o); if (by && !banBlocked(g, c, from, o)) { o = { ...o, insteadOf: 'gy', banBy: by.u }; to = 'ban'; } }
+  // an Extra Deck monster that would go to the hand or Deck goes back to the Extra Deck, from any zone (A Feather of the Phoenix archive:
+  // "it is returned to the Fusion Deck"; Raiza, Brionac and every return from the GY or banished pile)
+  if (isExtraD(D(c)) && ['hand', 'deck', 'deckTop'].includes(to)) to = 'extra';
+  // "Neither player can banish cards" (Imperial Iron Wall), "from the GY" (Necrovalley, Kycoo): a banish that can't happen. A destroy-and-banish
+  // (Nobleman of Crossout, Bottomless Trap Hole) still destroys, and the card goes to the GY (Imperial Iron Wall site ruling); anything else
+  // stays where it is (Caius, Allure of Darkness: "reveal it, but it isn't banished")
+  if (to === 'ban' && banBlocked(g, c, from, o)) { if (o.destroyed || (o.insteadOf && o.insteadOf !== 'ban')) to = o.insteadOf && o.insteadOf !== 'ban' ? o.insteadOf : 'gy'; else { log(g, `${D(c).n} can't be banished.`); return null; } }
+  const linkNeg = wasField && c.linkTo ? negd(g, c) : false;   // a negated Call of the Haunted (Jinzo) leaves its monster
   detach(g, c);
   if (wasField && to !== 'm') {
     // equips on it go to the GY; its own equip link ends
     for (const P of g.p) for (const x of P.st) if (x && x.equipTo === c.u) { x.equipTo = null; g.later.push(x); }
-    for (const x of allField(g)) if (x.linkTo === c.u) { x.linkTo = null; g.laterDestroy.push(x); }
-    if (c.linkTo) { const t = allField(g).find(x => x.u === c.linkTo); if (t) g.laterDestroy.push(t); }
-    c.mods = []; c.flags = {}; c.attacks = 0; c.equipTo = null; c.linkTo = null; c.ctr = {};
+    // Call of the Haunted and its kind (2026-11-27 audit): "when that monster is destroyed, destroy this card" only when it is destroyed
+    // (Tributed, sent or bounced, the card stays "meaninglessly": archive), or on any move when the text says "leaves the field"; and
+    // "when this card leaves the field, destroy that monster" not while this card's effect is negated (Jinzo: archive)
+    for (const x of allField(g)) if (x.linkTo === c.u) { x.linkTo = null; if (linkFollows(x, o) && !negd(g, x)) g.laterDestroy.push(x); }
+    if (c.linkTo && !linkNeg) { const t = allField(g).find(x => x.u === c.linkTo); if (t) g.laterDestroy.push(t); }
+    c.mods = []; c.flags = {}; c.attacks = 0; c.negAtk = 0; c.equipTo = null; c.linkTo = null; c.ctr = {};
+    if (!['st', 'fz'].includes(to)) resetUsed(c);
   }
   if (to === 'm' || to === 'st' || to === 'fz') {
     const P = g.p[o.ctrl != null ? o.ctrl : c.owner]; c.ctrl = o.ctrl != null ? o.ctrl : c.owner;
@@ -178,14 +211,66 @@ function move(g, c, to, o = {}) {
     c.pos = o.pos || (to === 'm' ? 'atk' : 'up'); c.zone = to; c.turnIn = g.turnNo; c.posChanged = false;
   } else {
     c.ctrl = c.owner; c.pos = null; c.zone = to === 'deckTop' ? 'deck' : to;
+    if (to !== 'gy' && to !== 'ban') c.proper = false;   // properly summoned: kept on the field, in the GY and banished only
     const P = g.p[c.owner];
     if (to === 'deckTop') P.deck.push(c);
     else if (to === 'deck') { P.deck.push(c); shuffleDeck(g, c.owner); }
     else P[to].push(c);
   }
-  const ev = emit(g, { type: 'move', c, from, to, wasField, snap: s, prevCtrl, ...o }, o.group);
+  c.moved = g.moves = (g.moves || 0) + 1;   // which arrival this is (Stardust Dragon: the same visit to the GY)
+  // asCost: the move happened while a cost was paid (a discard for a cost is not "discarded by a card effect": Dark World archive)
+  const ev = emit(g, { type: 'move', c, from, to, wasField, snap: s, prevCtrl, ...(g.inCost ? { asCost: true } : null), ...o }, o.group);
   if (!o.noLater) flushLater(g, ev.group);
   return ev;
+}
+/* Banish-instead replacements (2026-11-28 audit): a face-up static cont.gyBan says which cards it banishes instead of the GY: 'all'
+ (Macro Cosmos, Banisher of the Light/Radiance), 'mon' (Dimensional Fissure), or a function (g, src, c, o). A card's own replacement
+ doesn't reach itself (Macro Cosmos destroyed goes to the GY). gyLock(g, kind) answers for a cost whose cards aren't known yet. */
+function gyBanBy(g, c, o = {}) {
+  for (const [s, ct] of statics(g)) {
+    if (!ct.gyBan || s === c) continue;
+    const v = typeof ct.gyBan === 'function' ? ct.gyBan(g, s, c, o) : ct.gyBan === 'all' || (ct.gyBan === 'mon' && isMon(c));
+    if (v) return s;
+  }
+  return null;
+}
+function gyLock(g, kind) {   // kind: 'mon' a monster, 'deck' unknown cards (could be monsters), 'st' Spells/Traps, 'any' cards the player picks
+  for (const [, ct] of statics(g)) { const k = ct.gyBan; if (!k) continue; if (k === 'all') return true; if (k === 'mon' && (kind === 'mon' || kind === 'deck')) return true; }
+  return false;
+}
+// who banishes: the move's player, else the resolving link's, else the player paying a cost (Kycoo only stops the opponent)
+const banBlocked = (g, c, from, o = {}) => forbid(g, { type: 'banish', c, from, p: o.by != null ? o.by : g.resolvingL ? g.resolvingL.p : g.costP != null ? g.costP : null });
+/* Costs that send cards "to the GY" can't be paid while those cards would be banished instead (Dimensional Fissure and Macro Cosmos
+ rulings: "Cards/effects whose cost send/discard a monster(s) 'to the Graveyard' CANNOT activate": Card Trooper, Charge of the Light
+ Brigade, D.D. Crow, Brionac, Zombie Master, Thunder King Rai-Oh, Rescue Cat, Chimeratech Fortress Dragon's summon), while a plain
+ "Discard 1 card" cost can (Magic Jammer, Trade-In, Dark Grepher). Read from the card's text: the phrase that sends to the GY as a cost,
+ and what it sends (a monster, unknown cards from the Deck, Spells/Traps, or cards the player picks). */
+const GYCOST_RE = /(?:\b(?:send|sending|discard|discarding)\b[^.;:]{0,140}?\bto the (?:Graveyard|GY)\b\s*(?:;|:|,? then\b|,? to (?!the\b|your\b|their\b|its\b)[a-z]+)|\bby (?:sending|discarding)\b[^.]{0,140}?\bto the (?:Graveyard|GY)\b)/i;
+const gyCostMemo = new Map();
+function gyCostKind(c) {
+  const d = D(c), k = d.n + '|' + FMT; if (gyCostMemo.has(k)) return gyCostMemo.get(k);
+  const m = String(d.ps || d.tx || '').match(GYCOST_RE); let v = null;
+  if (m) { const s = m[0];
+    v = /\btop\b|from (?:the top of )?(?:your|their) Deck|cards? of your Deck/i.test(s) ? 'deck'
+      : /\bmonsters?\b|\b(?:LIGHT|DARK|WATER|FIRE|WIND|EARTH|Dragon|Machine|Fairy|Zombie|Fiend|Warrior|Spellcaster|Beast|Plant|Insect|Gemini|Tuner)s?\b/.test(s) || (isMonD(d) && /\b(?:this|equipped) (?:face-up )?card\b|\bit\b/i.test(s)) ? 'mon'
+      : /\b(?:Spell|Trap|Equip|Field)\b/.test(s) || /\bthis (?:face-up )?card\b/i.test(s) ? 'st' : 'any'; }
+  gyCostMemo.set(k, v); return v;
+}
+function gyCostBlocked(g, c, eff) {   // eff: an effect, or a summon procedure (proc / 'cf')
+  let kind = gyCostKind(c); if (!kind) return false;
+  if (eff === 'cf' && kind === 'any') kind = 'mon';   // a contact Fusion's "above cards" are its monsters (Chimeratech under Dimensional Fissure: archive)
+  if (eff && eff !== 'cf' && !(eff.cost && /'gy'|mill|discard|Cost\(/i.test(String(eff.cost)))) return false;
+  return gyLock(g, kind);
+}
+// When does a linked card (Call of the Haunted) go when its monster leaves the field? Read from its text: "that monster leaves the field"
+// on any move, "that monster is destroyed" only when destroyed, only "this card leaves the field, destroy that monster" (D.D.R.) never;
+// other wording keeps the old rule (any move).
+function linkFollows(x, o) {
+  const t = String(D(x).ps || D(x).tx || '');
+  if (/(?:when|if) (?:that|the) (?:monster|target|equipped monster) leaves the field,? destroy this card/i.test(t)) return true;
+  if (/(?:when|if) (?:that|the) (?:monster|target|equipped monster) is destroyed,? destroy this card/i.test(t)) return !!o.destroyed;
+  if (/(?:when|if) this card leaves the field,? destroy (?:that|the)/i.test(t)) return false;
+  return true;
 }
 function flushLater(g, group) {
   for (let i = 0; i < 6 && (g.later.length || g.laterDestroy.length); i++) {
@@ -197,13 +282,34 @@ function shuffleDeck(g, p) { const a = g.p[p].deck; for (let i = a.length - 1; i
 
 /* ---------- events and triggers ---------- */
 function beginOp(g) { g.group++; g.sw = null; }
+/* A monster's ATK/DEF changes from its own effect (addMod with own: true, and c.flags.ownBaseAtk) are lost for good once its effects are
+ negated (Card Trooper ruling: "Even if Skill Drain leaves play, the increase in ATK will not return"; Chimeratech Fortress Dragon:
+ "its ATK becomes 0 (permanently)"). stat() skips them while negated; this sweep, run on every event, makes it permanent. */
+function dropOwnWhenNegated(g) {
+  for (const c of fieldMons(g)) {
+    if (!c.flags.ownBaseAtk && !c.mods.some(m => m.own)) continue;
+    if (!faceUp(c) || !negd(g, c)) continue;
+    c.mods = c.mods.filter(m => !m.own); if (c.flags.ownBaseAtk) { c.flags.baseAtk = null; c.flags.ownBaseAtk = false; }
+  }
+}
+/* Superalloy Beast Raptinus (2026-11-27 audit): "All Gemini Monsters on the field are treated as Effect Monsters, and gain their effects".
+ While a face-up Raptinus applies, every face-up Gemini on the field gets c.flags.gemini = 'rap' (scripts read c.flags.gemini as "is an
+ Effect Monster"); once none applies, the ones it gave go back to Normal Monsters. Run on every event, like dropOwnWhenNegated. */
+function raptinusSweep(g) {
+  const ms = fieldMons(g); let on = null;
+  for (const x of ms) if (D(x).n === 'Superalloy Beast Raptinus' && faceUp(x)) { if (on === null) on = false; if (!negd(g, x)) { on = true; break; } }
+  for (const x of ms) { if (!isGemini(x)) continue; if (on && faceUp(x) && !x.flags.gemini) x.flags.gemini = 'rap'; else if (!on && x.flags.gemini === 'rap') x.flags.gemini = false; }
+}
 function emit(g, ev, group) {
+  dropOwnWhenNegated(g); raptinusSweep(g);
+  if (g.flipWatch && ev.c && (ev.type === 'flip' || ev.type === 'move')) g.flipWatch.push(ev.c.u);
   ev.group = group != null ? group : g.group; ev.seq = ++g.seq; ev.turn = g.turnNo; ev.phase = g.phase;
   if (ev.type === 'summon') g.summoned[ev.p] = true;
   g.events.push(ev); if (g.events.length > 120) g.events.splice(0, 40);
   if (g.hooks) g.hooks.ev(g, ev); // a client watching the live duel (Learn Retro Play); clones and tests have none
-  // collect triggers from every card that can see it
-  for (const P of g.p) for (const z of ['m', 'st', 'fz', 'hand', 'gy', 'ban', 'deck', 'extra']) {
+  // collect triggers from every card that can see it (g.inEmit: a rule a watcher installs here is never tied to an activation, see addRule)
+  const prevE = g.inEmit; g.inEmit = true;
+  try { for (const P of g.p) for (const z of ['m', 'st', 'fz', 'hand', 'gy', 'ban', 'deck', 'extra']) {
     const arr = z === 'fz' ? (P.fz ? [P.fz] : []) : P[z]; if (!arr) continue;
     for (const c of arr) {
       if (!c) continue; const es = effsOf(c); if (!es.length) continue;
@@ -215,7 +321,7 @@ function emit(g, ev, group) {
         try { if (eff.on(g, ev, c)) g.pend.push({ c, eff, ei, ev, p: onField(c) ? c.ctrl : c.owner }); } catch (e) { throw e; }
       });
     }
-  }
+  } } finally { g.inEmit = prevE; }
   return ev;
 }
 const lastGroup = g => g.events.length ? g.events[g.events.length - 1].group : -1;
@@ -245,12 +351,18 @@ function checkLP(g) {
   const a = g.p[0].lp <= 0, b = g.p[1].lp <= 0;
   if (a || b) { g.p[0].lp = Math.max(0, g.p[0].lp); g.p[1].lp = Math.max(0, g.p[1].lp); g.winner = a && b ? -1 : a ? 1 : 0; g.why = a && b ? 'Both players hit 0 LP' : `${PN(g, a ? 0 : 1)} hit 0 LP`; log(g, g.why + '.'); throw new Over(); }
 }
-function damage(g, p, n, o = {}) {
-  for (const [s, ct] of statics(g)) if (ct.dmg) { const r = ct.dmg(g, s, p, n, o); if (r && r.gain) { gain(g, p, r.gain); return 0; } if (typeof r === 'number') n = r; }
-  if (n <= 0) return 0; g.p[p].lp -= n;
-  log(g, `${PN(g, p)} took ${n} ${o.battle ? 'battle ' : ''}damage.`);
-  emit(g, { type: 'damage', p, n, battle: !!o.battle, src: o.src, srcP: o.srcP, direct: !!o.direct });
-  checkLP(g); return n;
+// the damage p takes after every "damage" static (Des Wombat, Ring of Defense, Prime Material Dragon): a number, or {gain}
+function dmgAmount(g, p, n, o) { for (const [s, ct] of statics(g)) if (ct.dmg) { const r = ct.dmg(g, s, p, n, o); if (r && r.gain) return { gain: r.gain }; if (typeof r === 'number') n = r; } return n; }
+function damage(g, p, n, o = {}) { return damageMany(g, [[p, n]], o)[0]; }
+/* Damage to several players at once (Ring of Destruction, Fairy Wind, Snake Deity...): every amount goes through the damage statics, all
+ LP drop together, then one LP check, so both at 0 is a draw (2026-11-27 audit: Ring of Destruction lowered the opponent's LP by hand,
+ skipping Des Wombat and Ring of Defense). Returns the damage each took. */
+function damageMany(g, list, o = {}) {
+  const amts = list.map(([p, n]) => [p, dmgAmount(g, p, n, o)]), out = [];
+  for (const [p, r] of amts) { if (r && r.gain) { gain(g, p, r.gain); out.push(0); continue; } const n = r > 0 ? r : 0; out.push(n); if (!n) continue;
+    g.p[p].lp -= n; log(g, `${PN(g, p)} took ${n} ${o.battle ? 'battle ' : ''}damage.`); }
+  amts.forEach(([p], i) => { if (out[i]) emit(g, { type: 'damage', p, n: out[i], battle: !!o.battle, src: o.src, srcP: o.srcP, direct: !!o.direct }); });
+  if (out.some(Boolean)) checkLP(g); return out;
 }
 // a card that wins the duel (Exodia, Destiny Board): p wins, why says how (Classic cards, 2026-11-25)
 // "you win when you have all of these in your hand": a script's self.handWin(g, c, p) on any card in that hand
@@ -261,15 +373,23 @@ function coin(g, p) { const h = g.rnd() < 0.5; log(g, `${PN(g, p)} tossed a coin
 function dice(g, p) { const n = 1 + Math.floor(g.rnd() * 6); log(g, `${PN(g, p)} rolled a ${n}.`); return n; }
 function gain(g, p, n) { if (n <= 0) return; g.p[p].lp += n; log(g, `${PN(g, p)} gained ${n} LP.`); }
 function pay(g, p, n) { g.p[p].lp -= n; log(g, `${PN(g, p)} paid ${n} LP.`); }
+/* Lingering effects that check drawn cards (Deck Devastation Virus: "is destroyed immediately and cannot chain its effect (because this
+ does not start a Chain)"; a draw by an effect is checked once that effect has resolved: archive) register with E.lib.onDraw(f), called
+ as f(g, cards) with no chain link. */
+const DRAW_HOOKS = [];
+function drawnCheck(g, cs) { for (const f of DRAW_HOOKS) f(g, cs); }
 function draw(g, p, n = 1) {
-  for (let i = 0; i < n; i++) {
-    if (forbid(g, { type: 'draw', p })) return;
-    const P = g.p[p]; if (!P.deck.length) { g.winner = 1 - p; g.why = `${PN(g, p)} couldn't draw`; log(g, g.why + '.'); throw new Over(); }
-    const c = P.deck[P.deck.length - 1]; move(g, c, 'hand', { reason: 'draw' });
-  }
-  if (n) log(g, `${PN(g, p)} drew ${n === 1 ? 'a card' : n + ' cards'}.`);
+  const drawn = [];
+  try {
+    for (let i = 0; i < n; i++) {
+      if (forbid(g, { type: 'draw', p })) return;
+      const P = g.p[p]; if (!P.deck.length) { g.winner = 1 - p; g.why = `${PN(g, p)} couldn't draw`; log(g, g.why + '.'); throw new Over(); }
+      const c = P.deck[P.deck.length - 1]; move(g, c, 'hand', { reason: 'draw' }); drawn.push(c);
+    }
+    if (n) log(g, `${PN(g, p)} drew ${n === 1 ? 'a card' : n + ' cards'}.`);
+  } finally { if (drawn.length && DRAW_HOOKS.length && g.winner == null) { if (g.resolvingL) (g.drawPend || (g.drawPend = [])).push(...drawn); else drawnCheck(g, drawn); } }
 }
-function mill(g, p, n) { const out = []; for (let i = 0; i < n && g.p[p].deck.length; i++) { const c = g.p[p].deck[g.p[p].deck.length - 1]; move(g, c, 'gy', { reason: 'effect' }); out.push(c); } if (out.length) log(g, `${PN(g, p)} sent ${out.map(name).join(', ')} from the Deck to the GY.`); return out; }
+function mill(g, p, n, o = {}) { const out = []; for (let i = 0; i < n && g.p[p].deck.length; i++) { const c = g.p[p].deck[g.p[p].deck.length - 1]; move(g, c, 'gy', { reason: o.reason || 'effect' }); out.push(c); } if (out.length) log(g, `${PN(g, p)} sent ${out.map(name).join(', ')} from the Deck to the GY.`); return out; }
 function* search(g, p, filter, text, to = 'hand') {
   if (to === 'hand' && forbid(g, { type: 'search', p })) { log(g, 'Cards can\u2019t be added from the Deck right now.'); return null; }
   const cands = g.p[p].deck.filter(filter); if (!cands.length) { shuffleDeck(g, p); return null; }
@@ -303,13 +423,114 @@ function replaced(g, c, o) { // "destroy X instead" style effects
   for (const [s, ct] of statics(g)) if (ct.replaceDestroy && ct.replaceDestroy(g, s, c, o)) return true;
   return false;
 }
+/* What a chain link would destroy when it resolves (2026-11-27 audit: Starlight Road, My Body as a Shield, Prime Material Dragon and
+ Stardust Dragon asked a hand-written list in batch-1.js, so Dark Hole, Raigeki, Fissure and Judgment Dragon read as "destroys nothing",
+ and Stardust's own check only read the static destroy tag, so it could negate Red Dragon Archfiend's End Phase with nothing to destroy).
+ Only what is certain counts (Stardust ruling 6: not "Barrel Dragon" or "Snipe Hunter", which may or may not destroy). In order:
+ 1. the effect's own eff.destroys(g, c, p, L), for effects whose cards the text can't name (Red Dragon Archfiend, Bottomless Trap Hole);
+ 2. a card that negates an activation "and destroys it" destroys the card below it on the chain, if that card is on the field
+    (Solemn Judgment or Magic Jammer on a Spell/Trap; EDOPro's Solemn declares the destroy only then, and a summon isn't on the field yet,
+    Stardust ruling 8);
+ 3. a destroy effect's one "destroy all ..." (or "the face-up monster ... with the lowest/highest ATK/DEF") sentence, read from the text,
+    plus its targets; 4. its targets on the field; 5. the monster it battles or the monsters just summoned, when the text says "that monster". */
+const DW_SUFFIX = [
+  [/^on the field\b/, null], [/^(?:that )?(?:your opponent|they) controls?\b|^on your opponent's side of the field\b|^in your opponent's spell (?:&|and) trap (?:card )?zones\b/, 'opp'],
+  [/^(?:that )?you control\b|^on your side of the field\b/, 'me'], [/^each player controls\b/, null],
+];
+function dwParse(g, L, phrase) {
+  let s = phrase.toLowerCase().replace(/"/g, '').replace(/\s+/g, ' ').trim()
+    .replace(/(?:,| and (?:inflict|draw|then|if|take|gain|you|your|banish|send|return|special)| then | also\b| \(| except this card| other than this card| during the end phase).*$/, '').trim();
+  let other = /^other\b/.test(s); if (other) s = s.slice(6).trim();
+  let own = null; let m;
+  if ((m = s.match(/^(?:of )?(?:your opponent's|their|the opponent's)\s+/))) { own = 'opp'; s = s.slice(m[0].length); }
+  else if ((m = s.match(/^(?:of )?your\s+/))) { own = 'me'; s = s.slice(m[0].length); }
+  if (/^other\b/.test(s)) { other = true; s = s.slice(6).trim(); }
+  let face = null, pos = null, kind = null;
+  if ((m = s.match(/^(face-up|face-down|set)\s+/))) { face = m[1] === 'face-up' ? 'up' : 'down'; s = s.slice(m[0].length); }
+  if ((m = s.match(/^(attack|defense) position\s+/))) { pos = m[1] === 'attack' ? 'atk' : 'def'; s = s.slice(m[0].length); }
+  const quals = [];   // words before the noun: a Level, an Attribute, a Type, "Special Summoned", "Normal", "Continuous" ...
+  if ((m = s.match(/^and non-(dark|light|earth|water|fire|wind) /)) && face === 'down') { const a = m[1].toUpperCase(); face = null; quals.push(x => !faceUp(x) || attr(x) !== a); s = s.slice(m[0].length); }
+  for (let k = 0; k < 4; k++) {
+    if ((m = s.match(/^level (\d+)(?: or (lower|less|higher|more))? /))) { const n = +m[1], dir = m[2]; quals.push(x => faceUp(x) && (!dir ? lv(x) === n : /lower|less/.test(dir) ? lv(x) <= n : lv(x) >= n)); }
+    else if ((m = s.match(/^(dark|light|earth|water|fire|wind|divine) /))) { const a = m[1].toUpperCase(); quals.push(x => faceUp(x) && attr(x) === a); }
+    else if ((m = s.match(/^(warrior|spellcaster|fairy|fiend|zombie|machine|aqua|pyro|rock|winged beast|plant|insect|thunder|dragon|beast-warrior|beast|dinosaur|fish|sea serpent|reptile|psychic)(?:-type)? /))) { const r = m[1]; quals.push(x => faceUp(x) && race(x).toLowerCase() === r); }
+    else if ((m = s.match(/^special summoned /))) quals.push(x => ['special', 'synchro', 'fusion', 'ritual'].includes(x.summonType) || D(x).k === 'token');
+    else if ((m = s.match(/^normal (?=monsters?)/))) quals.push(x => D(x).k === 'normal');
+    else if ((m = s.match(/^(continuous|equip|field|quick-play) (?=spell|trap|cards?)/))) { const sub = m[1][0].toUpperCase() + m[1].slice(1); quals.push(x => faceUp(x) && D(x).sub === sub); }
+    else break;
+    s = s.slice(m[0].length);
+  }
+  if ((m = s.match(/^monsters equipped with (?:an )?equip cards?(?:\(s\))?/))) { quals.push(x => allField(g).some(y => y.equipTo === x.u)); s = 'monsters' + s.slice(m[0].length); }
+  if ((m = s.match(/^monster cards?\b/))) s = 'monsters' + s.slice(m[0].length);
+  if ((m = s.match(/^tokens?\b/))) { quals.push(x => D(x).k === 'token'); s = 'monsters' + s.slice(m[0].length); }
+  if ((m = s.match(/^spells? ?(?:and|or|&|\/) ?traps?(?: cards?)?\b/))) kind = 'st';
+  else if ((m = s.match(/^spells?(?: cards?)?\b/))) kind = 'spell';
+  else if ((m = s.match(/^traps?(?: cards?)?\b/))) kind = 'trap';
+  else if ((m = s.match(/^monsters?\b/))) kind = 'mon';
+  else if ((m = s.match(/^cards?\b/))) kind = 'card';
+  if (!kind) return null; s = s.slice(m[0].length).trim();
+  for (let k = 0; k < 2; k++) for (const [re, o] of DW_SUFFIX) if ((m = s.match(re))) { if (o) own = o; s = s.slice(m[0].length).trim(); break; }
+  let filt = null;
+  if ((m = s.match(/^(?:with|that have) (\d+) or (less|lower|more|higher) (atk|def)\b/)) || (m = s.match(/^(?:with|that have) (atk|def) (\d+) or (less|lower|more|higher)\b/))) {
+    const [n, dir, st] = /\d/.test(m[1]) ? [+m[1], m[2], m[3]] : [+m[2], m[3], m[1]];
+    filt = x => faceUp(x) && (/less|lower/.test(dir) ? stat(g, x, st) <= n : stat(g, x, st) >= n); s = s.slice(m[0].length).trim();
+  } else if ((m = s.match(/^(?:that are )?level (\d+) or (lower|less|higher|more)\b/))) {
+    const n = +m[1], dir = m[2]; filt = x => faceUp(x) && (/lower|less/.test(dir) ? lv(x) <= n : lv(x) >= n); s = s.slice(m[0].length).trim();
+  }
+  if (s) return null;   // a condition the reader doesn't know (Ojamuscle's names, Makiu's "DEF less than that monster's ATK"): not certain
+  let cs = kind === 'mon' ? fieldMons(g) : kind === 'card' ? allField(g) : stOnField(g);
+  if (kind === 'spell') cs = cs.filter(isSpell); if (kind === 'trap') cs = cs.filter(isTrap);
+  if (own) cs = cs.filter(x => (x.ctrl === L.p) === (own === 'me'));
+  if (face) cs = cs.filter(x => faceUp(x) === (face === 'up'));
+  if (pos) cs = cs.filter(x => (pos === 'atk' ? x.pos === 'atk' : x.pos !== 'atk'));
+  if (filt) cs = cs.filter(filt);
+  for (const q of quals) cs = cs.filter(q);
+  if (other || L.cardAct) cs = cs.filter(x => x !== L.c);
+  return cs;
+}
+function dwText(g, L) {
+  const t = String(D(L.c).ps || D(L.c).tx || '').replace(/\n/g, ' ');
+  const found = [];
+  for (const m of t.matchAll(/\bdestroy (?:all|every) ([^.;:]*)/gi)) found.push(dwParse(g, L, m[1]));
+  for (const m of t.matchAll(/\bdestroy the (?:1 )?face-up monsters? (your opponent controls|you control|on the field) (?:that has|with) the (lowest|highest) (ATK|DEF)/gi)) {
+    let cs = fieldMons(g).filter(faceUp); if (m[1] !== 'on the field') cs = cs.filter(x => (x.ctrl === L.p) === (m[1] === 'you control'));
+    // which one is decided at resolution, so no single card is certain (Morphtronic Forcefield ruling 2: "uncertain to destroy" a given
+    // monster, "like Fissure or Smashing Ground"), but one of them will be (My Body as a Shield ruling 1 lists Fissure): maybe + n
+    found.push(Object.assign([], cs.length ? { maybe: cs, n: 1 } : {}));
+  }
+  return found.length === 1 ? found[0] : (found.length ? null : undefined);   // undefined: no such sentence; null: can't tell
+}
+function wouldDestroy(g, L) {
+  if (!L || L.negated) return [];
+  const on = xs => [...new Set((xs || []).filter(x => x && onField(x)))];
+  if (L.eff.destroys) return on(L.eff.destroys(g, L.c, L.p, L));
+  const t = String(D(L.c).ps || D(L.c).tx || '');
+  if (/negate (?:the|its|that|their)? ?(?:activation|summon)[^.]*\bdestroy (?:it|that card|the card|them)\b/i.test(t)) {
+    const below = g.chain[g.chain.indexOf(L) - 1], ref = (L.data && L.data.L) || below;
+    if (ref && ref !== L && L.data && L.data.mode !== 'summon') return on([ref.c]);
+  }
+  if (!(L.tags && L.tags.destroy)) return [];
+  const tg = on(L.t), txt = dwText(g, L);
+  if (txt) return Object.assign(on([...txt, ...tg]), txt.maybe ? { maybe: on(txt.maybe), n: txt.n } : {});
+  if (tg.length) return tg;
+  if (txt === null) return [];
+  const ev = L.ev;
+  if (ev && /\bdestroy (?:that|the|those) (?:opponent's |attacking |battling |summoned )?monsters?\b|\bdestroy it\b/i.test(t)) {
+    if (ev.a && (ev.a === L.c || ev.t === L.c)) return on([ev.a === L.c ? ev.t : ev.a]);
+    if (ev.type === 'summon' && ev.cs) return on(ev.cs);
+  }
+  return [];
+}
+// Will the link certainly destroy at least one card that passes f (default: any card)? Counts a "the 1 monster with the lowest ATK" pick
+// when every card it could pick passes f.
+function destroysSome(g, L, f = () => true) { const r = wouldDestroy(g, L); return r.some(f) || !!(r.maybe && r.n > 0 && r.maybe.length && r.maybe.every(f)); }
 function cantBattleDestroy(g, c) {
   if (!faceUp(c) && c.pos !== 'def') return false;
   const n = D(c).n, neg = negd(g, c);
   if (!neg && (n === 'Spirit Reaper' || n === 'Blackwing Armor Master')) return true;
   if (has(g, c, 'noBattleDestroy')) return true;
-  if (isFrog(c) && monsOf(g, c.ctrl).some(x => faceUp(x) && D(x).n === 'Substitoad' && !x.flags.negated)) return true;
-  if (isBW(c) && g.tp !== c.ctrl && !g.silverwindUsed[c.ctrl] && monsOf(g, c.ctrl).some(x => faceUp(x) && D(x).n === 'Blackwing - Silverwind the Ascendant' && !x.flags.negated)) { g.silverwindUsed[c.ctrl] = true; return true; }
+  if (isFrog(c) && D(c).n !== 'Frog the Jam' && fieldMons(g).some(x => faceUp(x) && D(x).n === 'Substitoad' && !negd(g, x))) return true;   // both players' Frogs (site ruling)
+  if (isBW(c) && g.tp !== c.ctrl && !g.silverwindUsed[c.ctrl] && monsOf(g, c.ctrl).some(x => faceUp(x) && D(x).n === 'Blackwing - Silverwind the Ascendant' && !negd(g, x))) { g.silverwindUsed[c.ctrl] = true; return true; }
   return false;
 }
 /* Position choice (2026-11-27, a player report: "you can't choose the position of the monster you are Special Summoning"): with cfg.askPos
@@ -329,12 +550,98 @@ function* askPositions(g) {
     const i = yield* choose(g, p, `${name(c)}: which position?`, ['Attack Position', 'Defense Position']);
     const pos = i ? 'def' : 'atk'; if (pos !== c.pos) { c.pos = pos; log(g, `${PN(g, p)} put ${name(c)} in ${i ? 'Defense' : 'Attack'} Position.`); } }
 }
+/* ---------- summoning conditions (2026-11-27 audit, Group B) ----------
+ Read from the card's own text, so every card with the line gets it (Blizzard, Tsukuyomi, Dark Armed Dragon, Chaos Sorcerer, BLS -
+ Envoy, Absolute Zero, Gaia...). forbid() applies them to every Special Summon by an effect (ss) and to the idle procedures:
+ - "Cannot be Special Summoned." (never): from anywhere, by anything (Blizzard's own effect can't revive another Blizzard).
+ - "Cannot be Special Summoned from the GY / hand / Deck": that place only.
+ - Summon-only monsters (nomi): "Must be Special Summoned (from your hand) by ...", "Must be Special Summoned with/by "X"",
+   "Must be Fusion/Synchro Summoned", "Cannot be Special Summoned except ...", "... and Cannot be Special Summoned by other ways":
+   only their own way, and never back from the GY or banished pile, even after a proper summon (Dark Armed Dragon ruling 3, the
+   Edison archive on Absolute Zero and Gaia, the Goat archive on Dark Paladin; EDOPro's summon condition says the same).
+ - "Must first be Special Summoned ..." and "This card can only be Special Summoned by ..." (the older wording the 2010 text
+   rewrote as "Must first be": Silpheed, Fenrir, Soul of Purity and Light, Air Neos): their own way first; once properly summoned
+   they can come back from the GY or banished pile (Chaos Sorcerer archive: "If successfully summoned ... Call of the Haunted").
+ - By rule, Fusion, Synchro and Ritual Monsters in the GY or banished come back only if they were properly summoned
+   (Metamorphosis ruling: it "does not properly Summon a Fusion Monster, so you cannot use Monster Reborn on it afterwards").
+ A summon is "its own way" when it is the card's procedure (specialProc, the idle option: a.proc), a Fusion/Synchro/Ritual Summon
+ its text asks for (a.how), an effect of the card itself, or an effect of a card its condition names ("with "Dark Fusion"", "by
+ "Armed Dragon LV5""), found from a.src, the card activating now (g.ssSrc) or the link resolving. c.proper marks a proper summon;
+ it lasts through the field, GY and banished pile and is lost in the hand, Deck or Extra Deck. o.proper on ss() forces it. */
+const SSC = new Map();
+const SS_PROBES = [
+  { id: 'probe-ss-a', n: '(any monster)', k: 'token', a: 'EARTH', r: 'Beast', lv: 1, atk: '0', def: '0' },
+  { id: 'probe-ss-b', n: '(any monster)', k: 'effect', a: 'DARK', r: 'Fiend', lv: 8, atk: '2500', def: '2000' },
+];
+function ssCond(c) {
+  const d = D(c); if (!d) return null; if (SSC.has(d.id)) return SSC.get(d.id);
+  const r = { never: false, nomi: false, first: false, how: null, names: [], zones: [] };
+  const sents = String(d.ps || d.tx || '').replace(/[\u24b8\u24c8\u00a9\u25cf\u2460-\u2469]/g, ' ').split(/(?<=[.;])\s+|\n/).map(x => x.trim()).filter(Boolean);
+  if (isMonD(d) && d.k !== 'token') for (const s of sents) {
+    if (!/Special Summon|Fusion Summon|Synchro Summon|Ritual Summon/i.test(s)) continue;
+    if (/^(?:This (?:card|monster) )?Cannot be Special Summoned\.?$/i.test(s)) { r.never = true; continue; }
+    const fz = s.match(/^(?:This card )?Cannot be Special Summoned from (?:the |your )?(GY|Graveyard|hand\/Deck|hand or Deck|Deck|hand)\.?$/i);
+    if (fz) { const z = fz[1].toLowerCase(); if (/gy|graveyard/.test(z)) r.zones.push('gy'); if (/hand/.test(z)) r.zones.push('hand'); if (/deck/.test(z)) r.zones.push('deck'); continue; }
+    // conditions their own scripts handle (Felgrand Dragon, Vennominon, Tyrant Dragon, Destiny HERO - Disk Commander)
+    if (/except from the (?:GY|Graveyard)|by another Effect Monster|unless|the turn this card/i.test(s)) continue;
+    const nomi = /Must be (?:Special|Fusion|Synchro|Ritual) Summoned|Cannot be Special Summoned,? except|cannot be Special Summoned by other ways/i.test(s);
+    const first = /Must first be (?:Special|Fusion|Synchro|Ritual) Summoned|can only be Special Summoned/i.test(s);
+    if (!nomi && !first) continue;
+    if (nomi) r.nomi = true; else r.first = true;
+    const h = s.match(/Must be (Fusion|Synchro|Ritual) Summoned|except by (Fusion|Synchro|Ritual) Summon/i); if (h) r.how = (h[1] || h[2]).toLowerCase();
+    for (const m of s.matchAll(/"([^"]+)"/g)) r.names.push(m[1]);
+  }
+  if (r.nomi && SS_AS_FIRST.includes(d.n)) { r.nomi = false; r.first = true; }
+  SSC.set(d.id, r); return r;
+}
+// Texts that read "Must be Special Summoned" but were ruled revivable once properly summoned: Chaos Emperor Dragon (the format sites and
+// archives are silent; its 2005 text read "can only be Special Summoned by", like BLS - Envoy, and EDOPro's pre-errata version only
+// limits revival to a proper summon first).
+const SS_AS_FIRST = ['Chaos Emperor Dragon - Envoy of the End'];
+const ssSrcOf = (g, a) => a.src || g.ssSrc || (g.resolvingL && g.resolvingL.c) || null;
+function ssOwnWay(g, c, a, k) {   // is this Special Summon the card's own way (its procedure, its Fusion/Synchro/Ritual Summon, its enabler)?
+  if (a.proc || a.proper) return true;
+  if (k.how && a.how === k.how) return true;
+  const src = ssSrcOf(g, a); if (!src || !src.id) return false;
+  if (src === c || k.names.includes(D(src).n)) return true;
+  // a card whose summon "is treated as a Fusion Summon with "Dark Fusion"" (Dark Calling) counts as the card it names
+  const as = String(D(src).ps || D(src).tx || '').match(/treated as (?:a |an )?(?:Special|Fusion|Synchro|Ritual) Summon (?:with|by) "([^"]+)"/i);
+  return !!as && k.names.includes(as[1]);
+}
+function ssLimited(g, a) {   // a summoning condition stops this Special Summon (a: the forbid() action, type 'ss')
+  const c = a.c; if (!c || !c.id || a.probe) return false;
+  const d = D(c); if (!d || !isMonD(d) || d.k === 'token') return false;
+  const k = ssCond(c), dead = c.zone === 'gy' || c.zone === 'ban';
+  const src = ssSrcOf(g, a);   // "Special Summon ... ignoring its Summoning conditions" (Assault Revival) sets them all aside
+  if (src && src.id && /ignoring (?:its|their|the) Summoning conditions/i.test(String(D(src).ps || D(src).tx || ''))) return false;
+  if (k.never) return !a.proper && !a.proc;   // a procedure its own script gives it (The Wicked Avatar's 3-Tribute summon) is its own way
+  if (k.zones.includes(c.zone)) return true;
+  const own = ssOwnWay(g, c, a, k);
+  if (k.nomi) return !own;
+  if (dead && (k.first || isExtraD(d) || d.k === 'ritual')) return !own && !c.proper;
+  if (k.first) return !own;
+  return false;
+}
+function properSummon(g, c, o) {   // does this effect Special Summon count as properly summoning it (for a later revival)?
+  const d = D(c), k = ssCond(c); if (!d || !k) return false;
+  if (o.proper || (o.how && o.how === d.k)) return true;
+  return (k.nomi || k.first) && ssOwnWay(g, c, { how: o.how, src: o.src }, k);
+}
+/* Can nothing be Special Summoned by p right now (Vanity's Fiend, the turn of Scapegoat)? Two unlike stand-in monsters are tried, so a
+ lock on some monsters only (DARK only, no Tokens) doesn't count. Cards and effects that Special Summon can't be activated then
+ (Vanity's Fiend rulings: "Scapegoat and Premature Burial cannot be activated"; mandatory effects still activate and summon nothing). */
+function ssBlanket(g, p, src) {
+  return SS_PROBES.every(pr => forbid(g, { type: 'ss', c: { id: pr.id, owner: p, ctrl: p, flags: {}, used: {}, zone: 'probe' }, p, how: 'special', src, probe: true }));
+}
+const canSS = (g, p, c, o = {}) => freeM(g, p) >= 0 && !forbid(g, { type: 'ss', c, p, how: o.how || 'special', src: o.src });
 function ss(g, p, c, pos = 'atk', o = {}) { // Special Summon by an effect (no negation window of its own)
   const zi = freeM(g, p); if (zi < 0) return false;
-  if (forbid(g, { type: 'ss', c, p, how: o.how || 'special' })) { log(g, `${name(c)} can\u2019t be Special Summoned right now.`); return false; }
+  if (forbid(g, { type: 'ss', c, p, how: o.how || 'special', src: o.src, proper: o.proper })) { log(g, `${name(c)} can\u2019t be Special Summoned right now.`); return false; }
+  const proper = properSummon(g, c, o);
   move(g, c, 'm', { ctrl: p, pos, reason: 'summon', group: o.group });
+  if (proper) c.proper = true;
   c.summonType = o.how || 'special'; c.attacks = 0;
-  if (o.negate) c.flags.negated = true;
+  if (o.negate) { c.flags.negated = true; const rt = g.resolvingL ? String(D(g.resolvingL.c).ps || D(g.resolvingL.c).tx || '') : ''; if (!/effects? can(?:'t|not) be activated/i.test(rt)) c.flags.negActOk = true; }   // "it has its effects negated": they can still be activated, costs paid, and resolve negated (Junk Synchron site ruling)
   if (o.banishOnLeave) c.flags.banishOnLeave = true;
   // a text that names no position asks, whatever the script defaulted to (2026-11-27: Destiny HERO - Malicious's script forced Defense)
   if (pos !== 'set' && askPosFor(g)) (g.posAsk = g.posAsk || []).push({ c, p });
@@ -348,9 +655,48 @@ function takeControl(g, p, c, untilEnd) {
   detach(g, c); c.ctrl = p; g.p[p].m[zi] = c; c.flags.ctrlUntil = untilEnd ? g.turnNo : null; if (untilEnd) c.flags.ctrlFrom = 1 - p;
   log(g, `${PN(g, p)} took control of ${name(c)}.`); return true;
 }
-function setFaceDown(g, c) { g.seq++; c.pos = 'set'; c.mods = []; c.flags = { banishOnLeave: c.flags.banishOnLeave }; log(g, `${D(c).n} was turned face-down.`); }
-function negate(g, L, destroyIt) {
-  L.negated = true; log(g, `${name(L.c)}'s ${L.eff.type === 'act' ? 'activation' : 'effect'} was negated.`);
+/* Turning a monster face-down (2026-11-27 audit; Book of Moon, Snatch Steal, Premature Burial, Mind Control, Card Trooper and Call of the
+ Haunted rulings). It forgets the lingering effects on it (mods, flags), its counters, its once-per-turn uses and "banish it when it
+ leaves the field" (Plaguespreader, Battle Fader). It keeps the control changes and the locks that come with them (KEEP_FACE_DOWN):
+ Brain Control, Change of Heart and Mind Control still give it back in the End Phase, and Mind Control's no-Tribute lock lasts to then.
+ Equip Cards on it go to the GY, their target lost (move option lostTarget: Snatch Steal's control stays), and Call of the Haunted's
+ link to it is cut for good. Its summon type, the turn it came out and its attacks are remembered (they live outside flags). */
+const KEEP_FACE_DOWN = ['ctrlUntil', 'ctrlFrom', 'b1mc', 'f19charm', 'f19charmFrom', 'f29charm', 'f29charmFrom', 'f37charm', 'f37charmFrom',
+  'f29hypno', 'f29hypnoFrom', 'f41mind', 'f41hyp', 'f34sc'];
+/* Tokens can't be turned face-down (2026-11-27 audit, Book of Moon rulings 9 and 11, the Goat archive: "Tokens may not be turned face
+ down"): effects that turn a monster face-down target face-up non-Tokens (canFaceDown), and setFaceDown leaves a Token as it is. */
+const canFaceDown = c => faceUp(c) && c.zone === 'm' && D(c).k !== 'token';
+function setFaceDown(g, c) {
+  if (D(c).k === 'token') return false;
+  g.seq++; c.pos = 'set'; c.mods = []; c.ctr = {};
+  const keep = {}; for (const k of KEEP_FACE_DOWN) if (c.flags[k] != null) keep[k] = c.flags[k];
+  if (c.flags.b1mc != null && c.flags.noTribute) keep.noTribute = true;   // Mind Control: can't be Tributed until the End Phase
+  if (c.flags.battleDoomed) keep.battleDoomed = true;   // already destroyed by battle: turning it face-down doesn't save it (2026-11-28 audit, Tsukuyomi ruling)
+  c.flags = keep; resetUsed(c);
+  for (const x of allField(g)) if (x.linkTo === c.u) x.linkTo = null;
+  log(g, `${D(c).n} was turned face-down.`);
+  for (const P of g.p) for (const x of P.st) if (x && x.equipTo === c.u) { x.equipTo = null; move(g, x, 'gy', { reason: 'rule', lostTarget: true }); }
+  return true;
+}
+/* "You can't conduct your Battle Phase the turn you activate this card" (Soul Exchange and the like): the lock belongs to the link, so a
+ negated activation lifts it and a negated effect doesn't (Soul Exchange site rulings 9). g.noBP stays for locks with no link. */
+function lockBP(g, p, L) { L = L || g.afterL || g.lockL; if (!L) { g.noBP[p] = true; return; } (g.noBPL || (g.noBPL = [])).push({ p, L, turn: g.turnNo }); }
+const bpLocked = (g, p) => !!g.noBP[p] || !!(g.noBPL && g.noBPL.some(x => x.p === p && x.turn === g.turnNo && !x.L.actNegated));
+/* Once-per-turn uses (c.used[effect index]) belong to one stay on the field: a card that leaves the field or is turned face-down can use
+ them again (2026-11-27 audit: Swap Frog, Card Trooper). Script keys (c.used.union, .bjack, .proper...) and the uses of cards whose text
+ says "You can only use this effect ... once per turn" (a hard once per turn) are kept. */
+const HARD_OPT_RE = /only (use|activate) this effect( of "[^"]+")? once per (turn|Duel)|use this effect only once per turn/i;
+function resetUsed(c) { const d = D(c); if (HARD_OPT_RE.test(d.ps || d.tx || '')) return; for (const k of Object.keys(c.used)) if (/^\d+$/.test(k)) delete c.used[k]; }
+/* Negation (2026-11-27 audit): L.negated means nothing of the link resolves; L.actNegated means the activation itself was negated, so
+ "the turn you activate this card" locks don't apply (Scapegoat, Soul Exchange, Sirocco site rulings; Spirit Reaper ruling 5). The
+ negating card's text tells which: "negate the activation" (Solemn Judgment, Magic Jammer, Dark Bribe, Divine Wrath, Stardust Dragon)
+ or only its effect (Royal Oppression, Pulling the Rug). Imperial Order sets L.negated alone, so it negates the effect only. o.effect
+ or o.activation overrides the text. */
+function negate(g, L, destroyIt, o = {}) {
+  const by = g.resolvingL && g.resolvingL !== L ? g.resolvingL.c : null, bt = by ? String(D(by).ps || D(by).tx || '') : '';
+  const effOnly = o.effect || (!o.activation && by && !/activation/i.test(bt) && /negat\w*[^.]*\beffects?\b/i.test(bt));
+  L.negated = true; if (!effOnly) L.actNegated = true;
+  log(g, `${name(L.c)}'s ${L.eff.type === 'act' && !effOnly ? 'activation' : 'effect'} was negated.`);
   if (destroyIt && onField(L.c)) destroy(g, [L.c], { by: L.negBy });
 }
 function addMod(g, c, m) { c.mods.push({ ...m, turn: g.turnNo }); }
@@ -367,7 +713,7 @@ function synReq(sx) {
 }
 function synCombos(g, p, sx) {
   const d = D(sx); if (d.k !== 'synchro') return [];
-  const mons = monsOf(g, p).filter(c => faceUp(c) && !(D(c).n === 'Blackwing - Vayu the Emblem of Honor' && !c.flags.negated));
+  const mons = monsOf(g, p).filter(c => faceUp(c) && !(D(c).n === 'Blackwing - Vayu the Emblem of Honor' && !negd(g, c)));
   const r = synReq(sx), out = [], n = mons.length, L = num(d.lv);
   for (let mask = 1; mask < (1 << n); mask++) {
     const mats = mons.filter((_, i) => mask & (1 << i)); if (mats.length < 2) continue;
@@ -379,18 +725,21 @@ function synCombos(g, p, sx) {
   }
   return out;
 }
-const isGemini = c => /treated as a Normal Monster while face-up on the field or in the GY/.test(D(c).tx || '');
-function cfCombos(g, p, fx) { // contact fusions: Chimeratech Fortress Dragon, Superalloy Beast Raptinus
-  const n = D(fx).n;
-  if (n === 'Chimeratech Fortress Dragon') {
-    const cyber = fieldMons(g).filter(c => faceUp(c) && D(c).n === 'Cyber Dragon');
-    const mach = fieldMons(g).filter(c => faceUp(c) && race(c) === 'Machine' && D(c).n !== 'Cyber Dragon');
-    if (!cyber.length || !mach.length) return [];
-    return [[cyber[0], ...mach]];
-  }
-  if (n === 'Superalloy Beast Raptinus') {
-    const gem = monsOf(g, p).filter(c => faceUp(c) && isGemini(c)); return gem.length >= 2 ? [gem.slice(0, 2)] : [];
-  }
+const GEMM = new Map();
+const isGemini = c => { let v = GEMM.get(c.id); if (v === undefined) { v = /treated as a Normal Monster while face-up on the field or in the GY/.test(D(c).tx || ''); GEMM.set(c.id, v); } return v; };
+/* Contact fusions (2026-11-27 audit): the player chooses the materials. Chimeratech Fortress Dragon: "Cyber Dragon" + 1 or more Machines
+ from either field, your face-down monsters too (not the opponent's), never a Token or a Chimeratech (it can't be Fusion Material), and a
+ second Cyber Dragon counts as a Machine (site rulings, archive). Superalloy Beast Raptinus: 2 Gemini monsters you control.
+ cfPool lists who may be used; cfCombos says whether a summon is possible (one sample combination). */
+function cfPool(g, p, fx) {
+  const n = D(fx).n, okMat = c => D(c).k !== 'token' && (faceUp(c) || c.ctrl === p) && !/can(?:'t|not) be used as(?: a)? Fusion Material/i.test(D(c).ps || D(c).tx || '');
+  if (n === 'Chimeratech Fortress Dragon') { const all = fieldMons(g).filter(okMat); return { first: all.filter(c => D(c).n === 'Cyber Dragon'), rest: all.filter(c => race(c) === 'Machine'), restMin: 1, restMax: 99 }; }
+  if (n === 'Superalloy Beast Raptinus') { const gem = monsOf(g, p).filter(c => okMat(c) && isGemini(c)); return { first: gem, rest: gem, restMin: 1, restMax: 1 }; }
+  return null;
+}
+function cfCombos(g, p, fx) {
+  const P = cfPool(g, p, fx); if (!P) return [];
+  for (const a of P.first) { const r = P.rest.filter(x => x !== a); if (r.length >= P.restMin && (monsOf(g, p).some(x => x === a || r.includes(x)) || freeM(g, p) >= 0)) return [[a, r[0]]]; }
   return [];
 }
 /* Can it be Normal Summoned (kind 'ns') or Set ('set') from the hand? (2026-11-26: "Cannot be Normal Summoned" was read as a full ban,
@@ -402,21 +751,25 @@ function canNormal(c, kind, g, p) { const d = D(c); if (!isMonD(d) || isExtraD(d
   // Terrorking Archfiend: "unless you have an Archfiend Monster Card on your side of the field" (a Set is allowed either way)
   if (/Cannot be Normal Summoned or Flip Summoned unless you have an Archfiend/i.test(t)) return kind === 'set' || !g || monsOf(g, p).some(x => faceUp(x) && /Archfiend/.test(name(x)));
   return false; }
-function tribNeed(g, p, c) { // [standard, alternatives...]
+function tribNeed(g, p, c, set) { // [standard, alternatives...]; set: for a Set (Malicious Edge's 1 Tribute is for a face-up Tribute Summon only)
   const L = lv(c), need = L >= 7 ? 2 : L >= 5 ? 1 : 0, n = D(c).n, oppHas = monsOf(g, 1 - p).length > 0;
   const alts = [need];
   const sc0 = SC(c); if (sc0 && sc0.self && sc0.self.tribExact) return [sc0.self.tribExact];
   if (sc0 && sc0.self && sc0.self.tributes) for (const n2 of [].concat(sc0.self.tributes(g, c, p) || [])) alts.push(n2);
   for (const [s, ct] of statics(g)) if (ct.tributes) { const n2 = ct.tributes(g, s, c, p, need); if (n2 != null) alts.push(n2); }
   if (n === 'Blackwing - Sirocco the Dawn' && !monsOf(g, p).length && oppHas) alts.push(0);
-  if (n === 'Evil HERO Malicious Edge' && oppHas) alts.push(1);
+  if (n === 'Evil HERO Malicious Edge' && oppHas && !set) alts.push(1);
   return [...new Set(alts)];
 }
 function tributeCands(g, p) {
   const own = monsOf(g, p).filter(c => D(c).n !== 'Sheep Token' && !c.flags.noTribute);
-  const extra = g.soulEx[p] ? monsOf(g, 1 - p).filter(c => c.u === g.soulEx[p]) : [];
-  return [...own, ...extra];
+  return [...own, ...soulExOf(g, p)];
 }
+/* Soul Exchange (2026-11-27 audit, site rulings 3 and 5): each copy adds its target, so two copies let you Tribute both, and the target can
+ be Tributed for any Tribute, costs included (Enemy Controller, Substitoad, Metamorphosis), not only a Tribute Summon. A face-down target
+ has no Level, Type or Attribute (rulings 7, Goat archive). tribPool: what you may Tribute for a cost (Mind Control's monster can't be). */
+const soulExOf = (g, p) => { const us = g.soulEx[p] || []; return us.length ? monsOf(g, 1 - p).filter(c => us.includes(c.u)) : []; };
+const tribPool = (g, p, o = {}) => [...monsOf(g, p).filter(c => !c.flags.noTribute), ...soulExOf(g, p).filter(c => !o.known || faceUp(c))];
 function combos(arr, k) { const out = []; const rec = (s, cur) => { if (cur.length === k) { out.push(cur.slice()); return; } for (let i = s; i < arr.length; i++) { cur.push(arr[i]); rec(i + 1, cur); cur.pop(); } }; rec(0, []); return out; }
 
 /* ---------- what a player may activate now ---------- */
@@ -441,7 +794,6 @@ function usable(g, p, c, eff, ei, mode) {
   if (g.inDS && !(eff.ds || (eff.type === 'act' && d.sub === 'Counter') || eff.speed === 3)) return false;
   if (g.attempt && !top && !eff.negSummon) return false;
   if (eff.type === 'act') {
-    if (g.coldWave != null && g.coldWave >= 0) return false;
     if (c.zone === 'hand') {
       if (d.k === 'trap') return false;
       if (g.tp !== p) return false;
@@ -451,7 +803,10 @@ function usable(g, p, c, eff, ei, mode) {
       if (d.k === 'spell' && d.sub !== 'Quick-Play' && (g.tp !== p)) return false;
     } else return false;
   } else {
-    if (isMonD(d) && (eff.loc || 'm') === 'm' && negd(g, c)) return false;
+    if (isMonD(d) && (eff.loc || 'm') === 'm' && negd(g, c) && !c.flags.negActOk) return false;
+    // a monster destroyed by battle, waiting to leave after damage calculation, can't activate its effects on the field (2026-11-28 audit,
+    // Stardust Dragon ruling 14: a Stardust destroyed by Red Dragon Archfiend's attack can't negate its effect); its triggers still can
+    if ((eff.loc || 'm') === 'm' && c.zone === 'm' && c.flags.battleDoomed) return false;
     if (isMonD(d) && c.flags.gemini === false && eff.gemini) return false;
     const loc = eff.loc || 'm';
     if (loc === 'm') { if (c.zone !== 'm' || !faceUp(c)) return false; }
@@ -460,16 +815,48 @@ function usable(g, p, c, eff, ei, mode) {
   }
   if (eff.type === 'ign' && (mode !== 'idle' && mode !== 'ign')) return false;
   if (eff.gemini && !c.flags.gemini) return false;
+  // Cold Wave (2026-11-27 audit: its lock tested an object as a number, so nothing was ever blocked): until its controller's next turn,
+  // no Spell/Trap Card can be activated, and no effect of a Spell/Trap on the field (Royal Oppression, Armory Arm as an Equip) either.
+  if (g.coldWave && (isST(c) || (isMon(c) && c.zone === 'st')) && (eff.type === 'act' || onField(c))) return false;   // a Monster Card equipped (Armory Arm, Unions) counts as an Equip Spell (archive)
+  if (g.aw && attackMoment(c, eff) && !(p === g.aw.ctrl ? g.aw.tpOpen : g.aw.open)) return false;
   if (forbid(g, { type: 'activate', c, eff, p })) return false;
-  try { return eff.cond ? !!eff.cond(g, c, p, { top, mode }) : true; } catch (e) { throw e; }
+  if (gyCostBlocked(g, c, eff)) return false;   // its cost sends cards to the GY that would be banished instead (Dimensional Fissure, Macro Cosmos)
+  const prevS = g.ssSrc; g.ssSrc = c;
+  try {
+    if (eff.tags && eff.tags.ss && !eff.tags.ssOpt && ssBlanket(g, p, c)) return false;
+    return eff.cond ? !!eff.cond(g, c, p, { top, mode }) : true;
+  } finally { g.ssSrc = prevS; }
 }
+/* Cards that answer an attack declaration ("When an opponent's monster declares an attack": Mirror Force, Sakuretsu Armor, Magic Cylinder,
+ Dimensional Prison, Negate Attack...) can only be activated in the first chain right after it, and not once a player has passed on it
+ (2026-11-27 audit, Mirror Force forum rulings 1 to 3: after a pass, an MST from the attacker gets no Mirror Force; after Solemn negates one
+ Mirror Force, no second). g.aw stays set until the Damage Step for "the attacking monster"; g.aw.open is that first moment. Read from the
+ card's text, for the effect whose condition reads g.aw. */
+const ATK_MOMENT = /declares? (?:an|a direct) attack|declared an attack|attack declaration|(?:is|are) (?:selected as an attack target|targeted for an attack)|an attack is declared/i;
+const atkMomentMemo = new WeakMap();
+// The engine asks the attacked player first. Their pass ends the moment for their cards (the attacker had priority before it, so an MST
+// the attacker plays after that pass gets no Mirror Force: ruling 2's example); the attacker's own "when your monster declares an attack"
+// cards (Strike Slash) stay open until the attacker passes, and a chain the attacker starts with one is still the first chain.
+function awPass(g, p) { if (g.aw && !g.chain.length) { if (p === g.aw.ctrl) g.aw.tpOpen = false; else g.aw.open = false; } }
+function attackMoment(c, eff) {
+  if (atkMomentMemo.has(eff)) { const m = atkMomentMemo.get(eff); if (m.has(D(c).n)) return m.get(D(c).n); }
+  const v = ATK_MOMENT.test(D(c).ps || D(c).tx || '') && /g\.aw\b/.test(String(eff.cond || ''));
+  if (!atkMomentMemo.has(eff)) atkMomentMemo.set(eff, new Map()); atkMomentMemo.get(eff).set(D(c).n, v); return v;
+}
+// Is t still "the attacking monster"? Not once it changed position, was turned face-down, changed control, its attack was negated or the
+// Battle Phase ended (Dimensional Prison site ruling; Sakuretsu Armor and Dimensional Prison archive: Book of Moon, Enemy Controller, Scrubbed Raid).
+// Did c declare an attack this turn that wasn't negated? (Red Dragon Archfiend ruling 4: a monster whose attack Magic Cylinder negated is
+// destroyed by its End Phase effect.) c.declared alone stays true for "declared an attack" texts (Chaos Sorcerer, BLS: negated counts).
+const attackWent = c => !!c.declared && (c.negAtk || 0) < c.attacks;
+const attackingNow = (g, t) => !!(g.aw && t && g.aw.a === t && onField(t) && faceUp(t) && t.pos === 'atk' && t.ctrl === g.aw.ctrl && !g.attackNegated && !g.bpEnd);
 function activatable(g, p, mode) {
   const out = [];
   const seen = new Set();
   const consider = (c) => { if (!c || seen.has(c.u)) return; seen.add(c.u); const es = effsOf(c); if (!es.length) return; es.forEach((eff, ei) => { if (usable(g, p, c, eff, ei, mode)) out.push({ c, eff, ei }); }); };
   const P = g.p[p];
   P.hand.forEach(consider); P.st.forEach(consider); P.m.forEach(consider); P.gy.forEach(consider); if (P.fz) consider(P.fz); P.ban.forEach(consider);
-  for (const x of [...g.p[1 - p].st, ...g.p[p].st, g.p[1 - p].fz, g.p[p].fz]) if (x && faceUp(x) && effsOf(x).some(e => e.anyPlayer)) { seen.delete(x.u); consider(x); }
+  // the opponent's face-up "either player" cards (Royal Oppression); your own were already considered above, so they aren't listed twice
+  for (const x of [...g.p[1 - p].st, g.p[1 - p].fz]) if (x && faceUp(x) && effsOf(x).some(e => e.anyPlayer)) consider(x);
   return out;
 }
 function actLabel(g, a) { const sc = SC(a.c); const lab = a.eff.label || (a.eff.type === 'act' ? (a.c.zone === 'hand' || a.c.pos === 'set' ? 'Activate' : 'Activate') : 'Use effect'); return `${lab}: ${name(a.c)}`; }
@@ -478,17 +865,24 @@ function actLabel(g, a) { const sc = SC(a.c); const lab = a.eff.label || (a.eff.
 function* activate(g, p, c, eff, ei) {
   const d = D(c);
   const L = { c, eff, ei, p, speed: speedOf(c, eff), t: [], data: {}, negated: false, cardAct: eff.type === 'act', tags: eff.tags || {}, link: g.chain.length + 1 };
+  if (eff.type === 'act' && d.k === 'spell') L.upAt = allField(g).filter(faceUp).map(x => x.u);   // who saw the Spell activated (spellCtrEv)
   if (eff.type === 'act') {
     if (c.zone === 'hand') { if (d.sub === 'Field') { if (g.p[p].fz) { destroy(g, [g.p[p].fz], { rule: true, by: p }); const sw = g.sw; beginOp(g); g.sw = sw; } move(g, c, 'fz', { ctrl: p, pos: 'up', reason: 'activate' }); } else move(g, c, 'st', { ctrl: p, pos: 'up', reason: 'activate' }); }
     else { c.pos = 'up'; g.seq++; }
   }
   c.used[ei] = g.turnNo;
+  if (g.aw && !g.chain.length && p === g.aw.ctrl && g.aw.tpOpen && attackMoment(c, eff)) g.aw.open = true;
   log(g, `${PN(g, p)} activated ${name(c)}${eff.type !== 'act' ? "'s effect" : ''}${g.chain.length ? ` (Chain Link ${g.chain.length + 1})` : ''}.`);
-  if (eff.cost) yield* eff.cost(g, c, p, L);
-  if (eff.target) yield* eff.target(g, c, p, L);
+  const prevS = g.ssSrc; g.ssSrc = c;
+  try {
+    if (eff.cost) { const pc = g.inCost, pp = g.costP; g.inCost = true; g.costP = p; try { yield* eff.cost(g, c, p, L); } finally { g.inCost = pc; g.costP = pp; } }
+    g.lockL = L; if (eff.target) yield* eff.target(g, c, p, L);   // lockBP() in a target reads the link from g.lockL
+  } finally { g.ssSrc = prevS; g.lockL = null; }
+  L.tGY = L.t.filter(x => x && x.zone === 'gy');   // targets in a GY when it was activated (Necrovalley)
+  L.gyAt = new Set([...g.p[0].gy, ...g.p[1].gy].map(x => x.u));   // what was in the GYs then (Goat Necrovalley: gyHold)
   g.chain.push(L);
   if (g.hooks) g.hooks.note(g, { type: 'chain', L });
-  if (eff.after) eff.after(g, c, p, L);
+  if (eff.after) { g.afterL = L; try { eff.after(g, c, p, L); } finally { g.afterL = null; } }
   return L;
 }
 function* respondLoop(g, p, mode) { // players respond to the chain until both pass
@@ -503,22 +897,61 @@ function* respondLoop(g, p, mode) { // players respond to the chain until both p
     yield* activate(g, p, a.c, a.eff, a.ei); passes = 0; p = 1 - p;
   }
 }
+/* A face-down monster an effect turns face-up activates its Flip effect after that effect resolves (2026-11-27 audit, Black Rose Dragon
+ ruling 4: Black Rose's ② on a Set Morphing Jar never let the Jar's effect activate). Scripts only set c.pos, so the engine compares the
+ face-down monsters from before the link with after it and emits the flip event for any it turned face-up, unless the script emitted
+ one itself or the card moved (g.flipWatch collects those), or the resolving card's text says Flip effects are not activated. */
+const NO_FLIP_RE = /Flip effects? (are not|aren't|is not|isn't) activated/i;
+function flipsByEffect(g, L, downs, seen) {
+  if (!downs.length) return; const d = D(L.c); if (NO_FLIP_RE.test(d.ps || d.tx || '')) return;
+  for (const x of downs) if (x.zone === 'm' && faceUp(x) && !seen.includes(x.u)) emit(g, { type: 'flip', c: x, p: x.ctrl, byEffect: true });
+}
 function* resolveChain(g) {
+  const leave = [], links = g.chain.slice(), reapEnd = [];   // Normal and Quick-Play Spells, Normal and Counter Traps: on the field until the whole chain has resolved
   while (g.chain.length) {
     const L = g.chain.pop(); beginOp(g);
     if (g.hooks) g.hooks.note(g, { type: 'resolve', L });
+    // Necrovalley: "Negate any card effect that targets a card(s) in the GY" (Edison), "...that would move a card in the GY" (Goat); a
+    // static cont.gyNegate(g, src, L) says when (2026-11-28 audit: Call of the Haunted, Premature Burial, Monster Reborn, Monster Reincarnation)
+    if (!L.negated) for (const [s, ct] of statics(g)) if (ct.gyNegate && s !== L.c && ct.gyNegate(g, s, L)) { L.negated = true; log(g, `${D(s).n} negated ${name(L.c)}'s effect.`); break; }
     if (!L.negated) {
       const d = D(L.c);
       const stillThere = L.eff.type !== 'act' || onField(L.c) || !['Continuous', 'Equip', 'Field'].includes(d.sub);
       const monGone = isMonD(d) && L.eff.type !== 'trig' && L.eff.needsSelf && !onField(L.c);
-      if (stillThere && !monGone && !(isMonD(d) && onField(L.c) && negd(g, L.c) && L.eff.loc !== 'gy' && L.eff.loc !== 'hand')) { const prevR = g.resolvingL; g.resolvingL = L; yield* L.eff.res(g, L.c, L.p, L); g.resolvingL = prevR; yield* askPositions(g); }
+      if (stillThere && !monGone && !(isMonD(d) && onField(L.c) && negd(g, L.c) && L.eff.loc !== 'gy' && L.eff.loc !== 'hand')) { const prevR = g.resolvingL, prevW = g.flipWatch, downs = fieldMons(g).filter(x => x.pos === 'set'); g.flipWatch = []; g.resolvingL = L; yield* L.eff.res(g, L.c, L.p, L); g.resolvingL = prevR; if (!prevR && g.hwPend) { const ps = [...new Set(g.hwPend)]; g.hwPend = null; for (const q of ps) handWin(g, q); } if (!prevR && g.drawPend) { const ds = g.drawPend; g.drawPend = null; drawnCheck(g, ds); } const seen = g.flipWatch; g.flipWatch = prevW; flipsByEffect(g, L, downs, seen); yield* askPositions(g); }
     }
-    if (L.eff.type === 'act' && onField(L.c) && L.c.zone === 'st' && !['Continuous', 'Equip', 'Field'].includes(D(L.c).sub) && !L.keep) move(g, L.c, 'gy', { reason: 'rule' });
+    // a Spell Card activation has resolved (its effect may have been negated, its activation wasn't): Spell Counter cards and the like read
+    // this event (spellCtrEv), Continuous/Equip/Field Spells and Set Spells flipped up included (2026-11-27 audit, Skilled White Magician ruling)
+    if (L.cardAct && isSpell(L.c) && !L.actNegated) { const pr = g.resolvingL; g.resolvingL = L; try { emit(g, { type: 'spellResolved', sc: L.c, p: L.p, L }); } finally { g.resolvingL = pr; } }   // seen as part of the link
+    // (2026-11-27 audit, Heavy Storm site ruling and Dust Tornado: a chained Normal Trap that was targeted is still there to destroy)
+    if (L.eff.type === 'act' && onField(L.c) && L.c.zone === 'st' && !['Continuous', 'Equip', 'Field'].includes(D(L.c).sub) && !L.keep) { leave.push([L.c, L.link]); L.c.pendLeave = true; g.seq++; }   // a lasting effect it left (a 'gy' static, Damage Translation) applies already
     if (L.eff.type === 'act' && onField(L.c) && D(L.c).sub === 'Equip' && !L.c.equipTo && !L.c.linkTo) move(g, L.c, 'gy', { reason: 'rule' });
     if (L.eff.type === 'act' && !L.negated && onField(L.c) && D(L.c).sub === 'Field') { const o = g.p[1 - L.p].fz; if (o && o.pos !== 'set') destroy(g, [o], { rule: true }); }
-    for (const t of L.t) if (t && D(t).n === 'Spirit Reaper' && onField(t) && faceUp(t) && !t.flags.negated && !L.negated) destroy(g, [t]);
+    // Spirit Reaper: destroyed after an effect that targeted it resolves, even one whose effect was negated (ruling 5: Imperial Order); after
+    // the whole chain when an Equip Spell targeted it, after damage calculation in the Damage Step (archive)
+    for (const t of L.t) if (t && D(t).n === 'Spirit Reaper' && onField(t) && faceUp(t) && !negd(g, t) && !L.actNegated) { if (g.inDS && !g.dsCalcDone) (g.dsReap || (g.dsReap = [])).push(t); else if (D(L.c).sub === 'Equip' && L.eff.type === 'act') reapEnd.push(t); else destroy(g, [t]); }
   }
+  // they leave together; the move says which link each was and the whole chain (chainLinks), for scripts that count links or read what
+  // a Counter Trap negated (Blast Asmodian, Iris, Van'Dalgyon)
+  if (leave.length) { const grp = g.group; for (const [x, link] of leave) { const was = x.pendLeave; x.pendLeave = false; if (was && onField(x) && x.zone === 'st') move(g, x, 'gy', { reason: 'rule', chainEnd: true, link, chainLinks: links, group: grp }); } }
+  reapSpirit(g, reapEnd);
+  if (g.aw) { if (g.aw.reopen) g.aw.reopen = false; else g.aw.open = g.aw.tpOpen = false; }   // a chain has resolved: the attack declaration's moment is over (Jetroid's readied Traps keep it: reopen)
 }
+function reapSpirit(g, xs) { const ts = (xs || []).filter(t => onField(t) && faceUp(t) && D(t).n === 'Spirit Reaper' && !negd(g, t)); if (ts.length) destroy(g, [...new Set(ts)]); }
+/* Effects that can't share a chain (2026-11-27 audit): only one effect that Special Summons a card from the hand by itself (Gorz,
+ Tragoedia: site rulings, "only one hand trigger that Special Summons itself per chain"), and eff.oneName: one copy of the card per
+ chain (Treeborn Frog: "You cannot activate two copies of Treeborn Frog in the same chain"). */
+const handSelfSS = eff => eff.type === 'trig' && eff.loc === 'hand' && !!(eff.tags && eff.tags.ss);
+function onePerChain(g, t) {
+  if (handSelfSS(t.eff) && g.chain.some(L => handSelfSS(L.eff))) return true;
+  if (t.eff.oneName && g.chain.some(L => L.eff === t.eff && D(L.c).n === D(t.c).n)) return true;
+  return false;
+}
+/* A "when/if this card is sent to the GY" trigger still activates when the card has left the GY before its chain was built (2026-11-28
+ audit, Dandylion rulings: "activates even if Dandylion is moved from the Graveyard during the chain": discarded for Monster
+ Reincarnation and returned by it, banished by D.D. Crow, shuffled into the Deck by The Transmigration Prophecy). Only for a GY trigger
+ set off by the card's own arrival in the GY, and not once it is back on the field. */
+const gyLeft = t => (t.eff.loc === 'gy') && t.ev && t.ev.type === 'move' && t.ev.c === t.c && t.ev.to === 'gy' && ['hand', 'ban', 'deck', 'extra'].includes(t.c.zone);
 function* processTriggers(g) {
   let guard = 0;
   while (g.pend.length && guard++ < 30) {
@@ -526,10 +959,16 @@ function* processTriggers(g) {
     const seen = new Set();
     list = list.filter(t => {
       const k = t.c.u + ':' + t.ei; if (seen.has(k)) return false; seen.add(k);
-      if (t.eff.when && !t.eff.mand && t.ev.group !== last) return false; // missed the timing
-      const loc = t.eff.loc || 'm'; if (loc !== 'any' && (loc === 'm' ? t.c.zone !== 'm' : t.c.zone !== loc)) return false;
+      if (t.eff.when && !t.eff.mand && t.ev.group !== last && !t.held) return false; // missed the timing (a held battle Flip effect doesn't)
+      const loc = t.eff.loc || 'm'; if (loc !== 'any' && !(t.held && ['gy', 'ban'].includes(t.c.zone)) && !gyLeft(t) && (loc === 'm' ? t.c.zone !== 'm' : t.c.zone !== loc)) return false;
+      if (t.eff.cost && gyCostBlocked(g, t.c, t.eff)) return false;
       if (t.eff.opt && t.c.used[t.ei] === g.turnNo) return false;
-      return !t.eff.cond || t.eff.cond(g, t.c, t.p, { ev: t.ev });
+      if (g.coldWave && (isST(t.c) || (isMon(t.c) && t.c.zone === 'st')) && onField(t.c)) return false;   // Cold Wave: no Spell/Trap effects on the field either
+      const prevS = g.ssSrc; g.ssSrc = t.c;
+      try {
+        if (!t.eff.mand && t.eff.tags && t.eff.tags.ss && !t.eff.tags.ssOpt && ssBlanket(g, t.p, t.c)) return false;   // Vanity's Fiend: optional summoners stay off
+        return !t.eff.cond || t.eff.cond(g, t.c, t.p, { ev: t.ev });
+      } finally { g.ssSrc = prevS; }
     });
     if (!list.length) continue;
     const tp = g.tp, order = [...list.filter(t => t.eff.mand && t.p === tp), ...list.filter(t => t.eff.mand && t.p !== tp), ...list.filter(t => !t.eff.mand && t.p === tp), ...list.filter(t => !t.eff.mand && t.p !== tp)];
@@ -537,6 +976,7 @@ function* processTriggers(g) {
       if (!t.eff.mand && !(yield* yn(g, t.p, `Use ${name(t.c)}'s effect?${t.eff.label ? ' (' + t.eff.label + ')' : ''}`))) continue;
       if (t.eff.ok && !t.eff.ok(g, t.c, t.p, { ev: t.ev })) continue;
       if (forbid(g, { type: 'activate', c: t.c, eff: t.eff, p: t.p })) continue;
+      if (onePerChain(g, t)) continue;
       const L = yield* activate(g, t.p, t.c, t.eff, t.ei); L.ev = t.ev;
     }
     if (g.chain.length) { yield* respondLoop(g, 1 - g.chain[g.chain.length - 1].p); yield* resolveChain(g); }
@@ -548,12 +988,13 @@ function* openWindow(g, first, o = {}) {
   while (passes < 2 && guard++ < 40) {
     const mode = o.ign && p === g.tp ? 'ign' : 'respond';
     const acts = activatable(g, p, mode);
-    if (!acts.length) { passes++; p = 1 - p; continue; }
+    if (!acts.length) { if (o.oppOnly) return; passes++; awPass(g, p); p = 1 - p; continue; }
     const k = (yield* ask(g, p, 'respond', o.text || 'Activate a card or effect?', [...acts.map(a => ({ key: `a:${a.c.u}:${a.ei}`, u: a.c.u, label: actLabel(g, a) })), { key: 'pass', label: 'Pass' }]))[0];
-    if (k === 'pass') { passes++; p = 1 - p; continue; }
+    if (k === 'pass') { if (o.oppOnly) return; passes++; awPass(g, p); p = 1 - p; continue; }
     const [, u, ei] = k.split(':'); const a = acts.find(x => x.c.u === +u && x.ei === +ei);
     yield* activate(g, p, a.c, a.eff, a.ei);
     yield* respondLoop(g, 1 - p); yield* resolveChain(g); yield* processTriggers(g);
+    if (o.oppOnly) return;   // one chain: the turn player then acts from the idle prompt
     if (g.attempt) return; // a summon negation window ends after one chain
     passes = 0; p = g.tp;
   }
@@ -565,20 +1006,30 @@ function* summonAttempt(g, p, cs, how) {
   g.attempt = { cs, how, p, negated: false };
   yield* openWindow(g, 1 - p, { text: `${PN(g, p)} is summoning ${cs.map(name).join(', ')}. Negate it?` });
   const neg = g.attempt.negated; g.attempt = null;
-  if (neg) { destroy(g, cs.filter(onField), {}); return false; }
+  if (neg) {
+    // the Summon never happened, so the monster wasn't on the field: "sent from the field" and "leaves the field" effects don't activate
+    // (2026-11-27 audit, Sangan ruling: "If the Summon of this card is negated with Horn of Heaven or Solemn Judgment you do not get its
+    // effect"; Witch of the Black Forest, Absolute Zero alike). It is destroyed, so "destroyed"/"sent to the GY" effects still can.
+    const grp = g.group, out = cs.filter(onField);
+    for (const c of out) move(g, c, 'gy', { reason: 'effect', destroyed: true, by: 1 - p, group: grp, noLater: true, wasField: false, from: 'summon', negSummon: true });
+    flushLater(g, grp); if (out.length) log(g, `${out.map(name).join(', ')} ${out.length > 1 ? 'were' : 'was'} destroyed.`);
+    return false;
+  }
   return true;
 }
 function* normalSummon(g, p, c, set) {
-  const alts = tribNeed(g, p, c); let need = Math.min(...alts);
+  const alts = tribNeed(g, p, c, set); let need = Math.min(...alts);
   const cands = tributeCands(g, p);
   const usable = alts.filter(n => cands.length >= n);
   if (usable.length > 1) { const i = yield* choose(g, p, `Summon ${name(c)} with how many Tributes?`, usable.map(n => n ? `${n} Tribute${n > 1 ? 's' : ''}` : 'No Tribute')); need = usable[i]; } else need = usable[0];
   let tribs = [];
   if (need) { tribs = yield* pick(g, p, `Choose ${need} monster${need > 1 ? 's' : ''} to Tribute`, cands, need, need, 'cost'); }
-  const group = g.group;
-  for (const t of tribs) { const wasOpp = t.ctrl !== p; move(g, t, 'gy', { reason: 'tribute', by: p, group, tributeFor: c.u }); if (wasOpp) g.soulEx[p] = null; }
+  // the Tributes are sent before the monster is summoned (2026-11-27 audit, Dupe Frog archive: its "when" effect doesn't activate when it is
+  // Tributed for a Tribute Summon), so they get their own event group and a "when ... you can" effect on a Tribute misses the timing
+  const tg = g.group; if (tribs.length) g.group++; const group = g.group;
+  for (const t of tribs) { const wasOpp = t.ctrl !== p; move(g, t, 'gy', { reason: 'tribute', by: p, group: tg, tributeFor: c.u }); if (wasOpp) g.soulEx[p] = (g.soulEx[p] || []).filter(u => u !== t.u); }
   if (tribs.length) log(g, `${PN(g, p)} Tributed ${tribs.map(x => x.snapName || D(x).n).join(', ')}.`);
-  if (g.frogNS[p] && g.ns[p] >= 1 && isFrog(c)) g.frogNS[p] = false; else g.ns[p]++;
+  if (!set && g.frogNS[p] && isFrog(c) && !['Swap Frog', 'Frog the Jam'].includes(D(c).n)) g.frogNS[p] = false; else g.ns[p]++;
   const zi = freeM(g, p); if (zi < 0) return;
   move(g, c, 'm', { ctrl: p, pos: set ? 'set' : 'atk', reason: set ? 'set' : 'summon', group });
   c.summonType = tribs.length ? 'tribute' : 'normal'; c.tributes = tribs.map(t => t.u);
@@ -591,11 +1042,12 @@ function* normalSummon(g, p, c, set) {
 }
 function* specialProc(g, p, c, how, cost, pos = 'atk') { // inherent Special Summons: from the hand, Synchro, contact Fusion
   const group = g.group;
-  if (cost) yield* cost(group);
+  if (cost) { const pc = g.inCost, pp = g.costP; g.inCost = true; g.costP = p; try { yield* cost(group); } finally { g.inCost = pc; g.costP = pp; } }
   const zi = freeM(g, p); if (zi < 0) return;
   move(g, c, 'm', { ctrl: p, pos, reason: 'summon', group }); c.summonType = how; c.attacks = 0;
   log(g, `${PN(g, p)} ${how === 'synchro' ? 'Synchro' : how === 'fusion' ? 'Fusion' : 'Special'} Summoned ${name(c)}${pos === 'def' ? ' in Defense Position' : ''}.`);
   if (!(yield* summonAttempt(g, p, [c], how))) { yield* processTriggers(g); return; }
+  c.proper = true;   // its own procedure (or a Synchro / contact Fusion Summon): it can be revived later where its text allows
   const ev = emit(g, { type: 'summon', cs: [c], how, p }, group);
   g.sw = { cs: [c], p, how, group: ev.group };
   yield* afterAction(g);
@@ -607,9 +1059,9 @@ E.newDuel = function (cfg) {
   cfg = { ...cfg, seed };
   const g = {
     cfg, rnd: mulberry(seed), nextU: 1, p: [], tp: cfg.first || 0, turnNo: 0, phase: 'start', chain: [], events: [], pend: [], later: [], laterDestroy: [], rules: [],
-    group: 0, seq: 0, summoned: [false, false], history: [], log: [], winner: null, why: '', ns: [0, 0], frogNS: [false, false], soulEx: [null, null],
+    group: 0, seq: 0, summoned: [false, false], history: [], log: [], winner: null, why: '', ns: [0, 0], frogNS: [false, false], soulEx: [[], []],
     noBP: [false, false], noSummon: [false, false], onlyAttacker: [null, null], silverwindUsed: [false, false], roar: null,
-    coldWave: null, goldSarc: [], attempt: null, sw: null, aw: null, inDS: false, battle: null, quiet: !!cfg.quiet,
+    coldWave: null, flipWatch: null, goldSarc: [], attempt: null, sw: null, aw: null, inDS: false, battle: null, quiet: !!cfg.quiet,
   };
   for (const pi of [0, 1]) {
     const dk = cfg.decks[pi];
@@ -648,10 +1100,13 @@ function applyBoard(g, board) {
     if (b.lp != null) P.lp = b.lp;
     const make = (x, zone) => { const nm = typeof x === 'string' ? x : x.n; const c = mk(g, idOf(nm), p); c.zone = zone; return c; };
     if (b.hand) { for (const c of P.hand.splice(0)) { c.zone = 'deck'; P.deck.unshift(c); } for (const x of b.hand) P.hand.push(make(x, 'hand')); }
-    for (const z of ['gy', 'ban', 'extra']) if (b[z]) for (const x of b[z]) P[z].push(make(x, z));
+    // a monster placed in the GY or banished counts as properly summoned before ({n, proper: false} for one that never was), so a preset
+    // position can revive its Fusions, Synchros and Ritual Monsters (summoning conditions, 2026-11-27)
+    for (const z of ['gy', 'ban', 'extra']) if (b[z]) for (const x of b[z]) { const c = make(x, z); if (z !== 'extra' && !(typeof x === 'object' && x.proper === false)) c.proper = true; P[z].push(c); }
     if (b.deckTop) for (const x of b.deckTop.slice().reverse()) P.deck.push(make(x, 'deck'));
     (b.m || []).forEach((x, i) => { if (!x) return; const c = make(x, 'm'); c.pos = x.pos || 'atk'; c.turnIn = 0; P.m[x.zi != null ? x.zi : i] = c; });
     (b.st || []).forEach((x, i) => { if (!x) return; const c = make(x, 'st'); c.pos = x.pos || 'set'; c.turnIn = 0; P.st[x.zi != null ? x.zi : i] = c; });
+    if (b.fz) { const c = make(b.fz, 'fz'); c.pos = b.fz.pos || 'up'; c.turnIn = 0; P.fz = c; }   // a Field Spell (face-up unless {pos: 'set'})
   });
   const tn = board.turn || (board[0] && board[0].turn); if (tn) g.turnNo = tn - 1;
 }
@@ -663,10 +1118,10 @@ function* duel(g) {
   for (;;) { yield* turn(g); g.tp = 1 - g.tp; }
 }
 function* turn(g) {
-  const tp = g.tp; g.turnNo++; g.ns = [0, 0]; g.summoned = [false, false]; g.frogNS = [false, false]; g.noBP = [false, false]; g.noSummon = [false, false]; g.onlyAttacker = [null, null]; g.silverwindUsed = [false, false]; g.roar = null; g.bpEnd = false; g.goBattle = false; g.soulEx = [null, null];
+  const tp = g.tp; g.turnNo++; g.ns = [0, 0]; g.summoned = [false, false]; g.frogNS = [false, false]; g.noBP = [false, false]; g.noSummon = [false, false]; g.onlyAttacker = [null, null]; g.silverwindUsed = [false, false]; g.roar = null; g.bpEnd = false; g.goBattle = false; g.soulEx = [[], []];
   if (g.coldWave && g.coldWave.p === tp) g.coldWave = null;
   g.rules = g.rules.filter(r => r.startOf !== tp);
-  for (const c of fieldMons(g)) { c.attacks = 0; c.posChanged = false; c.declared = false; }
+  for (const c of fieldMons(g)) { c.attacks = 0; c.posChanged = false; c.declared = false; c.negAtk = 0; }
   log(g, `— Turn ${g.turnNo}: ${PN(g, tp)} —`);
   g.phase = 'draw'; beginOp(g); draw(g, tp, 1); yield* processTriggers(g);
   g.phase = 'standby'; beginOp(g);
@@ -696,40 +1151,43 @@ function idleOpts(g) {
   if (!g.noSummon[p]) for (const c of P.hand) {
     if (!isMon(c)) continue;
     const nsOk = canNormal(c, 'ns', g, p), setOk = canNormal(c, 'set', g, p);
-    if ((nsOk || setOk) && (g.ns[p] < 1 || (g.frogNS[p] && isFrog(c) && !['Swap Frog', 'Frog the Jam'].includes(D(c).n)))) {
-      const alts = tribNeed(g, p, c), cands = tributeCands(g, p);
-      if (alts.some(n => cands.length >= n && (n > 0 || freeM(g, p) >= 0))) {
-        if (nsOk && !forbid(g, { type: 'ns', c, p })) out.push({ key: 'ns:' + c.u, u: c.u, kind: 'ns', label: Math.min(...alts.filter(n => cands.length >= n)) ? 'Tribute Summon' : 'Normal Summon' });
-        if (setOk && !forbid(g, { type: 'set', c, p })) out.push({ key: 'set:' + c.u, u: c.u, kind: 'set', label: 'Set face-down' });
-      }
+    // Swap Frog's extra Normal Summon is for a Frog's Summon only, never a Set (site rulings)
+    const frogX = g.frogNS[p] && isFrog(c) && !['Swap Frog', 'Frog the Jam'].includes(D(c).n);
+    if ((nsOk || setOk) && (g.ns[p] < 1 || frogX)) {
+      const cands = tributeCands(g, p), fits = alts => alts.some(n => cands.length >= n && (n > 0 || freeM(g, p) >= 0));
+      const altsN = tribNeed(g, p, c), altsS = tribNeed(g, p, c, true);
+      if (nsOk && fits(altsN) && !forbid(g, { type: 'ns', c, p })) out.push({ key: 'ns:' + c.u, u: c.u, kind: 'ns', label: Math.min(...altsN.filter(n => cands.length >= n)) ? 'Tribute Summon' : 'Normal Summon' });
+      if (setOk && g.ns[p] < 1 && fits(altsS) && !forbid(g, { type: 'set', c, p })) out.push({ key: 'set:' + c.u, u: c.u, kind: 'set', label: 'Set face-down' });
     }
     const sc = SC(c);
-    if (sc && sc.proc && !sc.proc.extra && freeM(g, p) >= 0 && sc.proc.cond(g, c, p) && !forbid(g, { type: 'ss', c, p, how: 'special' })) out.push({ key: 'sp:' + c.u, u: c.u, kind: 'sp', label: sc.proc.label || 'Special Summon' });
+    if (sc && sc.proc && !sc.proc.extra && freeM(g, p) >= 0 && sc.proc.cond(g, c, p) && !forbid(g, { type: 'ss', c, p, how: 'special', proc: true }) && !(sc.proc.cost && gyCostBlocked(g, c, sc.proc))) out.push({ key: 'sp:' + c.u, u: c.u, kind: 'sp', label: sc.proc.label || 'Special Summon' });
   }
   if (!g.noSummon[p] && freeM(g, p) >= 0 || monsOf(g, p).length) {
     for (const x of P.extra) {
       if (g.noSummon[p]) break;
-      if (forbid(g, { type: 'ss', c: x, p, how: D(x).k })) continue;
-      const xs = SC(x); if (xs && xs.proc && xs.proc.extra && xs.proc.cond(g, x, p)) out.push({ key: 'sp:' + x.u, u: x.u, kind: 'sp', label: xs.proc.label || 'Special Summon' });
+      if (forbid(g, { type: 'ss', c: x, p, how: D(x).k, proc: true })) continue;
+      const xs = SC(x); if (xs && xs.proc && xs.proc.extra && xs.proc.cond(g, x, p) && !(xs.proc.cost && gyCostBlocked(g, x, xs.proc))) out.push({ key: 'sp:' + x.u, u: x.u, kind: 'sp', label: xs.proc.label || 'Special Summon' });
       if (D(x).k === 'synchro' && !(xs && xs.noSynchro) && synCombos(g, p, x).length) out.push({ key: 'syn:' + x.u, u: x.u, kind: 'syn', label: 'Synchro Summon' });
-      if (D(x).k === 'fusion' && cfCombos(g, p, x).length) out.push({ key: 'cf:' + x.u, u: x.u, kind: 'cf', label: 'Special Summon' });
+      if (D(x).k === 'fusion' && !gyCostBlocked(g, x, 'cf') && cfCombos(g, p, x).length) out.push({ key: 'cf:' + x.u, u: x.u, kind: 'cf', label: 'Special Summon' });
     }
   }
   for (const c of monsOf(g, p)) {
-    if (c.pos === 'set' && c.turnIn !== g.turnNo && !c.posChanged) out.push({ key: 'flip:' + c.u, u: c.u, kind: 'flip', label: 'Flip Summon' });
+    // an attacker turned face-down can't be Flip Summoned in Main Phase 2 (Book of Moon Goat ruling: no position change after attacking)
+    if (c.pos === 'set' && c.turnIn !== g.turnNo && !c.posChanged && !c.attacks && !forbid(g, { type: 'flip', c, p })) out.push({ key: 'flip:' + c.u, u: c.u, kind: 'flip', label: 'Flip Summon' });
     if (c.pos === 'atk' && isGemini(c) && !c.flags.gemini && (g.ns[p] < 1) && !g.noSummon[p] && !forbid(g, { type: 'ns', c, p })) out.push({ key: 'gem:' + c.u, u: c.u, kind: 'gem', label: 'Gemini Summon (gain its effect)' });
     if (c.pos !== 'set' && c.turnIn !== g.turnNo && !c.posChanged && !c.attacks && !forbid(g, { type: 'pos', c })) out.push({ key: 'pos:' + c.u, u: c.u, kind: 'pos', label: c.pos === 'atk' ? 'Change to Defense' : 'Change to Attack' });
   }
   for (const a of activatable(g, p, 'idle')) out.push({ key: `a:${a.c.u}:${a.ei}`, u: a.c.u, kind: 'act', label: a.eff.label || (a.eff.type === 'act' ? 'Activate' : 'Use effect') });
   if (!g.coldWave) for (const c of P.hand) if (isST(c) && D(c).sub === 'Field' && !forbid(g, { type: 'setST', c, p })) out.push({ key: 'setst:' + c.u, u: c.u, kind: 'setst', label: 'Set' });
   if (freeST(g, p) >= 0 && !(g.coldWave)) for (const c of P.hand) if (isST(c) && D(c).sub !== 'Field' && !forbid(g, { type: 'setST', c, p })) out.push({ key: 'setst:' + c.u, u: c.u, kind: 'setst', label: 'Set' });
-  if (g.phase === 'main1' && g.turnNo > 1 && !g.noBP[p]) out.push({ key: 'bp', kind: 'phase', label: 'Battle Phase' });
+  if (g.phase === 'main1' && g.turnNo > 1 && !bpLocked(g, p)) out.push({ key: 'bp', kind: 'phase', label: 'Battle Phase' });
   out.push({ key: 'end', kind: 'phase', label: 'End turn' });
   return out;
 }
 E.idleOpts = idleOpts;
 function* mainPhase(g) {
   for (let guard = 0; guard < 200; guard++) {
+    g.sw = null;   // the last summon's moment passed in its own response window (afterAction); a fresh prompt doesn't reopen it
     const opts = idleOpts(g);
     const k = (yield* ask(g, g.tp, 'idle', g.phase === 'main1' ? 'Main Phase 1' : 'Main Phase 2', opts))[0];
     if (k === 'bp') { g.goBattle = true; return; }
@@ -753,9 +1211,13 @@ function* doIdle(g, k) {
     return yield* specialProc(g, p, c, 'synchro', function* (grp) { for (const m of mats) move(g, m, 'gy', { reason: 'synchro', by: p, group: grp }); log(g, `${PN(g, p)} sent ${mats.map(m => m.snapName || D(m).n).join(' + ')} to the GY for a Synchro Summon.`); }, posI ? 'def' : 'atk');
   }
   if (kind === 'cf') {
-    const mats = cfCombos(g, p, c)[0];
+    const P = cfPool(g, p, c), firstOk = P.first.filter(a => P.rest.some(x => x !== a));
+    const [a1] = firstOk.length > 1 ? yield* pick(g, p, D(c).n === 'Chimeratech Fortress Dragon' ? 'Send which "Cyber Dragon"?' : 'Send which Gemini monster?', firstOk, 1, 1, 'cost') : firstOk;
+    const rest = P.rest.filter(x => x !== a1);
+    const more = rest.length > P.restMin || P.restMax > 1 && rest.length > 1 ? yield* pick(g, p, D(c).n === 'Chimeratech Fortress Dragon' ? 'Send which Machine monsters (1 or more)?' : 'Send which other Gemini monster?', rest, P.restMin, Math.min(P.restMax, rest.length), 'cost') : rest.slice(0, P.restMin);
+    const mats = [a1, ...more];
     const pos = g.cfg.askPos && (yield* choose(g, p, `${name(c)}: which position?`, ['Attack Position', 'Defense Position'])) ? 'def' : 'atk';
-    return yield* specialProc(g, p, c, 'fusion', function* (grp) { for (const m of mats) move(g, m, 'gy', { reason: 'fusion', by: p, group: grp }); if (D(c).n === 'Chimeratech Fortress Dragon') c.flags.baseAtk = 1000 * mats.length; }, pos);
+    return yield* specialProc(g, p, c, 'fusion', function* (grp) { for (const m of mats) move(g, m, 'gy', { reason: 'fusion', by: p, group: grp }); if (D(c).n === 'Chimeratech Fortress Dragon') { c.flags.baseAtk = 1000 * mats.length; c.flags.ownBaseAtk = true; } }, pos);
   }
   if (kind === 'flip') {
     const group = g.group; c.pos = 'atk'; c.posChanged = true; log(g, `${PN(g, p)} Flip Summoned ${name(c)}.`);
@@ -771,7 +1233,9 @@ function* doIdle(g, k) {
   }
   if (kind === 'pos') { c.pos = c.pos === 'atk' ? 'def' : 'atk'; c.posChanged = true; log(g, `${PN(g, p)} changed ${name(c)} to ${c.pos === 'atk' ? 'Attack' : 'Defense'} Position.`); emit(g, { type: 'pos', c, p }); yield* processTriggers(g); return; }
   if (kind === 'setst') { if (D(c).sub === 'Field') { if (P.fz) destroy(g, [P.fz], { rule: true, by: p }); // replacing your Field Spell destroys it (Geartown rulings: its effect can activate when you Set over it, misses the timing when you activate over it)
- move(g, c, 'fz', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a Field Spell.`); yield* processTriggers(g); return; } move(g, c, 'st', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a card.`); return; }
+ move(g, c, 'fz', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a Field Spell.`); yield* processTriggers(g); return; } move(g, c, 'st', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a card.`);
+    // the opponent may respond to a Set before the turn player's next action, e.g. MST it before a Synchro Summon (MST site ruling 1)
+    yield* openWindow(g, 1 - p, { text: `${PN(g, p)} Set a card. Respond?`, oppOnly: true }); return; }
   if (kind === 'a') {
     const ei = +b; const eff = effsOf(c)[ei];
     yield* activate(g, p, c, eff, ei); yield* respondLoop(g, 1 - p); yield* resolveChain(g); yield* afterAction(g);
@@ -792,7 +1256,7 @@ function canAttack(g, c) {
 }
 function attackTargets(g, c) {
   const opp = monsOf(g, 1 - g.tp);
-  const dupe = opp.filter(x => faceUp(x) && D(x).n === 'Dupe Frog' && !x.flags.negated);
+  const dupe = opp.filter(x => faceUp(x) && D(x).n === 'Dupe Frog' && !negd(g, x));
   const aok = selfFn(g, c, 'attackOk');
   const targetable = opp.filter(t => !(faceUp(t) && has(g, t, 'noAttackTarget')) && (!aok || aok(g, c, t)));
   const out = (dupe.length ? dupe : targetable).map(t => t.u);
@@ -814,6 +1278,7 @@ function* battlePhase(g) {
   g.phase = 'battle'; beginOp(g); log(g, `${PN(g, g.tp)} entered the Battle Phase.`);
   yield* openWindow(g, 1 - g.tp, { text: 'Start of the Battle Phase. Activate a card or effect?' });
   for (let guard = 0; guard < 60 && !g.bpEnd; guard++) {
+    g.sw = null;   // as in mainPhase: "when a monster is Summoned" cards were offered here and crashed once beginOp cleared it (test_engine)
     const k = (yield* ask(g, g.tp, 'idle', 'Battle Phase', battleOpts(g)))[0];
     if (k === 'endbp') break;
     beginOp(g);   // a new action ends the last summon's moment (see mainPhase)
@@ -831,11 +1296,11 @@ function* attack(g, a, t) {
     log(g, `${name(a)} attacks ${t ? (t.pos === 'set' ? 'a face-down monster' : name(t)) : 'directly'}.`);
     const before = monsOf(g, op).length; beginOp(g);
     const ev = emit(g, { type: 'attack', a, t, p: tp, direct: !t });
-    g.aw = { a, t, group: ev.group };
+    g.aw = { a, t, group: ev.group, ctrl: tp, open: true, tpOpen: true };   // the attack declaration's own moment, per side (see attackMoment)
     yield* processTriggers(g);
     if (g.aw) yield* openWindow(g, op, { text: `${name(a)} is attacking. Respond?` });
     g.aw = null;
-    if (g.attackNegated) { g.attackNegated = false; log(g, 'The attack was negated.'); return; }
+    if (g.attackNegated) { g.attackNegated = false; a.negAtk = (a.negAtk || 0) + 1; log(g, 'The attack was negated.'); return; }
     if (g.bpEnd || !onField(a) || a.ctrl !== tp || a.pos !== 'atk') return;
     const now = monsOf(g, op).length;
     if (now !== before || (t && (!onField(t) || t.ctrl !== op))) { // replay
@@ -852,17 +1317,17 @@ function* attack(g, a, t) {
 }
 function* damageStep(g, a, t) {
   const tp = g.tp, op = 1 - tp;
-  g.inDS = true; g.battle = { a, t }; beginOp(g);
+  g.inDS = true; g.dsCalcDone = false; g.dsReap = null; g.battle = { a, t }; beginOp(g);
   emit(g, { type: 'dsStart', a, t }); yield* processTriggers(g);
   yield* openWindow(g, op, { text: 'Damage Step. Activate a card or effect?' });
   const alive = () => onField(a) && a.ctrl === tp && (!t || (onField(t) && t.ctrl === op));
-  if (!alive()) { g.inDS = false; g.battle = null; return; }
+  if (!alive()) { g.inDS = false; g.battle = null; if (g.dsReap) { const r = g.dsReap; g.dsReap = null; reapSpirit(g, r); } return; }
   let flipped = false;
   if (t && t.pos === 'set') { t.pos = 'def'; flipped = true; g.seq++; log(g, `The face-down monster was ${name(t)}.`); }
   yield* openWindow(g, op, { text: 'Before damage calculation. Activate a card or effect?' });
-  if (!alive()) { g.inDS = false; g.battle = null; return; }
+  if (!alive()) { g.inDS = false; g.battle = null; if (g.dsReap) { const r = g.dsReap; g.dsReap = null; reapSpirit(g, r); } return; }
   beginOp(g);
-  const A = stat(g, a, 'atk') + (t && t.pos !== 'atk' && D(a).n === 'Blackwing Armed Wing' && !a.flags.negated ? 500 : 0);
+  const A = stat(g, a, 'atk') + (t && t.pos !== 'atk' && D(a).n === 'Blackwing Armed Wing' && !negd(g, a) ? 500 : 0);
   const pierce = c => (!negd(g, c) && ['Blackwing - Bora the Spear', 'Blackwing Armed Wing', 'Flamvell Uruquizas', 'Evil HERO Malicious Edge'].includes(D(c).n)) || has(g, c, 'piercing');
   const noDmg = (p, c1, c2) => [c1, c2].some(c => c && c.ctrl === p && faceUp(c) && ((D(c).n === 'Blackwing Armor Master' && !negd(g, c)) || has(g, c, 'noBattleDamage'))) || g.p[p].noBattleDamage === g.turnNo;
   let killA = false, killT = false, dmgTo = null, dmg = 0;
@@ -872,28 +1337,65 @@ function* damageStep(g, a, t) {
   else { const Dv = stat(g, t, 'def'); if (A > Dv) { killT = true; if (pierce(a)) { dmgTo = op; dmg = A - Dv; } } else if (A < Dv) { dmgTo = tp; dmg = Dv - A; } }
   if (dmgTo != null && noDmg(dmgTo, a, t)) dmg = 0;
   if (dmg > 0) damage(g, dmgTo, dmg, { battle: true, src: dmgTo === op ? a : t, srcP: 1 - dmgTo, direct: !t });
+  g.dsCalcDone = true; if (g.dsReap) { const r = g.dsReap; g.dsReap = null; reapSpirit(g, r); }   // Spirit Reaper targeted earlier in the Damage Step
   const victims = [];
   if (killT && t && !cantBattleDestroy(g, t)) victims.push([t, a]);
   if (killA && !cantBattleDestroy(g, a)) victims.push([a, t]);
   for (const [v] of victims) v.flags.battleDoomed = true;
   emit(g, { type: 'afterCalc', a, t, tWasDef: tDef, flipped });
+  // the battle's own triggers (damage, after damage calculation) activate and resolve before the flipped monster's Flip effect, which
+  // starts a new chain (2026-11-27 audit: Red Dragon Archfiend site ruling 1 and archive; Airknight Parshath draws before the Flip effect)
+  // (the Flip effect is collected now, while the monster is on the field, and held back: it still activates if the first chain destroyed it)
   if (flipped && onField(t)) emit(g, { type: 'flip', c: t, p: op, battle: true });
+  if (flipped) { const held = g.pend.filter(x => x.ev.type === 'flip' && x.ev.battle); if (held.length) { g.pend = g.pend.filter(x => !held.includes(x)); yield* processTriggers(g); for (const x of held) x.held = true; g.pend.push(...held); } }
   yield* processTriggers(g);
   beginOp(g);
   const grp = g.group;
-  for (const [v, k] of victims) if (onField(v) && v.flags.battleDoomed) { v.flags.battleDoomed = false; if (replaced(g, v, { battle: true, killer: k })) continue; move(g, v, 'gy', { reason: 'battle', destroyed: true, battle: true, killer: k, group: grp, noLater: true }); log(g, `${D(v).n} was destroyed by battle.`); }
+  // "A monster destroyed by this monster as a result of battle is removed from play instead of going to the Graveyard" (Goat Dark Magician
+  // of Chaos, self.battleBanish): read for every victim before any leaves, so two that destroy each other are both banished (archive)
+  const banV = victims.filter(([v, k]) => k && k.ctrl !== v.ctrl && onField(k) && faceUp(k) && has(g, k, 'battleBanish')).map(([v]) => v);
+  for (const [v, k] of victims) if (onField(v) && v.flags.battleDoomed) { v.flags.battleDoomed = false; if (replaced(g, v, { battle: true, killer: k })) continue; if (banV.includes(v)) { move(g, v, 'ban', { reason: 'battle', destroyed: true, battle: true, killer: k, insteadOf: 'gy', group: grp, noLater: true }); log(g, `${D(v).n} was destroyed by battle and banished.`); continue; } move(g, v, 'gy', { reason: 'battle', destroyed: true, battle: true, killer: k, group: grp, noLater: true }); log(g, `${D(v).n} was destroyed by battle.`); }
   flushLater(g, grp);
   emit(g, { type: 'dsEnd', a, t, attackedMonster: !!t });
   yield* processTriggers(g);
-  g.inDS = false; g.battle = null;
+  g.inDS = false; g.battle = null; if (g.dsReap) { const r = g.dsReap; g.dsReap = null; reapSpirit(g, r); }
 }
 
 /* ---------- card scripts ---------- */
+const swapRet = x => !isExtraD(D(x)) && D(x).k !== 'token' && !x.flags.banishOnLeave;   // a monster that can go back to the hand as a cost
 const opp = p => 1 - p;
 const evSummoned = (ev, c, hows) => ev.type === 'summon' && ev.cs.includes(c) && (!hows || hows.includes(ev.how));
 const fromFieldToGY = (ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to === 'gy';
 const battleKill = (ev, c) => ev.type === 'move' && ev.battle && ev.killer === c && ev.to === 'gy' && ev.c.zone === 'gy';
-function* tgt(g, p, L, text, cands, min = 1, max = 1, hint) { cands = cands.filter(x => !(onField(x) && faceUp(x) && has(g, x, 'cantBeTargeted') && (!L || !L.c || !(SC(x) && SC(x).self && SC(x).self.targetFilter) || SC(x).self.targetFilter(g, x, L)))); const t = yield* pick(g, p, text, cands, min, max, hint); L.t = t; return t; }
+/* "Can attack all your opponent's monsters once each" (Asura Priest, Berserk Dragon, Gemini Asura copies): each monster once, a direct
+ attack only before it attacked a monster, and none after a direct attack (2026-11-27 audit, Asura ruling 2: a monster that appears
+ after its direct attack, from Scapegoat or Call of the Haunted, can't be attacked). For self.maxAttacks / self.attackOk. */
+const attacksThisTurn = (g, c) => g.events.filter(e => e.type === 'attack' && e.a === c && e.turn === g.turnNo);
+const attackEach = {
+  maxAttacks: (g, c) => { const es = attacksThisTurn(g, c); if (es.some(e => e.direct)) return c.attacks; const hit = new Set(es.filter(e => e.t).map(e => e.t.u));
+    const rest = monsOf(g, opp(c.ctrl)).filter(m => !hit.has(m.u)).length; return c.attacks + (rest || (c.attacks ? 0 : 1)); },
+  attackOk: (g, c, t) => !attacksThisTurn(g, c).some(e => e.t && e.t.u === t.u),
+};
+// can L (a link, or {c, p} before one exists) target x? ("cannot be targeted", narrowed by the card's own targetFilter)
+/* Does this effect (or 'proc', the card's own Special Summon procedure) banish cards from a GY, as a cost or as its effect? Read from the
+ card's text, for the effect whose script moves a card to the banished pile (2026-11-27 audit: Kycoo the Ghost Destroyer listed card names,
+ so it blocked D.D. Survivor and Burial from a Different Dimension and missed Gigantes, Dark Necrofear, Inferno, Silpheed and Soul of
+ Purity and Light; archive: "cannot activate cards/effects that remove cards in the GY from play, whether as cost or as part of their
+ effect" and "cannot Summon monsters like Chaos Sorcerer"). */
+const GYBAN_RE = /(?:banish|remov\w* from play)[^.;]*?\b(?:from|in) (?:your|their|your opponent's|the opponent's|his|its owner's|either player's|either|each player's|any|both players') (?:own )?(?:GY|Graveyard)|(?:from|in) (?:your|their|your opponent's|either player's|either|any) (?:GY|Graveyard)s?\b[^.]*?;\s*(?:banish|remove)/i;
+const PROC_SENT = /[^.]*\bSpecial Summon(?:ed)?\b[^.]*\bby (?:banishing|remov\w*)[^.]*\.?/gi;
+const gybanMemo = new Map();
+function banishesFromGY(c, eff) {
+  if (eff && eff.gyOpt) return false;   // it can use the field instead (Miracle Fusion under Kycoo: site ruling 1); the script asks forbid({type:'banish', from:'gy'})
+  const d = D(c), k = d.n + '|' + (eff === 'proc' ? 'proc' : effsOf(c).indexOf(eff)) + '|' + FMT; if (gybanMemo.has(k)) return gybanMemo.get(k);
+  // the summon condition ("Must first be Special Summoned ... by banishing ... from your GY") belongs to 'proc', the rest to the effects
+  const t = String(d.ps || d.tx || '').replace(/\n/g, ' '), procS = (t.match(PROC_SENT) || []).join(' ');
+  let v = GYBAN_RE.test(eff === 'proc' ? procS : t.replace(PROC_SENT, ' '));
+  if (v) { const o = eff === 'proc' ? (SC(c) || {}).proc : eff; const src = o ? Object.values(o).filter(f => typeof f === 'function').map(String).join('\n') : ''; v = /['"]ban['"]/.test(src); }
+  gybanMemo.set(k, v); return v;
+}
+const canTarget = (g, x, L) => !(onField(x) && faceUp(x) && has(g, x, 'cantBeTargeted') && (!L || !L.c || !(SC(x) && SC(x).self && SC(x).self.targetFilter) || SC(x).self.targetFilter(g, x, L)));
+function* tgt(g, p, L, text, cands, min = 1, max = 1, hint) { cands = cands.filter(x => canTarget(g, x, L)); const t = yield* pick(g, p, text, cands, min, max, hint); L.t = t; return t; }
 const live = (L) => L.t.filter(x => onField(x));
 const oppFaceUp = (g, p) => monsOf(g, opp(p)).filter(faceUp);
 const stOnField = g => [...stOf(g, 0), ...stOf(g, 1)];
@@ -904,15 +1406,15 @@ const SCRIPTS = {
   /* ----- Blackwing ----- */
   'Blackwing - Blizzard the Far North': { effs: [{ type: 'trig', when: true, tags: { ss: 1 },
     on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isBW(x) && isMon(x) && lv(x) <= 4),
-    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon a Level 4 or lower Blackwing from your GY', g.p[p].gy.filter(x => isBW(x) && isMon(x) && lv(x) <= 4), 1, 1, 'good'); },
+    cond: (g, c, p) => g.p[p].gy.some(x => isBW(x) && isMon(x) && lv(x) <= 4 && canSS(g, p, x)),
+    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon a Level 4 or lower Blackwing from your GY', g.p[p].gy.filter(x => isBW(x) && isMon(x) && lv(x) <= 4 && canSS(g, p, x)), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'def'); } }] },
   'Blackwing - Bora the Spear': { proc: { cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isBW(x) && D(x).n !== 'Blackwing - Bora the Spear'), label: 'Special Summon (you control a Blackwing)' } },
   'Blackwing - Gale the Whirlwind': { proc: { cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isBW(x) && D(x).n !== 'Blackwing - Gale the Whirlwind'), label: 'Special Summon (you control a Blackwing)' },
     effs: [{ type: 'ign', opt: true, label: 'Halve ATK/DEF',
       cond: (g, c, p) => oppFaceUp(g, p).length > 0,
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Halve the ATK and DEF of', oppFaceUp(g, p), 1, 1, 'bad'); },
-      res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) { const A = stat(g, t, 'atk'), Dv = stat(g, t, 'def'); addMod(g, t, { atk: -(A - Math.floor(A / 2)), def: -(Dv - Math.floor(Dv / 2)) }); log(g, `${name(t)}'s ATK and DEF were halved.`); } } }] },
+      res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) { const A = stat(g, t, 'atk'), Dv = stat(g, t, 'def'); addMod(g, t, { set: Math.floor(A / 2), which: 'atk' }); addMod(g, t, { set: Math.floor(Dv / 2), which: 'def' }); log(g, `${name(t)}'s ATK and DEF were halved.`); } } }] },
   'Blackwing - Kalut the Moon Shadow': { effs: [{ type: 'quick', loc: 'hand', ds: true, label: '+1400 ATK',
     cond: (g, c, p) => g.inDS && g.battle && [g.battle.a, g.battle.t].some(x => x && x.ctrl === p && faceUp(x) && isBW(x)),
     cost: function* (g, c, p, L) { L.data.m = [g.battle.a, g.battle.t].find(x => x && x.ctrl === p && isBW(x)); move(g, c, 'gy', { reason: 'cost' }); },
@@ -921,9 +1423,9 @@ const SCRIPTS = {
     on: (g, ev, c) => battleKill(ev, c), cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isBW(x) && isMon(x) && baseAtk(x) <= 1500),
     res: function* (g, c, p, L) { const cands = g.p[p].deck.filter(x => isBW(x) && isMon(x) && baseAtk(x) <= 1500); const [x] = yield* pick(g, p, 'Special Summon a Blackwing with 1500 or less ATK from your Deck', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk', { negate: true }); shuffleDeck(g, p); } }] },
   'Blackwing - Sirocco the Dawn': { effs: [{ type: 'ign', opt: true, label: 'Pump a Blackwing',
-    cond: (g, c, p) => g.phase === 'main1' && monsOf(g, p).filter(x => faceUp(x) && isBW(x)).length >= 2,
+    cond: (g, c, p) => g.phase === 'main1' && monsOf(g, p).some(x => faceUp(x) && isBW(x)),   // itself alone is fine (ruling 3)
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Which Blackwing gains the ATK?', monsOf(g, p).filter(x => faceUp(x) && isBW(x)), 1, 1, 'good'); },
-    after: (g, c, p, L) => { g.onlyAttacker[p] = L.t[0] && L.t[0].u; },
+    after: (g, c, p, L) => { const u = L.t[0] && L.t[0].u; addRule(g, (g2, a) => a.type === 'attack' && a.c && a.c.ctrl === p && a.c.u !== u, { end: g.turnNo }); },   // only the target can attack; gone if the activation is negated (ruling 8)
     res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t)) return; const add = fieldMons(g).filter(x => x !== t && faceUp(x) && isBW(x)).reduce((s, x) => s + stat(g, x, 'atk'), 0); addMod(g, t, { atk: add, end: true }); log(g, `${name(t)} gained ${add} ATK.`); } }] },
   'Blackwing - Vayu the Emblem of Honor': { effs: [{ type: 'ign', loc: 'gy', tags: { ss: 1 }, label: 'Summon a Blackwing Synchro',
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => x !== c && isBW(x) && isMon(x) && !D(x).tu && g.p[p].extra.some(e => D(e).k === 'synchro' && isBW(e) && num(D(e).lv) === lv(x) + lv(c))),
@@ -936,13 +1438,14 @@ const SCRIPTS = {
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which card?', allField(g).filter(x => x !== c), 1, 1, 'bad'); },
       res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'Allure of Darkness': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 2,
-    res: function* (g, c, p, L) { draw(g, p, 2); const darks = g.p[p].hand.filter(x => isMon(x) && attr(x) === 'DARK'); if (darks.length) { const [x] = yield* pick(g, p, 'Banish a DARK from your hand', darks, 1, 1, 'cost'); move(g, x, 'ban', { reason: 'effect' }); log(g, `${PN(g, p)} banished ${name(x)}.`); } else { const h = g.p[p].hand.slice(); for (const x of h) move(g, x, 'gy', { reason: 'effect' }); log(g, `${PN(g, p)} had no DARK and sent the whole hand to the GY.`); } } }] },
+    res: function* (g, c, p, L) { draw(g, p, 2); const darks = g.p[p].hand.filter(x => isMon(x) && attr(x) === 'DARK'); if (darks.length) { const [x] = yield* pick(g, p, 'Banish a DARK from your hand', darks, 1, 1, 'cost'); if (move(g, x, 'ban', { reason: 'effect' })) log(g, `${PN(g, p)} banished ${name(x)}.`); else log(g, `${PN(g, p)} revealed ${name(x)}.`); } else {   // Imperial Iron Wall chained: revealed, not banished (site ruling)
+       const h = g.p[p].hand.slice(); for (const x of h) move(g, x, 'gy', { reason: 'effect' }); log(g, `${PN(g, p)} had no DARK and sent the whole hand to the GY.`); } } }] },
   'Black Whirlwind': { effs: [{ type: 'act', res: function* () {} },
     { type: 'trig', loc: 'st', when: true,
       on: (g, ev, c) => ev.type === 'summon' && ['normal', 'tribute'].includes(ev.how) && ev.p === c.ctrl && ev.cs.some(isBW),
-      res: function* (g, c, p, L) { const m = L.ev.cs[0]; const A = onField(m) ? stat(g, m, 'atk') : baseAtk(m); yield* search(g, p, x => isBW(x) && isMon(x) && baseAtk(x) < A, `Add a Blackwing with less than ${A} ATK`); } }] },
-  'Book of Moon': { effs: [{ type: 'act', cond: (g) => fieldMons(g).some(faceUp),
-    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Turn which monster face-down?', fieldMons(g).filter(faceUp), 1, 1, 'bad'); },
+      res: function* (g, c, p, L) { const m = L.ev.cs.find(isBW) || L.ev.cs[0]; if (!onField(m) || !faceUp(m)) return; const A = stat(g, m, 'atk'); yield* search(g, p, x => isBW(x) && isMon(x) && baseAtk(x) < A, `Add a Blackwing with less than ${A} ATK`); } }] },
+  'Book of Moon': { effs: [{ type: 'act', cond: (g) => fieldMons(g).some(canFaceDown),
+    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Turn which monster face-down?', fieldMons(g).filter(canFaceDown), 1, 1, 'bad'); },
     res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) setFaceDown(g, t); } }] },
   'Brain Control': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 800 && oppFaceUp(g, p).length && freeM(g, p) >= 0,
     cost: function* (g, c, p) { pay(g, p, 800); },
@@ -956,15 +1459,19 @@ const SCRIPTS = {
   'Bottomless Trap Hole': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => lastSummonOk(g, s => s.p !== p && s.cs.some(x => onField(x) && faceUp(x) && stat(g, x, 'atk') >= 1500)),
     target: function* (g, c, p, L) { L.data.cs = g.sw.cs.slice(); },
+    destroys: (g, c, p, L) => (L.data.cs || []).filter(x => onField(x) && faceUp(x) && stat(g, x, 'atk') >= 1500),
     res: function* (g, c, p, L) { destroy(g, L.data.cs.filter(x => onField(x) && faceUp(x) && stat(g, x, 'atk') >= 1500), { by: p, banish: true }); } }] },
-  'Dimensional Prison': { effs: [{ type: 'act', cond: (g, c, p) => g.aw && g.aw.a.ctrl !== p,
-    target: function* (g, c, p, L) { L.t = [g.aw.a]; },
-    res: function* (g, c, p, L) { const t = live(L)[0]; if (t) { move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${D(t).n} was banished.`); } } }] },
-  'Icarus Attack': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Winged Beast' && allField(g).filter(y => y !== c && y !== x).length >= 2),   // 2 targets left after the Tribute, face-down Winged Beasts count
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Winged Beast', monsOf(g, p).filter(x => race(x) === 'Winged Beast'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
+  'Dimensional Prison': { effs: [{ type: 'act', cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && canTarget(g, g.aw.a, { c, p }),
+    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Target the attacking monster', [g.aw.a], 1, 1, 'bad'); },
+    res: function* (g, c, p, L) { const t = live(L)[0]; if (attackingNow(g, t)) { move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${D(t).n} was banished.`); } } }] },
+  'Icarus Attack': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => tribPool(g, p, { known: true }).some(x => race(x) === 'Winged Beast' && allField(g).filter(y => y !== c && y !== x).length >= 2),   // 2 targets left after the Tribute, face-down Winged Beasts count
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Winged Beast', tribPool(g, p, { known: true }).filter(x => race(x) === 'Winged Beast'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which 2 cards?', allField(g).filter(x => x !== c), 2, 2, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
-  'Legacy of Yata-Garasu': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 1, res: function* (g, c, p) { draw(g, p, 1); } }] },
+  // the effect is chosen on activation; "draw 2" only while the opponent controls a face-up Spirit, and it still draws 2 if the Spirit leaves (site ruling)
+  'Legacy of Yata-Garasu': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= 1,
+    target: function* (g, c, p, L) { L.data.n = 1; if (oppFaceUp(g, p).some(x => /\bSpirit\b/.test(D(x).ab || '')) && g.p[p].deck.length >= 2 && (yield* choose(g, p, 'Legacy of Yata-Garasu: which effect?', ['Draw 1 card', 'Draw 2 cards (your opponent controls a Spirit)'])) === 1) L.data.n = 2; },
+    res: function* (g, c, p, L) { draw(g, p, L.data.n || 1); } }] },
   'Mirror Force': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => g.aw && g.aw.a.ctrl !== p,
     res: function* (g, c, p) { destroy(g, monsOf(g, opp(p)).filter(x => x.pos === 'atk'), { by: p }); } }] },
   'Solemn Judgment': { effs: [{ type: 'act', negSummon: true,
@@ -972,10 +1479,11 @@ const SCRIPTS = {
     cost: function* (g, c, p, L) { pay(g, p, Math.floor(g.p[p].lp / 2)); },
     target: function* (g, c, p, L) { L.data.mode = g.chain.length ? 'link' : 'summon'; L.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L) { if (L.data.mode === 'summon') { if (g.attempt) { g.attempt.negated = true; log(g, 'The summon was negated.'); } } else { L.data.L.negBy = p; negate(g, L.data.L, true); } } }] },
+  // Trap Dustshoot shows the whole hand, monsters or not (forum ruling 2)
   'Trap Dustshoot': { effs: [{ type: 'act', cond: (g, c, p) => g.p[opp(p)].hand.length >= 4,
-    res: function* (g, c, p) { const h = g.p[opp(p)].hand; log(g, `${PN(g, p)} looked at ${PN(g, opp(p))}'s hand.`); const mons = h.filter(isMon); if (!mons.length) return; const [x] = yield* pick(g, p, 'Shuffle which monster into the Deck?', mons, 1, 1, 'bad'); move(g, x, 'deck', { reason: 'effect' }); log(g, `${name(x)} was shuffled into the Deck.`); } }] },
+    res: function* (g, c, p) { const h = g.p[opp(p)].hand; log(g, `${PN(g, opp(p))}'s hand: ${h.map(x => D(x).n).join(', ')}.`); const mons = h.filter(isMon); if (!mons.length) return; const [x] = yield* pick(g, p, 'Shuffle which monster into the Deck?', mons, 1, 1, 'bad'); move(g, x, 'deck', { reason: 'effect' }); log(g, `${name(x)} was shuffled into the Deck.`); } }] },
   'Ally of Justice Catastor': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 },
-    on: (g, ev, c) => ev.type === 'dsStart' && (ev.a === c || ev.t === c) && (() => { const o = ev.a === c ? ev.t : ev.a; return o && attr(o) !== 'DARK'; })(),
+    on: (g, ev, c) => ev.type === 'dsStart' && (ev.a === c || ev.t === c) && (() => { const o = ev.a === c ? ev.t : ev.a; return o && faceUp(o) && faceUp(c) && attr(o) !== 'DARK'; })(),   // face-down at the start of the Damage Step: no effect (site rulings 1-2, archive)
     res: function* (g, c, p, L) { const o = L.ev.a === c ? L.ev.t : L.ev.a; if (o && onField(o)) destroy(g, [o], { by: p }); } }] },
   'Black Rose Dragon': { effs: [
     { type: 'trig', when: true, tags: { destroy: 1 }, label: 'Destroy all cards on the field', on: (g, ev, c) => evSummoned(ev, c, ['synchro']),
@@ -989,13 +1497,15 @@ const SCRIPTS = {
     on: (g, ev, c) => evSummoned(ev, c, ['synchro']),
     cond: (g, c, p) => fieldMons(g).some(x => x !== c && faceUp(x) && stat(g, x, 'def') < stat(g, c, 'atk')),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy up to 2 face-up monsters', fieldMons(g).filter(x => x !== c && faceUp(x) && stat(g, x, 'def') < stat(g, c, 'atk')), 1, 2, 'bad'); g.noBP[p] = true; },
-    res: function* (g, c, p, L) { destroy(g, live(L).filter(x => faceUp(x) && onField(c) && stat(g, x, 'def') < stat(g, c, 'atk')), { by: p }); } }] },
+    res: function* (g, c, p, L) { destroy(g, live(L).filter(x => faceUp(x) && onField(c) && faceUp(c) && stat(g, x, 'def') < stat(g, c, 'atk')), { by: p }); } }] },   // turned face-down: nothing (ruling 5)
   'Blackwing Armor Master': { effs: [
     { type: 'trig', when: true, on: (g, ev, c) => ev.type === 'dsEnd' && ev.a === c && ev.t && onField(ev.t), label: 'Place a Wedge Counter',
       res: function* (g, c, p, L) { const t = L.ev.t; if (t && onField(t)) { t.flags.wedge = 1; log(g, `${name(t)} got a Wedge Counter.`); } } },
-    { type: 'quick', ds: true, label: 'Remove Wedge Counters', cond: (g, c, p) => monsOf(g, opp(p)).some(x => x.flags.wedge),
-      res: function* (g, c, p) { for (const x of monsOf(g, opp(p))) if (x.flags.wedge) { x.flags.wedge = 0; addMod(g, x, { set: 0, which: 'both', end: true }); log(g, `${name(x)}'s ATK and DEF became 0.`); } } }] },
-  'Brionac, Dragon of the Ice Barrier': { effs: [{ type: 'ign', opt: true, label: 'Discard to bounce cards',
+    // ④ is an Ignition Effect; removing the counters is its cost (text, archive), so only the monsters that had them become 0
+    { type: 'ign', label: 'Remove Wedge Counters', cond: (g, c, p) => monsOf(g, opp(p)).some(x => x.flags.wedge),
+      cost: function* (g, c, p, L) { L.data.had = monsOf(g, opp(p)).filter(x => x.flags.wedge); for (const x of L.data.had) x.flags.wedge = 0; log(g, `${PN(g, p)} removed the Wedge Counters.`); },
+      res: function* (g, c, p, L) { for (const x of L.data.had) if (onField(x) && faceUp(x)) { addMod(g, x, { set: 0, which: 'both', end: true }); log(g, `${name(x)}'s ATK and DEF became 0.`); } } }] },
+  'Brionac, Dragon of the Ice Barrier': { effs: [{ type: 'ign', label: 'Discard to bounce cards',
     cond: (g, c, p) => g.p[p].hand.length > 0 && allField(g).length > 0,
     cost: function* (g, c, p, L) { const n = yield* choose(g, p, 'Discard how many cards?', [...Array(Math.min(g.p[p].hand.length, allField(g).length)).keys()].map(i => String(i + 1))); const ds = yield* pick(g, p, `Discard ${n + 1} card${n ? 's' : ''}`, g.p[p].hand, n + 1, n + 1, 'cost'); for (const x of ds) move(g, x, 'gy', { reason: 'cost' }); L.data.n = n + 1; },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, `Return ${L.data.n} card(s) to the hand`, allField(g), L.data.n, L.data.n, 'bad'); },
@@ -1007,21 +1517,23 @@ const SCRIPTS = {
     res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   'Dark End Dragon': { effs: [{ type: 'ign', opt: true, label: 'Send a monster to the GY', cond: (g, c, p) => monsOf(g, opp(p)).length > 0 && stat(g, c, 'atk') >= 500 && stat(g, c, 'def') >= 500,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Send which monster to the GY?', monsOf(g, opp(p)), 1, 1, 'bad'); },
-    res: function* (g, c, p, L) { if (!onField(c) || stat(g, c, 'atk') < 500 || stat(g, c, 'def') < 500) return; addMod(g, c, { atk: -500, def: -500 }); const t = live(L)[0]; if (t) { move(g, t, 'gy', { reason: 'effect', by: p }); log(g, `${D(t).n} was sent to the GY.`); } } }] },
+    res: function* (g, c, p, L) { if (!onField(c) || stat(g, c, 'atk') < 500 || stat(g, c, 'def') < 500) return; addMod(g, c, { atk: -500, def: -500, own: true }); const t = live(L)[0]; if (t) { move(g, t, 'gy', { reason: 'effect', by: p }); log(g, `${D(t).n} was sent to the GY.`); } } }] },
   'Goyo Guardian': { effs: [{ type: 'trig', tags: { ss: 1 }, on: (g, ev, c) => battleKill(ev, c), cond: (g, c, p, x) => freeM(g, p) >= 0 && x.ev.c.zone === 'gy',
     res: function* (g, c, p, L) { const t = L.ev.c; if (t.zone === 'gy') ss(g, p, t, 'def'); } }] },
   'Magical Android': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
     res: function* (g, c, p) { gain(g, p, 600 * monsOf(g, p).filter(x => faceUp(x) && race(x) === 'Psychic').length); } }] },
   'Stardust Dragon': { effs: [
-    { type: 'quick', label: 'Tribute to negate', speed: 2,
-      cond: (g, c, p, x) => x.top && x.top.tags && x.top.tags.destroy && !x.top.negated,
-      cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; g.stardust = g.stardust || {}; g.stardust[c.u] = g.turnNo; move(g, c, 'gy', { reason: 'cost' }); },
-      res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } },
-    { type: 'trig', loc: 'gy', tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && g.stardust && g.stardust[c.u] === g.turnNo,
+    // usable in the Damage Step (ruling 2); the End Phase summon needs the negation to have resolved (ruling 17: not after Divine Wrath)
+    // and Stardust still in the GY it went to (rulings 10, 19)
+    { type: 'quick', ds: true, label: 'Tribute to negate', speed: 2,
+      cond: (g, c, p, x) => destroysSome(g, x.top),   // only what will certainly destroy a card (rulings 6, 9)
+      cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; move(g, c, 'gy', { reason: 'cost' }); L.data.at = c.moved; },
+      res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); if (c.zone === 'gy' && c.moved === L.data.at) (g.stardust || (g.stardust = {}))[c.u] = { t: g.turnNo, at: c.moved }; } },
+    { type: 'trig', loc: 'gy', tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && g.stardust && g.stardust[c.u] && g.stardust[c.u].t === g.turnNo && g.stardust[c.u].at === c.moved,
       cond: (g, c, p) => freeM(g, p) >= 0, res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c); } }] },
   'Thought Ruler Archfiend': { effs: [
     { type: 'trig', mand: true, on: (g, ev, c) => battleKill(ev, c), res: function* (g, c, p, L) { gain(g, p, baseAtk(L.ev.c)); } },
-    { type: 'quick', label: 'Pay 1000 to negate', cond: (g, c, p, x) => spellTrapAct(x.top) && x.top.t.length === 1 && isMon(x.top.t[0]) && race(x.top.t[0]) === 'Psychic' && g.p[p].lp > 1000,
+    { type: 'quick', ds: true, label: 'Pay 1000 to negate', cond: (g, c, p, x) => spellTrapAct(x.top) && x.top.t.length === 1 && isMon(x.top.t[0]) && race(x.top.t[0]) === 'Psychic' && g.p[p].lp > 1000,
       cost: function* (g, c, p, L) { pay(g, p, 1000); L.data.L = g.chain[g.chain.length - 1]; }, res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
   /* ----- Hybrid / Dark ----- */
   'Armageddon Knight': { effs: [{ type: 'trig', when: true, on: (g, ev, c) => evSummoned(ev, c), cond: (g, c, p) => g.p[p].deck.some(x => isMon(x) && attr(x) === 'DARK'),
@@ -1031,11 +1543,14 @@ const SCRIPTS = {
     res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c, 'atk', { banishOnLeave: true }); } }] },
   'Caius the Shadow Monarch': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => evSummoned(ev, c, ['tribute']), cond: (g) => allField(g).length > 0,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Banish which card?', allField(g), 1, 1, 'bad'); },
-    res: function* (g, c, p, L) { const t = live(L)[0]; if (!t) return; const dark = isMon(t) && faceUp(t) && attr(t) === 'DARK', o = t.ctrl; move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${D(t).n} was banished.`); if (dark) damage(g, o === p ? opp(p) : o, 1000, { src: c, srcP: p }); } }] },
+    res: function* (g, c, p, L) { const t = live(L)[0]; if (!t) return; const o = t.ctrl, cond = !!t.flags.banishOnLeave; move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${D(t).n} was banished.`);
+      // a DARK Monster Card in the banished pile, a face-down one too; not a Token or one banished by its own condition (archive, Plaguespreader and Caius rulings)
+      const dark = t.zone === 'ban' && isMon(t) && D(t).k !== 'token' && attr(t) === 'DARK' && !cond; if (dark) damage(g, o === p ? opp(p) : o, 1000, { src: c, srcP: p }); } }] },
   'Card Trooper': { effs: [
     { type: 'ign', opt: true, label: 'Send 1-3 cards to the GY for ATK', cond: (g, c, p) => g.p[p].deck.length > 1,
-      cost: function* (g, c, p, L) { const n = yield* choose(g, p, 'Send how many cards from the top of your Deck?', ['1', '2', '3'].slice(0, Math.min(3, g.p[p].deck.length - 1))); L.data.n = n + 1; },
-      res: function* (g, c, p, L) { const out = mill(g, p, L.data.n); if (onField(c) && faceUp(c)) addMod(g, c, { atk: 500 * out.length, end: true }); } },
+      // sending the cards is the cost (site ruling, archive): they are sent even if the effect is negated, and are in the GY while the chain builds
+      cost: function* (g, c, p, L) { const n = yield* choose(g, p, 'Send how many cards from the top of your Deck?', ['1', '2', '3'].slice(0, Math.min(3, g.p[p].deck.length - 1))); L.data.n = mill(g, p, n + 1, { reason: 'cost' }).filter(x => x.zone === 'gy').length; },   // "for each card sent to the GY this way"
+      res: function* (g, c, p, L) { if (onField(c) && faceUp(c)) addMod(g, c, { atk: 500 * L.data.n, end: true, own: true }); } },
     { type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.to === 'gy' && ev.prevCtrl === c.owner,
       res: function* (g, c, p) { draw(g, p, 1); } }] },
   'Dark Grepher': { proc: { label: 'Special Summon (discard a Level 5+ DARK)', cond: (g, c, p) => g.p[p].hand.some(x => x !== c && isMon(x) && lv(x) >= 5 && attr(x) === 'DARK'),
@@ -1043,11 +1558,11 @@ const SCRIPTS = {
     effs: [{ type: 'ign', opt: true, label: 'Discard a DARK: send a DARK', cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && attr(x) === 'DARK') && g.p[p].deck.some(x => isMon(x) && attr(x) === 'DARK'),
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard a DARK monster', g.p[p].hand.filter(x => isMon(x) && attr(x) === 'DARK'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
       res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && attr(x) === 'DARK', 'Send a DARK monster from your Deck to the GY', 'gy'); } }] },
-  'Super-Nimble Mega Hamster': { effs: [{ type: 'trig', tags: { ss: 1 }, faceDownOk: true, on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && race(x) === 'Beast' && lv(x) <= 3),
-    res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Beast' && lv(x) <= 3); const [x] = yield* pick(g, p, 'Special Summon a Level 3 or lower Beast face-down', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'set'); shuffleDeck(g, p); } }] },
-  'Ryko, Lightsworn Hunter': { effs: [{ type: 'trig', tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
-    target: function* (g, c, p, L) { const cands = allField(g).filter(x => x !== c); if (cands.length) yield* tgt(g, p, L, 'Destroy which card?', cands, 1, 1, 'bad'); },
+  // the Flip effect activates even with no Beast left; whether to summon is chosen on resolution (rulings)
+  'Super-Nimble Mega Hamster': { effs: [{ type: 'trig', mand: true, tags: { ss: 1, ssOpt: 1 }, faceDownOk: true, on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
+    res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Beast' && lv(x) <= 3 && canSS(g, p, x)); if (!cands.length || !(yield* yn(g, p, 'Special Summon a Level 3 or lower Beast from your Deck face-down?'))) return; const [x] = yield* pick(g, p, 'Special Summon a Level 3 or lower Beast face-down', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'set'); shuffleDeck(g, p); } }] },
+  'Ryko, Lightsworn Hunter': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
+    target: function* (g, c, p, L) { const cands = allField(g).filter(x => x !== c && canTarget(g, x, L)); if (cands.length && (yield* yn(g, p, 'Ryko: target a card to destroy?'))) yield* tgt(g, p, L, 'Destroy which card?', cands, 1, 1, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); mill(g, p, 3); } }] },
   'Spirit Reaper': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.direct && ev.src === c,
     res: function* (g, c, p) { const h = g.p[opp(p)].hand; if (!h.length) return; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, opp(p))} discarded ${name(x)} at random.`); } }] },
@@ -1058,10 +1573,11 @@ const SCRIPTS = {
     res: function* (g, c, p, L) { for (const t of L.t) if (t.zone === 'ban') move(g, t, 'gy', { reason: 'effect' }); log(g, `${L.t.map(x => D(x).n).join(', ')} returned to the GY.`); } }] },
   'Dust Tornado': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => stOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which Spell/Trap?', stOf(g, opp(p)), 1, 1, 'bad'); },
-    res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); const st = g.p[p].hand.filter(isST); if (st.length && freeST(g, p) >= 0 && (yield* yn(g, p, 'Set a Spell/Trap from your hand?'))) { const [x] = yield* pick(g, p, 'Set which card?', st, 1, 1, 'good'); move(g, x, 'st', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a card.`); } } }] },
+    res: function* (g, c, p, L) { if (!destroy(g, live(L), { by: p }).length) return;   // you may Set only if this destroyed it (site and archive)
+      const st = g.p[p].hand.filter(isST); if (st.length && freeST(g, p) >= 0 && (yield* yn(g, p, 'Set a Spell/Trap from your hand?'))) { const [x] = yield* pick(g, p, 'Set which card?', st, 1, 1, 'good'); move(g, x, 'st', { ctrl: p, pos: 'set', reason: 'set' }); log(g, `${PN(g, p)} Set a card.`); } } }] },
   'Royal Oppression': { effs: [{ type: 'act', res: function* () {} },
     { type: 'quick', loc: 'st', anyPlayer: true, negSummon: true, label: 'Pay 800: negate the Special Summon',
-      cond: (g, c, p, x) => g.p[p].lp > 800 && ((!x.top && g.attempt && !['normal', 'tribute', 'flip'].includes(g.attempt.how)) || (x.top && x.top.tags && x.top.tags.ss && !x.top.negated)),
+      cond: (g, c, p, x) => g.p[p].lp > 800 && !g.chain.some(L => L.c === c && L.eff.type === 'act') && ((!x.top && g.attempt && !['normal', 'tribute', 'flip'].includes(g.attempt.how)) || (x.top && x.top.tags && x.top.tags.ss && !x.top.negated)),
       cost: function* (g, c, p, L) { pay(g, p, 800); L.data.mode = g.chain.length ? 'link' : 'summon'; L.data.L = g.chain[g.chain.length - 1]; },
       res: function* (g, c, p, L) { if (L.data.mode === 'summon') { if (g.attempt) { g.attempt.negated = true; log(g, 'The Special Summon was negated.'); } } else { L.data.L.negBy = p; negate(g, L.data.L, true); } } }] },
   'Compulsory Evacuation Device': { effs: [{ type: 'act', cond: (g) => fieldMons(g).length > 0,
@@ -1069,9 +1585,9 @@ const SCRIPTS = {
     res: function* (g, c, p, L) { const t = live(L)[0]; if (t) { move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${D(t).n} returned to the ${isExtraD(D(t)) ? 'Extra Deck' : 'hand'}.`); } } }] },
   'Torrential Tribute': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g) => !!g.sw,
     res: function* (g, c, p) { destroy(g, fieldMons(g), { by: p }); } }] },
-  'Dark Bribe': { effs: [{ type: 'act', cond: (g, c, p, x) => spellTrapAct(x.top) && x.top.p !== p,
+  'Dark Bribe': { effs: [{ type: 'act', cond: (g, c, p, x) => spellTrapAct(x.top) && x.top.p !== p && g.p[x.top.p].deck.length > 0,   // not when they can't draw (site ruling 2)
     target: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; },
-    res: function* (g, c, p, L) { const o = L.data.L.p; if (g.p[o].deck.length) draw(g, o, 1); L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
+    res: function* (g, c, p, L) { const o = L.data.L.p; draw(g, o, 1); L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
   'Battle Fader': { effs: [{ type: 'trig', loc: 'hand', tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'attack' && ev.direct && ev.p !== c.owner,
     cond: (g, c, p) => freeM(g, p) >= 0,
     res: function* (g, c, p) { if (c.zone === 'hand' && ss(g, p, c, 'def', { banishOnLeave: true })) { g.bpEnd = true; g.aw = null; log(g, 'The Battle Phase ended.'); } } }] },
@@ -1083,12 +1599,21 @@ const SCRIPTS = {
     cond: (g, c, p) => [...monsOf(g, p).filter(faceUp), ...g.p[p].gy].some(x => isMon(x) && isHERO(x)),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Return which HERO to your hand?', [...monsOf(g, p).filter(faceUp), ...g.p[p].gy].filter(x => isMon(x) && isHERO(x)), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (t && (t.zone === 'gy' || onField(t))) { move(g, t, 'hand', { reason: 'effect' }); log(g, `${D(t).n} returned to the hand.`); } } }] },
+  // the effect is declared on activation (site ruling, archive); "destroy" needs another face-up HERO then, counts them on resolution and may
+  // destroy 0; it picks on resolution, so nothing is certain to be destroyed (Starlight Road and Stardust can't answer it: site)
   'Elemental HERO Stratos': { effs: [{ type: 'trig', when: true, on: (g, ev, c) => evSummoned(ev, c) && ev.how !== 'flip',
-    res: function* (g, c, p) { const heroes = monsOf(g, p).filter(x => x !== c && faceUp(x) && isHERO(x)).length; const canD = heroes > 0 && stOnField(g).length > 0; const i = canD ? yield* choose(g, p, 'Stratos: choose an effect', ['Destroy Spells/Traps', 'Add a HERO from your Deck']) : 1;
-      if (i === 0) { const ts = yield* pick(g, p, `Destroy up to ${heroes} Spell/Trap card(s)`, stOnField(g), 1, heroes, 'bad'); destroy(g, ts, { by: p }); } else yield* search(g, p, x => isMon(x) && isHERO(x), 'Add a HERO from your Deck'); } }] },
+    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && isHERO(x)) || g.p[p].deck.some(x => isMon(x) && isHERO(x)),
+    destroys: () => [],
+    target: function* (g, c, p, L) { const canD = monsOf(g, p).some(x => x !== c && faceUp(x) && isHERO(x)), canS = g.p[p].deck.some(x => isMon(x) && isHERO(x));
+      L.data.mode = canD && canS ? yield* choose(g, p, 'Stratos: choose an effect', ['Destroy Spells/Traps', 'Add a HERO from your Deck']) : canD ? 0 : 1; log(g, `Stratos: ${L.data.mode ? 'add a HERO' : 'destroy Spells/Traps'}.`); },
+    res: function* (g, c, p, L) { if (L.data.mode === 0) { const heroes = monsOf(g, p).filter(x => x !== c && faceUp(x) && isHERO(x)).length; const st = stOnField(g); if (!heroes || !st.length) return; const ts = yield* pick(g, p, `Destroy up to ${heroes} Spell/Trap card(s)`, st, 0, Math.min(heroes, st.length), 'bad'); if (ts.length) destroy(g, ts, { by: p }); }
+      else yield* search(g, p, x => isMon(x) && isHERO(x), 'Add a HERO from your Deck'); } }] },
   'Evil HERO Infernal Prodigy': { proc: { cond: (g, c, p) => monsOf(g, p).length === 0, label: 'Special Summon (you control no monsters)' },
-    effs: [{ type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.prodigy === g.turnNo, res: function* (g, c, p) { draw(g, p, 1); } },
-      { type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => { if (ev.type === 'summon' && ev.how === 'tribute' && ev.tribs && ev.tribs.includes(c) && ev.cs.some(isHERO)) c.flags.prodigy = g.turnNo; return false; }, res: function* () {} }] },
+    // ② draws in the End Phase if it was Tributed for a HERO's Tribute Summon this turn and is in the GY or banished: banished when Tributed
+    // (Macro Cosmos) or later (Soul Release) still draws; back in the GY from banished, or anywhere else, doesn't (site rulings 2, 3)
+    effs: [{ type: 'trig', loc: 'any', mand: true, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.prodigy === g.turnNo && (c.zone === 'gy' || c.zone === 'ban'), res: function* (g, c, p) { draw(g, p, 1); } },
+      { type: 'trig', loc: 'any', mand: true, on: (g, ev, c) => { if (ev.type === 'summon' && ev.how === 'tribute' && ev.tribs && ev.tribs.includes(c) && ev.cs.some(isHERO) && (c.zone === 'gy' || c.zone === 'ban')) c.flags.prodigy = g.turnNo;
+        else if (ev.type === 'move' && ev.c === c && c.flags.prodigy && !(ev.from === 'gy' && ev.to === 'ban')) c.flags.prodigy = 0; return false; }, res: function* () {} }] },
   'Gorz the Emissary of Darkness': { effs: [{ type: 'trig', loc: 'hand', when: true, tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'damage' && ev.p === c.owner && ev.srcP === 1 - c.owner,
     cond: (g, c, p) => fieldOf(g, p).length === 0,
@@ -1096,65 +1621,77 @@ const SCRIPTS = {
       if (ev.battle) { if (freeM(g, p) >= 0) { const t = mk(g, 'tok-gorz', p); t.zone = 'tok'; t.flags.tokAtk = ev.n; move(g, t, 'm', { ctrl: p, pos: 'atk', reason: 'summon' }); t.flags.tokAtk = ev.n; t.flags.tokDef = ev.n; addMod(g, t, { set: ev.n, which: 'def' }); log(g, `${PN(g, p)} Special Summoned an Emissary of Darkness Token with ${ev.n} ATK.`); } }
       else damage(g, opp(p), ev.n, { src: c, srcP: p }); } }] },
   'Junk Synchron': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, on: (g, ev, c) => evSummoned(ev, c, ['normal']),
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && lv(x) <= 2),
-    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon a Level 2 or lower monster from your GY', g.p[p].gy.filter(x => isMon(x) && lv(x) <= 2), 1, 1, 'good'); },
+    cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && lv(x) <= 2 && canSS(g, p, x)),
+    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon a Level 2 or lower monster from your GY', g.p[p].gy.filter(x => isMon(x) && lv(x) <= 2 && canSS(g, p, x)), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'def', { negate: true }); } }] },
   'Raiza the Storm Monarch': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => evSummoned(ev, c, ['tribute']), cond: g => allField(g).length > 0,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Return which card to the top of the Deck?', allField(g), 1, 1, 'bad'); },
-    res: function* (g, c, p, L) { const t = live(L)[0]; if (t) { move(g, t, 'deckTop', { reason: 'effect', by: p }); log(g, `${D(t).n} was put on top of the Deck.`); } } }] },
+    res: function* (g, c, p, L) { const t = live(L)[0]; if (t && move(g, t, 'deckTop', { reason: 'effect', by: p })) log(g, `${D(t).n} was put on top of the Deck.`); } }] },   // a chained Spell/Trap that resolved stays (site ruling 1)
   'Substitoad': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Tribute a monster: summon a Frog', cond: (g, c, p) => g.p[p].deck.some(x => isMon(x) && /Frog/.test(D(x).n)),
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a monster', monsOf(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a monster', tribPool(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && /Frog/.test(D(x).n)); const [x] = yield* pick(g, p, 'Special Summon a Frog from your Deck', cands, 1, 1, 'good'); if (x) ss(g, p, x); shuffleDeck(g, p); } }] },
   'Swap Frog': { proc: { label: 'Special Summon (discard a WATER)', cond: (g, c, p) => g.p[p].hand.some(x => x !== c && isMon(x) && attr(x) === 'WATER'),
       cost: function* (g, c, p, grp) { const [x] = yield* pick(g, p, 'Discard a WATER monster', g.p[p].hand.filter(x => x !== c && isMon(x) && attr(x) === 'WATER'), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'discard', group: grp }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } },
     effs: [{ type: 'trig', when: true, on: (g, ev, c) => evSummoned(ev, c), cond: (g, c, p) => [...g.p[p].deck, ...monsOf(g, p).filter(x => x !== c && faceUp(x))].some(x => isMon(x) && lv(x) <= 2 && attr(x) === 'WATER' && race(x) === 'Aqua'),
       res: function* (g, c, p) { const cands = [...g.p[p].deck, ...monsOf(g, p).filter(x => faceUp(x))].filter(x => isMon(x) && lv(x) <= 2 && attr(x) === 'WATER' && race(x) === 'Aqua'); const [x] = yield* pick(g, p, 'Send a Level 2 or lower WATER Aqua to the GY', cands, 1, 1, 'cost'); if (x) { const fromDeck = x.zone === 'deck'; move(g, x, 'gy', { reason: 'effect' }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); if (fromDeck) shuffleDeck(g, p); } } },
-      { type: 'ign', opt: true, label: 'Return a monster: extra Frog summon', cond: (g, c, p) => monsOf(g, p).length > 0,
-        cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Return a monster you control to the hand', monsOf(g, p), 1, 1, 'cost'); move(g, x, 'hand', { reason: 'cost' }); log(g, `${PN(g, p)} returned ${D(x).n} to the hand.`); },
+      { type: 'ign', opt: true, label: 'Return a monster: extra Frog summon', cond: (g, c, p) => monsOf(g, p).some(swapRet),
+        cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Return a monster you control to the hand', monsOf(g, p).filter(swapRet), 1, 1, 'cost'); move(g, x, 'hand', { reason: 'cost' }); log(g, `${PN(g, p)} returned ${D(x).n} to the hand.`); },
         res: function* (g, c, p) { g.frogNS[p] = true; log(g, `${PN(g, p)} can Normal Summon a Frog once more this turn.`); } }] },
-  'Treeborn Frog': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner,
+  // also when it is sent to the GY again during that same Standby Phase (site ruling 1)
+  'Treeborn Frog': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 }, oneName: true, on: (g, ev, c) => (ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner) || (ev.type === 'move' && ev.c === c && ev.to === 'gy' && g.phase === 'standby' && g.tp === c.owner),
     cond: (g, c, p) => freeM(g, p) >= 0 && stOf(g, p).length === 0 && !monsOf(g, p).some(x => faceUp(x) && D(x).n === 'Treeborn Frog'),
-    res: function* (g, c, p) { if (c.zone === 'gy' && stOf(g, p).length === 0) ss(g, p, c); } }] },
+    res: function* (g, c, p) { if (c.zone === 'gy' && stOf(g, p).length === 0 && !monsOf(g, p).some(x => faceUp(x) && D(x).n === 'Treeborn Frog')) ss(g, p, c); } }] },
   'E - Emergency Call': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.some(x => isMon(x) && /^Elemental HERO/.test(D(x).n)),
     res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && /^Elemental HERO/.test(D(x).n), 'Add an Elemental HERO'); } }] },
   'Enemy Controller': { effs: [{ type: 'act', cond: (g, c, p) => oppFaceUp(g, p).length > 0,
-    cost: function* (g, c, p, L) { const canTake = monsOf(g, p).length > 0; L.data.mode = canTake ? yield* choose(g, p, 'Enemy Controller: choose', ['Change its battle position', 'Tribute a monster and take control']) : 0;
-      if (L.data.mode === 1) { const [x] = yield* pick(g, p, 'Tribute a monster', monsOf(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); } },
+    cost: function* (g, c, p, L) { const canTake = tribPool(g, p).length > 0; L.data.mode = canTake ? yield* choose(g, p, 'Enemy Controller: choose', ['Change its battle position', 'Tribute a monster and take control']) : 0;
+      if (L.data.mode === 1) { const [x] = yield* pick(g, p, 'Tribute a monster', tribPool(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); } },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, L.data.mode ? 'Take control of which monster?' : 'Change the position of which monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
     res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t)) return; if (L.data.mode) takeControl(g, p, t, true); else { t.pos = t.pos === 'atk' ? 'def' : 'atk'; log(g, `${name(t)} changed to ${t.pos === 'atk' ? 'Attack' : 'Defense'} Position.`); } } }] },
-  'Miracle Fusion': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].extra.some(x => fusionMats(g, p, x).length),
-    res: function* (g, c, p) { const fs = g.p[p].extra.filter(x => fusionMats(g, p, x).length); if (!fs.length) return; const [f] = yield* pick(g, p, 'Fusion Summon which Elemental HERO?', fs, 1, 1, 'good'); const cs = fusionMats(g, p, f); let mats = cs[0]; if (cs.length > 1) { const i = yield* choose(g, p, 'Banish which materials?', cs.map(m => m.map(x => D(x).n).join(' + '))); mats = cs[i]; }
-      for (const m of mats) move(g, m, 'ban', { reason: 'fusion' }); log(g, `${PN(g, p)} banished ${mats.map(x => D(x).n).join(' + ')}.`); ss(g, p, f, 'atk', { how: 'fusion' }); } }] },
-  'One for One': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => x !== c && isMon(x)) && [...g.p[p].hand, ...g.p[p].deck].some(x => isMon(x) && lv(x) === 1 && !isExtraD(D(x))),
+  /* Miracle Fusion (2026-11-27 audit): any "Elemental HERO" Fusion whose listed materials are on your field (face-down ones too) or in your
+   GY, banished on resolution (not a cost); under Kycoo only field materials (site ruling 1, archive). The generic fusionSummon reads each
+   Fusion's material line, so every E-HERO Fusion in the pool works, not only Absolute Zero and Gaia. */
+  'Miracle Fusion': { effs: [{ type: 'act', tags: { ss: 1 }, gyOpt: true, cond: (g, c, p) => canFusion(g, p, mfOpts(g, p)),
+    res: function* (g, c, p) { yield* fusionSummon(g, p, mfOpts(g, p)); } }] },
+  // a Level 1 to Summon must be left once the cost is paid (ruling 3): some monster to send that isn't the only Level 1
+  'One for One': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => { if (freeM(g, p) < 0) return false; const l1 = [...g.p[p].hand, ...g.p[p].deck].filter(x => x !== c && isMon(x) && lv(x) === 1 && !isExtraD(D(x)) && canSS(g, p, x)); return g.p[p].hand.some(x => x !== c && isMon(x) && l1.some(y => y !== x)); },
     cost: function* (g, c, p, L) { const [x] = yield* pick(g, p, 'Send a monster from your hand to the GY', g.p[p].hand.filter(x => x !== c && isMon(x)), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
-    res: function* (g, c, p) { const cands = [...g.p[p].hand, ...g.p[p].deck].filter(x => isMon(x) && lv(x) === 1 && !/Cannot be Special Summoned/i.test(D(x).ps || '')); const [x] = yield* pick(g, p, 'Special Summon a Level 1 monster from your hand or Deck', cands, 1, 1, 'good'); if (x) { const fromDeck = x.zone === 'deck'; ss(g, p, x); if (fromDeck) shuffleDeck(g, p); } } }] },
+    res: function* (g, c, p) { const cands = [...g.p[p].hand, ...g.p[p].deck].filter(x => isMon(x) && lv(x) === 1 && canSS(g, p, x)); const [x] = yield* pick(g, p, 'Special Summon a Level 1 monster from your hand or Deck', cands, 1, 1, 'good'); if (x) { const fromDeck = x.zone === 'deck'; ss(g, p, x); if (fromDeck) shuffleDeck(g, p); } } }] },
   'Soul Exchange': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, opp(p)).length > 0 && g.phase === 'main1',
-    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Tribute which of their monsters this turn?', monsOf(g, opp(p)), 1, 1, 'bad'); g.noBP[p] = true; },
-    res: function* (g, c, p, L) { const t = live(L)[0]; if (t) { g.soulEx[p] = t.u; log(g, `${PN(g, p)} can Tribute ${shown(g, t)} this turn.`); } } }] },
+    target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Tribute which of their monsters this turn?', monsOf(g, opp(p)), 1, 1, 'bad'); lockBP(g, p, L); },
+    res: function* (g, c, p, L) { const t = live(L)[0]; if (t) { g.soulEx[p] = [...(g.soulEx[p] || []), t.u]; log(g, `${PN(g, p)} can Tribute ${shown(g, t)} this turn.`); } } }] },
   'Raigeki Break': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => g.p[p].hand.length > 0 && allField(g).some(x => x !== c),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard a card', g.p[p].hand, 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which card?', allField(g).filter(x => x !== c), 1, 1, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
-  'Elemental HERO Absolute Zero': { effs: [{ type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField,
+  'Elemental HERO Absolute Zero': { effs: [{ type: 'trig', loc: 'any', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.snap && ev.snap.faceUp,   // not when it left face-down (site, archive)
     res: function* (g, c, p) { destroy(g, monsOf(g, opp(p)), { by: p }); } }] },
   'Elemental HERO Gaia': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => evSummoned(ev, c, ['fusion']), cond: (g, c, p) => oppFaceUp(g, p).length > 0,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Halve the ATK of which monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
-    res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t) || !onField(c)) return; const A = stat(g, t, 'atk'), h = A - Math.floor(A / 2); addMod(g, t, { atk: -h, end: true }); addMod(g, c, { atk: h, end: true }); log(g, `${name(t)} lost ${h} ATK and Gaia gained it.`); } }] },
-  'Armory Arm': { effs: [{ type: 'ign', opt: true, label: 'Equip to a monster', cond: (g, c, p) => fieldMons(g).some(x => x !== c && faceUp(x)) && freeST(g, p) >= 0,
+    res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t) || !onField(c) || !faceUp(c)) return; const A = stat(g, t, 'atk'), h = A - Math.floor(A / 2); addMod(g, t, { set: Math.floor(A / 2), which: 'atk', end: true }); addMod(g, c, { atk: h, end: true }); log(g, `${name(t)} lost ${h} ATK and Gaia gained it.`); } }] },
+  /* Armory Arm (2026-11-27 audit; site rulings and archive): once per turn either equip (effect 0, from the Monster Zone) or unequip and
+   Special Summon itself in Attack Position (effect 2, from the Spell/Trap Zone), one or the other; the +1000 is its own lasting effect
+   (cont.atk), on whichever player's monster it is equipped to, and it stays in your zone; your opponent takes the damage (it is still your
+   card). If the target leaves before the equip resolves, Armory Arm is destroyed. While equipped its effects are an Equip Spell's (Cold Wave). */
+  'Armory Arm': { cont: { atk: (g, s, m) => s.zone === 'st' && s.equipTo === m.u ? 1000 : 0 },
+    effs: [{ type: 'ign', opt: true, label: 'Equip to a monster', cond: (g, c, p) => c.used[2] !== g.turnNo && fieldMons(g).some(x => x !== c && faceUp(x)) && freeST(g, p) >= 0,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Equip Armory Arm to which monster?', fieldMons(g).filter(x => x !== c && faceUp(x)), 1, 1, 'good'); },
-    res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !onField(c) || freeST(g, p) < 0) return; move(g, c, 'st', { ctrl: p, pos: 'up', reason: 'equip' }); c.equipTo = t.u; log(g, `Armory Arm was equipped to ${name(t)} (+1000 ATK).`); } },
+    res: function* (g, c, p, L) { if (!onField(c)) return; const t = live(L)[0]; if (!t || !faceUp(t)) { destroy(g, [c], { by: p }); log(g, 'Armory Arm had nothing to equip to and was destroyed.'); return; } if (freeST(g, p) < 0) return; move(g, c, 'st', { ctrl: p, pos: 'up', reason: 'equip' }); c.used[0] = g.turnNo; c.equipTo = t.u; log(g, `Armory Arm was equipped to ${name(t)} (+1000 ATK).`); } },
     { type: 'trig', loc: 'st', mand: true, on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.killer && ev.killer.u === c.equipTo && ev.to === 'gy',
-      res: function* (g, c, p, L) { damage(g, L.ev.c.owner, L.ev.snap ? L.ev.snap.atk : 0, { src: c, srcP: p }); } }] },
+      res: function* (g, c, p, L) { damage(g, opp(p), L.ev.snap ? L.ev.snap.atk : 0, { src: c, srcP: p }); } },   // the ATK it had on the field, even if it left the GY (site ruling, archive)
+    { type: 'ign', loc: 'st', opt: true, tags: { ss: 1 }, label: 'Unequip and Special Summon', cond: (g, c, p) => c.used[0] !== g.turnNo && !!c.equipTo && freeM(g, p) >= 0 && canSS(g, p, c),
+      res: function* (g, c, p) { if (c.zone !== 'st' || !faceUp(c)) return; c.equipTo = null; if (ss(g, p, c, 'atk')) { c.used[2] = g.turnNo; log(g, 'Armory Arm was unequipped and Special Summoned.'); } } }] },
   'Junk Warrior': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => evSummoned(ev, c, ['synchro']),
     res: function* (g, c, p) { if (!onField(c)) return; const add = monsOf(g, p).filter(x => faceUp(x) && lv(x) <= 2).reduce((s, x) => s + stat(g, x, 'atk'), 0); addMod(g, c, { atk: add }); log(g, `Junk Warrior gained ${add} ATK.`); } }] },
   'Mist Wurm': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => evSummoned(ev, c, ['synchro']), cond: (g, c, p) => fieldOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Return up to 3 of their cards to the hand', fieldOf(g, opp(p)), 1, 3, 'bad'); },
     res: function* (g, c, p, L) { const ts = live(L); for (const t of ts) move(g, t, 'hand', { reason: 'effect', by: p }); if (ts.length) log(g, `${ts.length} card(s) returned to the hand.`); } }] },
   'Unifrog': { effs: [{ type: 'trig', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.direct && ev.src === c,
-    cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && isFrog(x)) && stOf(g, opp(p)).length > 0,
+    cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isFrog(x) && !['Unifrog', 'Frog the Jam'].includes(D(x).n)) && stOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which Spell/Trap?', stOf(g, opp(p)), 1, 1, 'bad'); },
     tags: { destroy: 1 }, res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
-  'Mobius the Frost Monarch': { effs: [{ type: 'trig', tags: { destroy: 1 }, on: (g, ev, c) => evSummoned(ev, c, ['tribute']), cond: g => stOnField(g).length > 0,
+  // a "when ... you can" effect: it misses the timing when Tribute Summoned mid-chain (Ultimate Offering: site ruling 4, archive; RULINGS_DECIDED)
+  'Mobius the Frost Monarch': { effs: [{ type: 'trig', when: true, tags: { destroy: 1 }, on: (g, ev, c) => evSummoned(ev, c, ['tribute']), cond: g => stOnField(g).length > 0,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy up to 2 Spells/Traps', stOnField(g), 1, 2, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'Tragoedia': { effs: [
@@ -1166,32 +1703,31 @@ const SCRIPTS = {
       res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) takeControl(g, p, t, false); } },
     { type: 'ign', opt: true, label: 'Copy a Level', cond: (g, c, p) => g.p[p].gy.some(isMon),
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Copy the Level of which monster in your GY?', g.p[p].gy.filter(isMon), 1, 1, 'good'); },
-      res: function* (g, c, p, L) { const t = L.t[0]; if (t && onField(c)) { c.flags.lv = lv(t); c.flags.lvUntil = true; log(g, `Tragoedia's Level became ${lv(t)}.`); } } }] },
+      res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy' && onField(c) && faceUp(c)) { c.flags.lv = lv(t); c.flags.lvUntil = true; log(g, `Tragoedia's Level became ${lv(t)}.`); } } }] },
   'Gold Sarcophagus': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length > 0,
     res: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish which card from your Deck?', g.p[p].deck, 1, 1, 'good'); if (x) { move(g, x, 'ban', { reason: 'effect' }); g.goldSarc.push({ c: x, p, n: 0 }); log(g, `${PN(g, p)} banished ${name(x)} face-up with Gold Sarcophagus.`); } shuffleDeck(g, p); } }] },
-  'Scapegoat': { effs: [{ type: 'act', cond: (g, c, p) => nFreeM(g, p) >= 4 && !g.summoned[p],
-    after: (g, c, p) => { g.noSummon[p] = true; },
-    res: function* (g, c, p) { const grp = g.group; const toks = []; for (let i = 0; i < 4; i++) { if (freeM(g, p) < 0) break; const t = mk(g, 'tok-sheep', p); t.zone = 'tok'; move(g, t, 'm', { ctrl: p, pos: 'def', reason: 'summon', group: grp }); toks.push(t); } log(g, `${PN(g, p)} Special Summoned ${toks.length} Sheep Tokens.`); const ev = emit(g, { type: 'summon', cs: toks, how: 'special', p, byEffect: true }, grp); g.sw = { cs: toks, p, how: 'special', group: ev.group }; } }] },
+  'Scapegoat': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => nFreeM(g, p) >= 4 && !g.summoned[p],
+    // "You can't Summon other monsters the turn you activate this card" (2026-11-27 audit): Normal, Flip and Special Summons, not Sets
+    // (ruling 7); from the activation on, and gone if the activation is negated but not if only its effect is (site rulings, ruling 3,
+    // ruling 5: Royal Oppression). The rule is added in `after`, so it belongs to this link (addRule).
+    after: (g, c, p) => { addRule(g, (g2, a) => ['ns', 'flip', 'ss'].includes(a.type) && a.p === p && ssSrcOf(g2, a) !== c, { end: g.turnNo }); },
+    res: function* (g, c, p) { const grp = g.group; const toks = []; for (let i = 0; i < 4; i++) { if (freeM(g, p) < 0) break; if (forbid(g, { type: 'ss', c: { id: 'tok-sheep', owner: p, flags: {}, used: {}, zone: 'tok' }, p, how: 'special', src: c })) break; const t = mk(g, 'tok-sheep', p); t.zone = 'tok'; move(g, t, 'm', { ctrl: p, pos: 'def', reason: 'summon', group: grp }); toks.push(t); } if (!toks.length) return; log(g, `${PN(g, p)} Special Summoned ${toks.length} Sheep Tokens.`); const ev = emit(g, { type: 'summon', cs: toks, how: 'special', p, byEffect: true }, grp); g.sw = { cs: toks, p, how: 'special', group: ev.group }; } }] },
   'Cold Wave': { effs: [{ type: 'act', cond: (g, c, p) => g.phase === 'main1' && g.mainStart,
     res: function* (g, c, p) { g.coldWave = { p }; log(g, 'Until their next turn, no Spells or Traps can be Set or activated.'); } }] },
   'Threatening Roar': { effs: [{ type: 'act', cond: (g, c, p) => g.tp !== p && ['standby', 'main1', 'battle', 'draw'].includes(g.phase) && !g.inDS,
     res: function* (g, c, p) { g.roar = opp(p); log(g, `${PN(g, opp(p))} can't declare an attack this turn.`); } }] },
-  'Flamvell Uruquizas': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl, res: function* (g, c) { if (onField(c)) { addMod(g, c, { atk: 300 }); log(g, 'Flamvell Uruquizas gained 300 ATK.'); } } }] },
+  'Flamvell Uruquizas': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl, res: function* (g, c) { if (onField(c)) { addMod(g, c, { atk: 300, own: true }); log(g, 'Flamvell Uruquizas gained 300 ATK.'); } } }] },
   'X-Saber Urbellum': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl && g.p[ev.p].hand.length >= 4,
     res: function* (g, c, p) { const h = g.p[opp(p)].hand; if (!h.length) return; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'deckTop', { reason: 'effect' }); log(g, `A random card from ${PN(g, opp(p))}'s hand went on top of the Deck.`); } }] },
   'Red Dragon Archfiend': { effs: [
     { type: 'trig', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'afterCalc' && ev.a === c && ev.t && ev.tWasDef,
+      destroys: (g, c, p) => monsOf(g, opp(p)).filter(x => x.pos !== 'atk'),
       res: function* (g, c, p) { destroy(g, monsOf(g, opp(p)).filter(x => x.pos !== 'atk'), { by: p }); } },
     { type: 'trig', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (onField(c) && faceUp(c)) destroy(g, monsOf(g, p).filter(x => x !== c && !x.declared), { by: p }); } }] },
+      destroys: (g, c, p) => onField(c) && faceUp(c) ? monsOf(g, p).filter(x => x !== c && !attackWent(x)) : [],
+      res: function* (g, c, p) { if (onField(c) && faceUp(c)) destroy(g, monsOf(g, p).filter(x => x !== c && !attackWent(x)), { by: p }); } }] },
 };
-function fusionMats(g, p, f) {
-  const n = D(f).n, pool = [...monsOf(g, p).filter(faceUp), ...g.p[p].gy.filter(isMon)];
-  let A, B; if (n === 'Elemental HERO Absolute Zero') { A = x => isHERO(x); B = x => attr(x) === 'WATER'; } else if (n === 'Elemental HERO Gaia') { A = x => isEHERO(x); B = x => attr(x) === 'EARTH'; } else return [];
-  if (freeM(g, p) < 0 && !monsOf(g, p).length) return [];
-  const out = []; for (const a of pool) for (const b of pool) if (a !== b && A(a) && B(b)) { if (!out.some(m => m.includes(a) && m.includes(b))) out.push([a, b]); }
-  return out.slice(0, 8);
-}
+const mfOpts = (g, p) => ({ from: forbid(g, { type: 'banish', from: 'gy', p }) ? ['m'] : ['m', 'gy'], banish: true, filter: fx => /^Elemental HERO/.test(D(fx).n) });
 SCRIPTS['Chimeratech Fortress Dragon'] = { effs: [] }; // its summon rule is in cfCombos
 // Cyber Dragon and Neos Alius: no script needed for the Best decks beyond their summon rule.
 SCRIPTS['Cyber Dragon'] = { proc: { cond: (g, c, p) => monsOf(g, p).length === 0 && monsOf(g, opp(p)).length > 0, label: 'Special Summon (only they control a monster)' } };
@@ -1208,7 +1744,10 @@ const ctr = (c, kind) => (c.ctr && c.ctr[kind]) || 0;
 function negateAttack(g) { g.attackNegated = true; }
 function endBattle(g) { g.bpEnd = true; g.aw = null; g.attackNegated = true; log(g, 'The Battle Phase ended.'); }
 /* A temporary rule: forbid(g, action) like cont.forbid; end: the turn number at whose End Phase it ends; startOf: the player whose next turn ends it */
-function addRule(g, forbidFn, o = {}) { g.rules.push({ forbid: forbidFn, end: o.end, startOf: o.startOf }); }
+/* A rule added while a card is being activated (its `after`) belongs to that chain link: if the activation is negated, the rule is
+ gone ("If this card's activation is negated, you can still summon", Scapegoat; Soul Exchange, Sirocco, Chaos Sorcerer). A negated
+ effect keeps it (Imperial Order, Royal Oppression). o.L names the link, o.L === null opts out. */
+function addRule(g, forbidFn, o = {}) { g.rules.push({ forbid: forbidFn, end: o.end, startOf: o.startOf, L: o.L !== undefined ? o.L : (!g.inEmit && g.afterL) || null }); }
 function token(g, p, t, pos = 'def', o = {}) {
   const id = 'tok-' + t.n.replace(/\s+/g, '-').toLowerCase();
   if (!DATA.has(id)) { const d = { id, n: t.n, k: 'token', a: t.a || 'EARTH', r: t.r || 'Fiend', lv: t.lv || 1, atk: String(t.atk || 0), def: String(t.def || 0) }; DATA.set(id, d); BYNAME.set(d.n, d); }
@@ -1248,11 +1787,13 @@ function assignMats(preds, pool, limit = 12) {
   rec(0, []);
   const seen = new Set(); return out.filter(m => { const k = m.map(c => c.u).sort().join(','); if (seen.has(k)) return false; seen.add(k); return true; });
 }
-function fusionPool(g, p, from) { const out = []; for (const z of from) { if (z === 'hand') out.push(...g.p[p].hand); else if (z === 'm') out.push(...monsOf(g, p).filter(faceUp)); else if (z === 'gy') out.push(...g.p[p].gy); else if (z === 'deck') out.push(...g.p[p].deck); } return out; }
-function canFusion(g, p, o = {}) { const from = o.from || ['hand', 'm']; const pool = fusionPool(g, p, from); return g.p[p].extra.some(fx => D(fx).k === 'fusion' && (!o.filter || o.filter(fx)) && fusionRecipe(fx) && assignMats(fusionRecipe(fx), pool, 1).length); }
+// face-down monsters you control can be Fusion Material (Miracle Fusion and Chimeratech site rulings, archive: "You can always use face-down monsters")
+function fusionPool(g, p, from) { const out = []; for (const z of from) { if (z === 'hand') out.push(...g.p[p].hand); else if (z === 'm') out.push(...monsOf(g, p)); else if (z === 'gy') out.push(...g.p[p].gy); else if (z === 'deck') out.push(...g.p[p].deck); } return out; }
+function canFusion(g, p, o = {}) { const from = o.from || ['hand', 'm']; const pool = fusionPool(g, p, from); return g.p[p].extra.some(fx => D(fx).k === 'fusion' && (!o.filter || o.filter(fx)) && !forbid(g, { type: 'ss', c: fx, p, how: 'fusion' }) && fusionRecipe(fx) && assignMats(fusionRecipe(fx), pool, 1).length); }
 function* fusionSummon(g, p, o = {}) {
   const from = o.from || ['hand', 'm']; const pool = fusionPool(g, p, from);
-  const fs = g.p[p].extra.filter(fx => D(fx).k === 'fusion' && (!o.filter || o.filter(fx)) && fusionRecipe(fx) && assignMats(fusionRecipe(fx), pool, 1).length);
+  // a Fusion its summoning condition keeps out (Evil HEROes need "Dark Fusion") isn't offered, so no Fusion Material is lost
+  const fs = g.p[p].extra.filter(fx => D(fx).k === 'fusion' && (!o.filter || o.filter(fx)) && !forbid(g, { type: 'ss', c: fx, p, how: 'fusion' }) && fusionRecipe(fx) && assignMats(fusionRecipe(fx), pool, 1).length);
   if (!fs.length) return null;
   const [fx] = yield* pick(g, p, 'Fusion Summon which monster?', fs, 1, 1, 'good');
   const cs = assignMats(fusionRecipe(fx), pool); let mats = cs[0];
@@ -1279,18 +1820,24 @@ function* ritualSummon(g, p, o) {
   ss(g, p, rm, 'atk', { how: 'ritual', group: grp }); return rm;
 }
 E.lib = {
+  gyBanBy, gyLock, banBlocked, gyCostBlocked,
   ask, pick, yn, choose, tgt: null, move, destroy, ss, draw, damage, gain, pay, mill, search, takeControl, setFaceDown, negate, addMod,
   equip, equippedTo, link, addCtr, ctr, negateAttack, endBattle, addRule, token, tokens, fusionSummon, canFusion, fusionRecipe, ritualSummon, canRitual,
-  stat, atk: (g, c) => stat(g, c, 'atk'), def: (g, c) => stat(g, c, 'def'), name, D, isMon, isMonD, isST, isSpell, isTrap, isExtraD, onField, faceUp, attr, race, lv, baseAtk,
+  damageMany, stat, atk: (g, c) => stat(g, c, 'atk'), def: (g, c) => stat(g, c, 'def'), name, D, isMon, isMonD, isST, isSpell, isTrap, isExtraD, onField, faceUp, attr, race, lv, baseAtk,
   monsOf, stOf, fieldOf, allField, fieldMons, freeM, freeST, nFreeM, allCards, shuffleDeck, log, PN, has, forbid, negd, num, shown, emit, beginOp,
-  winDuel, coin, dice, isBW, isFrog, isHERO, isEHERO, isGemini, evSummoned, fromFieldToGY, battleKill, oppFaceUp, stOnField, spellTrapAct, live, opp, tributeCands, synCombos,
+  canSS, canFaceDown, lockBP, bpLocked, ssCond, wouldDestroy, destroysSome, attackEach, attackingNow, canTarget, banishesFromGY, winDuel, coin, dice, isBW, isFrog, isHERO, isEHERO, isGemini, evSummoned, fromFieldToGY, battleKill, oppFaceUp, stOnField, spellTrapAct, live, opp, tributeCands, tribPool, cantBattleDestroy, synCombos,
 };
 E.lib.tgt = tgt;
+/* "Each time a Spell Card is activated" (Spell Counters): the activation resolved (not negated), and the card c was face-up on the field
+ both when it was activated and now (Skilled White Magician rulings: one Special Summoned in a chain to it gets none). Returns the activator or -1. */
+E.lib.spellCtrEv = (g, ev, c) => ev.type === 'spellResolved' && ev.sc !== c && onField(c) && faceUp(c) && (!ev.L.upAt || ev.L.upAt.includes(c.u)) ? ev.p : -1;
+E.lib.spellResolvedBy = ev => ev.type === 'spellResolved' ? ev.p : -1;
+E.lib.onDraw = f => { if (!DRAW_HOOKS.includes(f)) DRAW_HOOKS.push(f); };
 E.lib.effsOf = effsOf;   // a card's effects, copied ones included (set c.flags.copyEffs = name to copy a monster's effects)
 E.addScripts = (obj, format) => { const into = format && format !== 'edison' ? (FSCRIPTS[format] || (FSCRIPTS[format] = {})) : SCRIPTS; for (const k in obj) into[k] = obj[k]; };
 E.format = () => FMT;
 E.cards = () => CARDLIST;   // the card list E.init loaded (the computer re-inits with it plus its stand-ins)
 E.SCRIPTS = SCRIPTS;
 root.EdisonEngine = E;
-E._internal = { stat, synCombos, activatable, fieldMons, monsOf, stOf, faceUp, isMon, isST, D };
+E._internal = { dwText, stat, synCombos, activatable, fieldMons, monsOf, stOf, faceUp, isMon, isST, D };
 })(typeof window !== 'undefined' ? window : globalThis);

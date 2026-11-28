@@ -144,7 +144,6 @@ E.addScripts({
     on: (g, ev, c) => sentByBattle(ev, c),
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isSixSam(x) && lv(x) <= 3 && canSS(g, p, x)),
     res: function* (g, c, p) { yield* ssFrom(g, p, g.p[p].deck.filter(x => isSixSam(x) && lv(x) <= 3 && canSS(g, p, x)), 'Special Summon which Six Samurai from your Deck?'); } }] },
-  // PARTIAL: a monster turned face-down loses the return (setFaceDown clears its flags).
   "Shien's Spy": { effs: [{ type: 'act',
     cond: (g, c, p) => monsOf(g, p).some(faceUp) && freeM(g, opp(p)) >= 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Give control of which face-up monster?', monsOf(g, p).filter(faceUp), 1, 1, 'cost'); },
@@ -192,7 +191,7 @@ E.addScripts({
   // 1 Fiend Tuner + 1 or more non-Tuners. The 800 ATK lasts for this Battle Phase; each use gives one more attack.
   'Stygian Sergeants': { noSynchro: true, proc: synProc({ tuner: t => race(t) === 'Fiend' }),
     effs: [{ type: 'trig', label: 'Gain 800 ATK and attack again', on: (g, ev, c) => battleKill(ev, c) && ev.c.owner !== c.ctrl,
-      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: 800, end: true, f34sg: true }); c.flags.maxAttacks = c.attacks + 1; c.flags.maxAttacksTurn = g.turnNo; g.seq++;
+      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: 800, end: true, f34sg: true, own: true }); c.flags.maxAttacks = c.attacks + 1; c.flags.maxAttacksTurn = g.turnNo; g.seq++;
         log(g, 'Stygian Sergeants gained 800 ATK and can attack again.'); } },
     { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'bpEnd' && c.mods.some(m => m.f34sg)) { c.mods = c.mods.filter(m => !m.f34sg); g.seq++; } return false; } }] },
 
@@ -389,7 +388,7 @@ E.addScripts({
       t.pos = 'atk'; g.seq++; log(g, `${name(t)} was changed to Attack Position.`); emit(g, { type: 'pos', c: t, p: t.ctrl, from: wasSet ? 'set' : 'def' }); if (wasSet) emit(g, { type: 'flip', c: t, p: t.ctrl }); } }] },
   'Worm Cartaros': { effs: [flip('Add a Level 4 or lower Reptile Worm', { cond: (g, c, p) => g.p[p].deck.some(x => isWorm(x) && lv(x) <= 4),
     res: function* (g, c, p) { yield* search(g, p, x => isWorm(x) && lv(x) <= 4, 'Add which Level 4 or lower Reptile Worm monster?'); } })] },
-  'Worm Dimikles': { effs: [flip('Gain 300 ATK and DEF', { res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300, def: 300 }); g.seq++; log(g, 'Worm Dimikles gained 300 ATK and DEF.'); } } })] },
+  'Worm Dimikles': { effs: [flip('Gain 300 ATK and DEF', { res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300, def: 300, own: true }); g.seq++; log(g, 'Worm Dimikles gained 300 ATK and DEF.'); } } })] },
   'Worm Erokin': { effs: [REC, { type: 'ign', opt: true, label: 'Change a Reptile Worm to face-down Defense',
     cond: g => fieldMons(g).some(x => faceUp(x) && isWorm(x)),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Change which Reptile Worm to face-down Defense Position?', fieldMons(g).filter(x => faceUp(x) && isWorm(x)), 1, 1, 'good'); },

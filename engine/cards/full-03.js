@@ -46,12 +46,11 @@ const HAND_ONLY_SS = ['Blue-Eyes Shining Dragon'];
 const summonRules = { type: 'trig', loc: 'any', res: function* () {}, on: (g) => {
   if (!g.full03Rules) { g.full03Rules = true; addRule(g, (g2, a) => a.c && a.c.id && (((a.type === 'ns' || a.type === 'set') && NO_NS.includes(D(a.c).n)) || (a.type === 'ss' && HAND_ONLY_SS.includes(D(a.c).n) && a.c.zone !== 'hand'))); }
   return false; } };
-// Spell Counters for each Spell Card that resolves (as goat-7.js). PARTIAL: a Set Continuous, Equip or Field Spell flipped
-// to activate adds none, and a Normal Spell whose activation was negated still adds one (the engine has no resolve event).
+// Spell Counters for each Spell Card that resolves (as goat-7.js). Read from the engine's
+// spellResolved event (L.spellCtrEv): Set Spells flipped up count, a negated activation doesn't.
 const spellCounter = { type: 'trig', on: (g, ev, c) => {
-  if (ev.type !== 'move' || !isSpell(ev.c)) return false;
-  const stays = ['Continuous', 'Equip', 'Field'].includes(D(ev.c).sub);
-  if ((!stays && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule') || (stays && ev.from === 'hand' && ev.reason === 'activate')) { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
+  if (L.spellCtrEv(g, ev, c) < 0) return false;   // a Spell Card activation resolved while this card was face-up (engine event, 2026-11-27 audit)
+  { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
   return false; }, res: function* () {} };
 // A battle worked out in the card: the engine's attack() keeps its target local, so an attack redirect negates the declared
 // attack and the attacker battles the new target here (as classic-4.js Eye of Illusion). ENGINE: attack redirect.
@@ -95,7 +94,7 @@ E.addScripts({
   /* ----- B ----- */
   // Ported from goat-1.js. Edison: the banish can target itself; it can't be activated after this card declared an attack
   // this turn; the second attack comes when it destroys a monster by battle (sent to the GY or not).
-  // PARTIAL: "Must first be Special Summoned" is not tracked, so it can be revived without a proper summon first.
+  // "Must first be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere (revived only after a proper summon, c.proper).
   'Black Luster Soldier - Envoy of the Beginning': {
     proc: { label: 'Special Summon (banish a LIGHT and a DARK)',
       cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'LIGHT') && g.p[p].gy.some(x => isMon(x) && attr(x) === 'DARK'),
@@ -104,12 +103,12 @@ E.addScripts({
         const [d] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'), 1, 1, 'cost');
         for (const x of [l, d]) if (x) move(g, x, 'ban', { reason: 'cost', group: grp });
         log(g, `${PN(g, p)} banished ${[l, d].filter(Boolean).map(name).join(' and ')}.`); } },
-    self: { cantAttack: (g, c) => c.flags.envoyBanish === g.turnNo },
+    self: { cantAttack: (g, c) => c.flags.envoyBanish === g.turnNo && !(c.flags.envoyL && c.flags.envoyL.actNegated) },   // no lock if the activation was negated (Divine Wrath)
     effs: [summonRules,
       { type: 'ign', label: 'Banish a monster',
         cond: (g, c, p) => c.flags.envoyUsed !== g.turnNo && !c.declared && fieldMons(g).length > 0,
         target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish which monster?', fieldMons(g).filter(x => x !== c).length ? fieldMons(g).filter(x => x !== c) : [c], 1, 1, 'bad'); },
-        after: (g, c) => { c.flags.envoyUsed = g.turnNo; c.flags.envoyBanish = g.turnNo; },
+        after: (g, c, p, L2) => { c.flags.envoyUsed = g.turnNo; c.flags.envoyBanish = g.turnNo; c.flags.envoyL = L2; },
         res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && t.zone === 'm') { const n = D(t).n; move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${n} was banished.`); } } },
       { type: 'trig', label: 'Attack again', on: (g, ev, c) => killedByBattle(ev, c) && !!g.battle && g.battle.a === c,
         cond: (g, c) => c.flags.envoyUsed !== g.turnNo && onField(c),
@@ -120,8 +119,9 @@ E.addScripts({
   // (the engine has no chain event); a Set Continuous or Equip card chained at Chain Link 2+ is missed.
   'Blast Asmodian': { effs: [{ type: 'trig', mand: true, label: '500 damage',
     on: (g, ev, c) => {
-      const L1 = g.chain[0]; if (!L1 || ev.type !== 'move' || !isST(ev.c)) return false;
-      const chained = (ev.from === 'hand' && ev.reason === 'activate' && g.chain.length >= 1) || (ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule' && g.chain.length >= 1);
+      const ch = ev.chainEnd ? ev.chainLinks : g.chain, L1 = ch[0]; if (!L1 || ev.type !== 'move' || !isST(ev.c)) return false;
+      // a resolved Spell/Trap leaves when the whole chain is done (engine): ev.link says which link it was
+      const chained = (ev.from === 'hand' && ev.reason === 'activate' && g.chain.length >= 1) || (ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule' && (ev.chainEnd ? ev.link >= 2 : g.chain.length >= 1));
       if (!chained) return false;
       L1.asmo = L1.asmo || []; if (L1.asmo.includes(c.u)) return false; L1.asmo.push(c.u); return true; },
     res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
@@ -195,7 +195,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && !!g.eclipse && g.eclipse.some(e => e.u === c.u && e.turn === g.turnNo),
       res: function* (g, c) { const e = g.eclipse.find(x => x.u === c.u && x.turn === g.turnNo); g.eclipse = g.eclipse.filter(x => x !== e); if (!e) return;
         const o = opp(e.p), ms = monsOf(g, o).filter(m => m.pos === 'set'); for (const m of ms) flipUp(g, m, 'def');
-        if (ms.length) { log(g, `${PN(g, o)} draws ${ms.length} card${ms.length > 1 ? 's' : ''} (Book of Eclipse).`); draw(g, o, Math.min(ms.length, g.p[o].deck.length)); } } }] },
+        if (ms.length) { log(g, `${PN(g, o)} draws ${ms.length} card${ms.length > 1 ? 's' : ''} (Book of Eclipse).`); draw(g, o, ms.length); } } }] },
   // Ported from classic-4.js.
   'Book of Secret Arts': { cont: eqBonus(300, 300), effs: [equipAct(m => race(m) === 'Spellcaster', 'Equip to which face-up Spellcaster?')] },
   // Ported from goat-2.js (Edison: into Attack Position).
@@ -354,7 +354,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'attack' && ev.t === c,
       cond: (g, c, p) => g.p[p].deck.length > 0,
       cost: function* (g, c, p, L2) { L2.data.n = yield* blockerMill(g, p); },
-      res: function* (g, c, p, L2) { if (onField(c) && faceUp(c) && L2.data.n) { addMod(g, c, { def: 500 * L2.data.n, end: true }); log(g, `Card Blocker gained ${500 * L2.data.n} DEF.`); } } }] },
+      res: function* (g, c, p, L2) { if (onField(c) && faceUp(c) && L2.data.n) { addMod(g, c, { def: 500 * L2.data.n, end: true, own: true }); log(g, `Card Blocker gained ${500 * L2.data.n} DEF.`); } } }] },
   'Card Ejector': { effs: [{ type: 'ign', opt: true, label: 'Banish a card from their GY', cond: (g, c, p) => g.p[opp(p)].gy.length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish which card from their GY?', g.p[opp(p)].gy, 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${D(t).n} was banished.`); } } }] },
@@ -397,7 +397,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       cond: (g, c, p) => g.p[p].hand.length > 0,
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Shuffle which card from your hand into the Deck?', g.p[p].hand, 1, 1, 'cost'); if (x) { move(g, x, 'deck', { reason: 'cost' }); log(g, `${PN(g, p)} shuffled a card into the Deck.`); } },
-      res: function* (g, c, p) { if (g.p[p].deck.length) draw(g, p, 1); } }] },
+      res: function* (g, c, p) { draw(g, p, 1); } }] },
   'Castle Gate': { self: { noBattleDestroy: true },
     effs: [{ type: 'ign', opt: true, label: 'Tribute: damage equal to its ATK',
       cond: (g, c, p) => c.pos === 'atk' && monsOf(g, p).some(x => x !== c && lv(x) <= 5),

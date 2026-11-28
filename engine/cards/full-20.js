@@ -77,7 +77,7 @@ E.addScripts({
     cost: function* (g, c, p, L2) { const xs = yield* pick(g, p, 'Banish up to 2 Spell Cards from your GY', g.p[p].gy.filter(isSpell), 1, 2, 'cost');
       for (const x of xs) move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${xs.map(name).join(' and ')}.`); L2.data.n = xs.length; },
     res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c) || !L2.data.n) return; const n = 300 * L2.data.n;
-      addMod(g, c, { atk: n, f20gus: g.turnNo + 1 }); log(g, `${name(c)} gained ${n} ATK until the end of the next turn.`); } }] },
+      addMod(g, c, { atk: n, f20gus: g.turnNo + 1, own: true }); log(g, `${name(c)} gained ${n} ATK until the end of the next turn.`); } }] },
   // Until the End Phase, read from the Charm in the GY. PARTIAL: it ends early if the Charm leaves the GY.
   'Charm of Shabti': {
     cont: { loc: 'gy', grant: (g, src, c, flag) => flag === 'noBattleDestroy' && !!g.f20shabti && g.f20shabti[c.ctrl] === g.turnNo && onField(c) && /^Gravekeeper's/.test(name(c)) },
@@ -252,7 +252,7 @@ E.addScripts({
       return false; } }] },
   'Desertapir': { effs: [{ type: 'trig', mand: true, faceDownOk: true, label: 'Flip a monster face-down', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
     cond: g => fieldMons(g).some(m => faceUp(m) && !named(m, 'Desertapir')),
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Flip which face-up monster face-down?', fieldMons(g).filter(m => faceUp(m) && !named(m, 'Desertapir')), 1, 1, 'bad'); },
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Flip which face-up monster face-down?', fieldMons(g).filter(m => L.canFaceDown(m) && !named(m, 'Desertapir')), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) setFaceDown(g, t); } }] },
   // Whose effect sent it: the move's `by` when set, else an effect during the opponent's turn.
   // PARTIAL: an opponent's Quick Effect on your own turn that sends it with no "by" is missed.
@@ -271,7 +271,7 @@ E.addScripts({
   'Diffusion Wave-Motion': { effs: [{ type: 'trig', loc: 'any', res: function* () {}, on: (g, ev) => {
       if (ev.type === 'move' && ev.battle && ev.destroyed && ev.killer && ev.killer.flags && ev.killer.flags.f20dwm === g.turnNo) { const x = ev.c; addRule(g, (g2, a) => a.type === 'activate' && a.c === x, { end: g.turnNo }); }
       return false; } },
-    { type: 'act', cond: (g, c, p) => g.phase === 'main1' && !g.noBP[p] && g.p[p].lp > 1000 && monsOf(g, opp(p)).length > 0 && monsOf(g, p).some(m => faceUp(m) && race(m) === 'Spellcaster' && lv(m) >= 7),
+    { type: 'act', cond: (g, c, p) => g.phase === 'main1' && !E.lib.bpLocked(g, p) && g.p[p].lp > 1000 && monsOf(g, opp(p)).length > 0 && monsOf(g, p).some(m => faceUp(m) && race(m) === 'Spellcaster' && lv(m) >= 7),
       cost: function* (g, c, p) { pay(g, p, 1000); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Level 7 or higher Spellcaster attacks every monster?', monsOf(g, p).filter(m => faceUp(m) && race(m) === 'Spellcaster' && lv(m) >= 7), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; g.onlyAttacker[p] = t.u; t.flags.maxAttacks = Math.max(1, monsOf(g, opp(p)).length); t.flags.maxAttacksTurn = g.turnNo; t.flags.f20dwm = g.turnNo; g.seq++;

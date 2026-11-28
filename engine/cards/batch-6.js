@@ -104,7 +104,7 @@ E.addScripts({
       const sum = mats.reduce((s, x) => s + baseAtk(x), 0), grp = g.group;
       for (const m of mats) move(g, m, 'ban', { reason: 'fusion', group: grp });
       log(g, `${PN(g, p)} banished ${mats.map(x => D(x).n).join(' + ')}.`);
-      if (D(fx).n === 'Evil HERO Dark Gaia') fx.flags.baseAtk = sum;
+      if (D(fx).n === 'Evil HERO Dark Gaia') { fx.flags.baseAtk = sum; fx.flags.ownBaseAtk = true; }
       fx.flags.darkFusion = true;
       ss(g, p, fx, 'atk', { how: 'fusion', group: grp });
     } }] },
@@ -130,7 +130,7 @@ E.addScripts({
   'Multiple Piece Golem': { mats: [x => D(x).n === 'Big Piece Golem', x => D(x).n === 'Medium Piece Golem'],
     effs: [
       { type: 'trig', mand: true, on: (g, ev, c) => { if (evSummoned(ev, c, ['fusion'])) c.flags.mats = g.events.filter(e => e.type === 'move' && e.reason === 'fusion' && e.group === ev.group).map(e => e.c); return false; }, res: function* () {} },
-      { type: 'trig', label: 'Return to the Extra Deck', on: (g, ev, c) => ev.type === 'dsEnd' && (ev.a === c || ev.t === c),
+      { type: 'trig', label: 'Return to the Extra Deck', tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'dsEnd' && (ev.a === c || ev.t === c),
         res: function* (g, c, p) {
           if (!onField(c)) return; const mats = c.flags.mats || [];
           move(g, c, 'extra', { reason: 'effect' }); log(g, `${D(c).n} returned to the Extra Deck.`);
@@ -387,7 +387,7 @@ E.addScripts({
 
   /* ===== Neo-Spacian ===== */
   'Cross Porter': { effs: [
-    { type: 'ign', label: 'Send a monster: summon a Neo-Spacian', cond: (g, c, p) => monsOf(g, p).length > 0,
+    { type: 'ign', tags: { ss: 1 }, label: 'Send a monster: summon a Neo-Spacian', cond: (g, c, p) => monsOf(g, p).length > 0,
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Send which monster you control to the GY?', monsOf(g, p), 1, 1, 'cost'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || t.ctrl !== p) return; move(g, t, 'gy', { reason: 'effect', by: p, cpSelf: t === c }); log(g, `${D(t).n} was sent to the GY.`);
         if (t.zone !== 'gy') return; const ns = g.p[p].hand.filter(isNS); if (ns.length && freeM(g, p) >= 0) { const [x] = yield* pick(g, p, 'Special Summon which Neo-Spacian from your hand?', ns, 1, 1, 'good'); if (x) ss(g, p, x); } } },

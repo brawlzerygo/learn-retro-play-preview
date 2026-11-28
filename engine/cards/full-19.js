@@ -51,10 +51,7 @@ const spiritReturn = { type: 'trig', mand: true, label: 'Return to the hand',
 const noSSFromGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src };
 // "This card can attack all monsters your opponent controls once each" (goat-1.js's Asura Priest): it may attack directly
 // only if it hasn't attacked a monster this turn
-function hitThisTurn(g, c) { return new Set(g.events.filter(e => e.type === 'attack' && e.a === c && e.turn === g.turnNo && e.t).map(e => e.t.u)); }
-const attackAll = {
-  maxAttacks: (g, c) => { const hit = hitThisTurn(g, c); const rest = monsOf(g, opp(c.ctrl)).filter(m => !hit.has(m.u)).length; return c.attacks + (rest || (c.attacks ? 0 : 1)); },
-  attackOk: (g, c, t) => !hitThisTurn(g, c).has(t.u) };
+const attackAll = L.attackEach;   // the engine's "attack each monster once" (no attacks after a direct one)
 // Summon locks: one duel-long rule, installed by the first event any of these cards sees (a trig that never fires).
 // A Normal Spell is face-up on the field while it resolves (A Deal with Dark Ruler).
 const resolving = (g, p, n) => stOf(g, p).some(x => faceUp(x) && named(x, n));
@@ -211,9 +208,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { const ev = L2.ev, k = ev.killer; const who = ev.battle && k ? (onField(k) ? k.ctrl : k.owner) : ev.by != null ? ev.by : opp(ev.prevCtrl);
         damage(g, who, 400 * ev.snap.flags.f19bl, { src: c, srcP: ev.prevCtrl }); } }] },
   // Port of goat-3.js. ENGINE: no banish-instead replacement in move(), so cards that reach the GY are moved on to banishment.
-  'Banisher of the Light': { effs: [{ type: 'trig', res: noop, on: (g, ev, c) => {
-    if (ev.type === 'move' && ev.to === 'gy' && ev.c !== c && ev.c.zone === 'gy' && onField(c) && faceUp(c)) { move(g, ev.c, 'ban', { reason: 'rule', noLater: true }); log(g, `${name(ev.c)} was banished instead.`); }
-    return false; } }] },
+  'Banisher of the Light': { cont: { gyBan: 'all' } },   // a replacement in move(): the card never reaches the GY (2026-11-28 audit)
   'Banner of Courage': { cont: { atk: (g, src, m) => m.ctrl === src.ctrl && g.phase === 'battle' && g.tp === src.ctrl ? 200 : 0 }, effs: [{ type: 'act', res: noop }] },
   'Bark of Dark Ruler': { effs: [{ type: 'act', ds: true,
     cond: (g, c, p) => { if (!g.inDS || !g.battle || !g.battle.t) return false; const { a, t } = g.battle; const mine = [a, t].find(x => x.ctrl === p), foe = [a, t].find(x => x.ctrl !== p);
@@ -269,7 +264,7 @@ E.addScripts({
   'Berserk Dragon': { self: attackAll,
     effs: [lockInstall,
       { type: 'trig', mand: true, label: 'Lose 500 ATK', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
-        res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: -500 }); log(g, 'Berserk Dragon lost 500 ATK.'); } } }] },
+        res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: -500, own: true }); log(g, 'Berserk Dragon lost 500 ATK.'); } } }] },
   // Port of goat-3.js. ENGINE: no forced attacks ("must attack if able" isn't enforced).
   'Berserk Gorilla': { effs: [{ type: 'trig', mand: true, label: 'Destroy itself (face-up Defense Position)',
     on: (g, ev, c) => faceUp(c) && c.pos === 'def',

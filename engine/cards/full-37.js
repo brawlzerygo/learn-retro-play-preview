@@ -344,7 +344,7 @@ E.addScripts({
       cond: (g, c, p) => g.p[p].gy.some(x => isTrap(x) && D(x).sub === 'Normal'),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish which Normal Trap from your GY?', g.p[p].gy.filter(x => isTrap(x) && D(x).sub === 'Normal'), 1, 1, 'cost'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (!t || t.zone !== 'gy') return; move(g, t, 'ban', { reason: 'effect' }); log(g, `${D(t).n} was banished.`);
-        if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, f37disk: true }); log(g, `${name(c)} gained 500 ATK.`); } } },
+        if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, f37disk: true, own: true }); log(g, `${name(c)} gained 500 ATK.`); } } },
     { type: 'trig', res: noop, on: (g, ev, c) => { if (c.mods.some(m => m.f37disk && g.turnNo >= m.turn + 2)) c.mods = c.mods.filter(m => !(m.f37disk && g.turnNo >= m.turn + 2)); return false; } }] },
   'Doctor Cranium': { effs: [{ type: 'trig', loc: 'gy', when: true, label: 'Pay 800: add a Psychic',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
@@ -406,7 +406,7 @@ E.addScripts({
   'Dreadscythe Harvester': { effs: [{ type: 'ign', label: 'Tribute an Insect: +500 ATK',
     cond: (g, c, p) => monsOf(g, p).some(m => m !== c && race(m) === 'Insect'),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute which Insect?', monsOf(g, p).filter(m => m !== c && race(m) === 'Insect'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true, own: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
   'Drill Synchron': { cont: { grant: (g, src, c, flag) => flag === 'piercing' && c.ctrl === src.ctrl && faceUp(c) && race(c) === 'Warrior' },
     effs: [{ type: 'trig', opt: true, when: true, label: 'Draw 1 card',
       on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.srcP === c.ctrl && ev.p !== c.ctrl && !!g.battle && g.battle.a === ev.src && !!g.battle.t && g.battle.t.pos !== 'atk' && race(ev.src) === 'Warrior',

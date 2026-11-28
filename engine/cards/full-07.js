@@ -260,7 +260,7 @@ const S = {
     effs: [{ type: 'ign', opt: true, label: 'Banish a Neos or HERO: +500 ATK',
       cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && (isNeosX(x) || isNSp(x) || isHEROm(x))),
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish a Neos, Neo-Spacian or HERO monster from your GY', g.p[p].gy.filter(x => isMon(x) && (isNeosX(x) || isNSp(x) || isHEROm(x))), 1, 1, 'cost'); move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${nm(x)}.`); },
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500 }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, own: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
   'Elemental HERO Electrum': {
     self: { atk: (g, c) => { const mine = attrsOf(g, c); return 300 * monsOf(g, opp(c.ctrl)).filter(x => faceUp(x) && attrsOf(g, x).some(a => mine.includes(a))).length; } },
     effs: [{ type: 'trig', mand: true, label: 'Shuffle all banished cards into the Deck', on: (g, ev, c) => evSummoned(ev, c, ['fusion']),
@@ -283,7 +283,7 @@ const S = {
   'Elemental HERO Knospe': {
     self: { noAttackTarget: (g, c) => monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && isEHERO(x)), directAttack: (g, c) => monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && isEHERO(x)) },
     effs: [{ type: 'trig', mand: true, label: '+100 ATK, -100 DEF', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl,
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 100, def: -100 }); log(g, 'Elemental HERO Knospe gained 100 ATK and lost 100 DEF.'); } } }] },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 100, def: -100, own: true }); log(g, 'Elemental HERO Knospe gained 100 ATK and lost 100 DEF.'); } } }] },
   'Elemental HERO Lady Heat': { effs: [{ type: 'trig', mand: true, label: '200 damage per Elemental HERO',
     on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
     res: function* (g, c, p) { const n = monsOf(g, p).filter(x => faceUp(x) && isEHERO(x)).length; if (n) damage(g, opp(p), 200 * n, { src: c, srcP: p }); } }] },
@@ -317,7 +317,7 @@ const S = {
   // PARTIAL: "can only target Poison Rose for attacks" can't stop attacks on face-down monsters (noAttackTarget is checked on face-up ones).
   'Elemental HERO Poison Rose': { cont: { grant: (g, src, c, flag) => flag === 'noAttackTarget' && c !== src && c.ctrl === src.ctrl && nm(c) !== 'Elemental HERO Poison Rose' },
     effs: [{ type: 'trig', mand: true, label: '+200 ATK, -200 DEF', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl,
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200, def: -200 }); log(g, 'Elemental HERO Poison Rose gained 200 ATK and lost 200 DEF.'); } } }] },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200, def: -200, own: true }); log(g, 'Elemental HERO Poison Rose gained 200 ATK and lost 200 DEF.'); } } }] },
   // PARTIAL / ENGINE: monsters can only attack in Attack Position, so its Defense Position attack is a Battle Phase effect that deals
   // half its ATK as direct battle damage and uses up its attack (no attack declaration, so attack-declaration cards can't answer it).
   'Elemental HERO Rampart Blaster': {

@@ -57,9 +57,7 @@ const spiritReturn = { type: 'trig', mand: true, label: 'Return to the hand',
     return ev.type === 'phase' && ev.ph === 'end' && c.flags.spirit === g.turnNo; },
   res: function* (g, c) { if (onField(c) && faceUp(c)) { move(g, c, 'hand', { reason: 'effect' }); log(g, `${name(c)} returned to the hand.`); } } };
 // Necrovalley's GY lock for Gravekeeper's Priestess (same reach as batch-4.js Necrovalley)
-const NV_BANISH = ['Dark Armed Dragon', 'Blackwing - Vayu the Emblem of Honor', 'D.D. Crow', 'Book of Life'];
 const noFieldSpell = g => ![g.p[0].fz, g.p[1].fz].some(f => f && faceUp(f));
-const hasChief = (g, p) => monsOf(g, p).some(x => faceUp(x) && named(x, "Gravekeeper's Chief") && !negd(g, x));
 // Gravekeeper's Watcher: does this card's effect make its activator discard? Read from the text, costs stripped
 // (the part before a ";", "by discarding", "discard ... to activate"), and "your opponent discards" doesn't count.
 const makesDiscard = c => { let t = txt(c).replace(/[^.:;]*;/g, ' ').replace(/by discarding[^.,]*/gi, ' ').replace(/discard[^.;]*to activate[^.]*/gi, ' ').replace(/(?:your )?opponent discards?[^.]*/gi, ' '); return /\bdiscards?\b/i.test(t); };
@@ -136,8 +134,7 @@ E.addScripts({
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, "Tribute 1 Gravekeeper's monster", monsOf(g, p).filter(x => x !== c && isGK(x) && !named(x, "Gravekeeper's Cannonholder")), 1, 1, 'cost');
       if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { damage(g, opp(p), 700, { src: c, srcP: p }); } }] },
-  // PARTIAL: "Your GY is unaffected by Necrovalley" only reaches Gravekeeper's Priestess here; batch-4.js Necrovalley
-  // doesn't look for it (ENGINE: no "unaffected by" hook for Field Spells). Only 1 face-up Chief: Flip Summons aren't stopped.
+  // "Your GY is unaffected by Necrovalley": batch-4.js nvRules reads a face-up Chief. Only 1 face-up Chief: Flip Summons aren't stopped.
   "Gravekeeper's Chief": { effs: [lockInstall, { type: 'trig', when: true, tags: { ss: 1 }, label: "Special Summon a Gravekeeper's from your GY",
     on: (g, ev, c) => evSummoned(ev, c, ['tribute']),
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(isGK),
@@ -149,12 +146,11 @@ E.addScripts({
     cond: (g, c, p) => monsOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which monster to the hand?', monsOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t) { move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${D(t).n} returned to the hand.`); } } }] },
-  // While no Field Spell is face-up: Necrovalley's +500 for Gravekeeper's and its GY banish lock (the same reach as
-  // batch-4.js Necrovalley). PARTIAL: effects that target the GY aren't negated (no hook, same as Necrovalley).
+  // While no Field Spell is face-up: Necrovalley's +500 for Gravekeeper's and all of its GY rules (batch-4.js nvRules).
   "Gravekeeper's Priestess": { cont: {
     atk: (g, src, c) => isGK(c) ? 200 + (noFieldSpell(g) ? 500 : 0) : 0,
     def: (g, src, c) => isGK(c) ? 200 + (noFieldSpell(g) ? 500 : 0) : 0,
-    forbid: (g, src, a) => noFieldSpell(g) && !(a.p != null && hasChief(g, a.p)) && ((a.type === 'banish' && a.from === 'gy') || (a.type === 'activate' && a.c && NV_BANISH.includes(D(a.c).n))) } },
+    ...L.nvRules(g => noFieldSpell(g)) } },   // batch-4.js Necrovalley's rules, Gravekeeper's Chief included (2026-11-28 audit)
   // The mill is done as the attack is declared (a cost of the attack, no chain link).
   "Gravekeeper's Servant": { effs: [{ type: 'act', res: function* (g) { g.seq++; } },
     { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'attack' && ev.a && ev.a.ctrl !== c.ctrl && faceUp(c)) mill(g, ev.a.ctrl, 1); return false; }, res: noop }],
@@ -239,7 +235,7 @@ E.addScripts({
   'Guardian Baou': { effs: [lockInstall,
     { type: 'trig', on: (g, ev, c) => { if (ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c && isMon(ev.c)) { const v = ev.c; addRule(g, (g2, a) => a.type === 'activate' && a.c === v, { end: g.turnNo }); } return false; }, res: noop },
     { type: 'trig', mand: true, label: 'Gain 1000 ATK', on: (g, ev, c) => battleKill(ev, c) && ev.c.owner !== c.ctrl,
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000 }); log(g, 'Guardian Baou gained 1000 ATK.'); } } }] },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, own: true }); log(g, 'Guardian Baou gained 1000 ATK.'); } } }] },
   'Guardian Ceal': { effs: [lockInstall, { type: 'ign', tags: { destroy: 1 }, label: 'Send an Equip: destroy a monster',
     cond: (g, c, p) => equipsOn(g, c).some(x => x.ctrl === p) && monsOf(g, opp(p)).length > 0,
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which Equip Spell to the GY?', equipsOn(g, c).filter(x => x.ctrl === p), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
@@ -252,7 +248,7 @@ E.addScripts({
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which Equip Spell to the GY?', equipsOn(g, c), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish up to 3 monsters from their GY', g.p[opp(p)].gy.filter(isMon), 1, 3, 'bad'); },
       res: function* (g, c, p, L2) { const xs = L2.t.filter(x => x.zone === 'gy'); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (!xs.length) return;
-        log(g, `${xs.map(x => D(x).n).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished.`); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500 * xs.length, end: true }); log(g, `Guardian Eatos gained ${500 * xs.length} ATK.`); } } }] },
+        log(g, `${xs.map(x => D(x).n).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished.`); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500 * xs.length, end: true, own: true }); log(g, `Guardian Eatos gained ${500 * xs.length} ATK.`); } } }] },
   // PARTIAL: "appropriate" is read from the Equip's text ("Equip only to a ... monster"); Premature Burial and Snatch Steal style cards are left out.
   'Guardian Elma': (() => {
     const BAD = ['Premature Burial', 'Snatch Steal', 'Mist Body', 'Creature Swap'];
@@ -330,7 +326,7 @@ E.addScripts({
           for (const m of monsOf(g, p)) if (faceUp(m) && isEH(m) && D(m).k === 'normal') m.flags.f09flash = g.turnNo; g.seq++; log(g, 'Elemental HERO Normal Monsters can attack directly this turn.'); } }] }; })(),
   'Hero Heart': { effs: [{ type: 'act', cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isEHERO(x)),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Target which Elemental HERO?', monsOf(g, p).filter(x => faceUp(x) && isEHERO(x)), 1, 1, 'good'); },
-    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const a = stat(g, t, 'atk'); addMod(g, t, { atk: -(a - Math.floor(a / 2)), end: true }); t.flags.extraAttack = g.turnNo; log(g, `${name(t)}'s ATK was halved and it can attack twice this turn.`); } }] },
+    res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const a = stat(g, t, 'atk'); addMod(g, t, { set: Math.floor(a / 2), which: 'atk', end: true }); t.flags.extraAttack = g.turnNo; log(g, `${name(t)}'s ATK was halved and it can attack twice this turn.`); } }] },
   'Hero Kid': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Special Summon Hero Kids from your Deck', on: (g, ev, c) => evSummoned(ev, c, SPECIAL),
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => named(x, 'Hero Kid')),
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => named(x, 'Hero Kid')); const n = Math.min(cs.length, 5 - monsOf(g, p).length); if (n <= 0) return;

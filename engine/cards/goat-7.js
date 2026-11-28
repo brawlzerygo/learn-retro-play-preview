@@ -17,11 +17,10 @@ const tx = c => D(c).ps || D(c).tx || '';
 const toDef = (g, c) => { if (!onField(c) || c.zone !== 'm' || c.pos !== 'atk') return; c.pos = 'def'; g.seq++; log(g, `${name(c)} was changed to Defense Position.`); emit(g, { type: 'pos', c, p: c.ctrl, from: 'atk' }); };
 // Spell Counters as each Spell resolves. Normal and Quick-Play Spells count as they leave the Spell/Trap Zone after resolving;
 // Continuous, Equip and Field Spells, which stay, count as they are activated from the hand.
-// PARTIAL: a Set Continuous, Equip or Field Spell flipped up to activate adds no counter (the engine has no event for that flip).
+// Read from the engine's spellResolved event (L.spellCtrEv): Set Spells flipped up count, a negated activation doesn't.
 const spellCounter = max => ({ type: 'trig', on: (g, ev, c) => {
-  if (ev.type !== 'move' || !isSpell(ev.c) || ctr(c, 'spell') >= max) return false;
-  const stays = ['Continuous', 'Equip', 'Field'].includes(D(ev.c).sub);
-  if ((!stays && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule') || (stays && ev.from === 'hand' && ev.reason === 'activate')) { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
+  if (L.spellCtrEv(g, ev, c) < 0 || ctr(c, 'spell') >= max) return false;   // a Spell Card activation resolved while this card was face-up (engine event, 2026-11-27 audit)
+  { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
   return false; }, res: function* () {} });
 // Chain Energy: the face-up copies on the field.
 const chainEnergies = g => allField(g).filter(x => faceUp(x) && named(x, 'Chain Energy'));
@@ -75,7 +74,7 @@ E.addScripts({
     effs: [{ type: 'act', res: function* () {} },
       { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'move' && ev.c !== c && ev.from === 'hand' && ['m', 'st', 'fz'].includes(ev.to)) pay(g, ev.c.ctrl, 500); return false; }, res: function* () {} }] },
   'Heavy Slump': { effs: [{ type: 'act', cond: (g, c, p) => g.p[opp(p)].hand.length >= 8,
-    res: function* (g, c, p) { const o = opp(p); const h = g.p[o].hand.slice(); if (h.length < 8) return; for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, o); log(g, `${PN(g, o)} shuffled ${h.length} cards into the Deck.`); draw(g, o, Math.min(2, g.p[o].deck.length)); } }] },
+    res: function* (g, c, p) { const o = opp(p); const h = g.p[o].hand.slice(); if (h.length < 8) return; for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, o); log(g, `${PN(g, o)} shuffled ${h.length} cards into the Deck.`); draw(g, o, 2); } }] },
 
   /* ----- Stein Gate Turbo, Last Turn ----- */
   'Cannon Soldier': { effs: [{ type: 'ign', label: 'Tribute: 500 damage', cond: (g, c, p) => monsOf(g, p).length > 0,

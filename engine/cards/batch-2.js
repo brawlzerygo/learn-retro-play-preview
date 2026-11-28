@@ -30,7 +30,7 @@ const lsEnd = n => ({ type: 'trig', mand: true, on: (g, ev, c) => endPhaseOf(ev,
   res: function* (g, c, p) { if (onField(c) && faceUp(c)) lsMill(g, p, n, c); } });
 /* Synchro Summons with material restrictions the engine's reader doesn't know. */
 function synMats(g, p, sx, o) {
-  const mons = monsOf(g, p).filter(c => faceUp(c) && !(D(c).n === 'Blackwing - Vayu the Emblem of Honor' && !c.flags.negated));
+  const mons = monsOf(g, p).filter(c => faceUp(c) && !(D(c).n === 'Blackwing - Vayu the Emblem of Honor' && !negd(g, c)));
   const Lv = lv(sx), out = [], n = mons.length;
   for (let mask = 1; mask < (1 << n) && out.length < 12; mask++) {
     const mats = mons.filter((_, i) => mask & (1 << i)); if (mats.length < 2) continue;
@@ -246,9 +246,10 @@ E.addScripts({
     res: function* (g, c, p) { const call = yield* choose(g, p, 'Call the coin toss', ['Heads', 'Tails']); const coin = g.rnd() < 0.5 ? 0 : 1; log(g, `The coin landed on ${coin ? 'Tails' : 'Heads'}.`);
       if (call === coin) { const gy = g.p[opp(p)].gy.slice(); for (const x of gy) move(g, x, 'ban', { reason: 'effect', by: p }); log(g, `${gy.length} card(s) in ${PN(g, opp(p))}'s GY were banished.`); }
       else mill(g, p, g.p[opp(p)].gy.length); } }] },
-  'Magic Cylinder': { effs: [{ type: 'act', cond: (g, c, p) => g.aw && g.aw.a.ctrl !== p,
-    target: function* (g, c, p, L) { L.t = [g.aw.a]; },
-    res: function* (g, c, p, L) { negateAttack(g); const t = live(L)[0]; if (t && faceUp(t)) damage(g, t.ctrl, atk(g, t), { src: c, srcP: p }); } }] },
+  // targets the attacker; nothing happens once it is no longer attacking (Scrubbed Raid ended the Battle Phase, Book of Moon: archive)
+  'Magic Cylinder': { effs: [{ type: 'act', cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && E.lib.canTarget(g, g.aw.a, { c, p }),
+    target: function* (g, c, p, L) { yield* E.lib.tgt(g, p, L, 'Target the attacking monster', [g.aw.a], 1, 1, 'bad'); },
+    res: function* (g, c, p, L) { const t = live(L)[0]; if (!E.lib.attackingNow(g, t)) return; negateAttack(g); damage(g, t.ctrl, atk(g, t), { src: c, srcP: p }); } }] },
   'Skill Drain': {
     // ENGINE: a monster effect already on the chain when Skill Drain starts applying still resolves (resolveChain only checks c.flags.negated).
     cont: { negates: (g, src, c) => !trapStunned(g) && isMon(c) && c.zone === 'm' && faceUp(c) },
@@ -278,7 +279,7 @@ E.addScripts({
   'Chaos Sorcerer': { proc: { label: 'Special Summon (banish a LIGHT and a DARK)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'LIGHT') && g.p[p].gy.some(x => isMon(x) && attr(x) === 'DARK'),
       cost: function* (g, c, p, grp) { const [l] = yield* pick(g, p, 'Banish a LIGHT monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT'), 1, 1, 'cost'); const [d] = yield* pick(g, p, 'Banish a DARK monster from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'), 1, 1, 'cost'); for (const x of [l, d]) if (x) move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${[l, d].filter(Boolean).map(name).join(' and ')}.`); } },
     effs: [{ type: 'ign', opt: true, label: 'Banish a face-up monster',
-      cond: (g, c, p) => fieldMons(g).some(x => x !== c && faceUp(x)) || fieldMons(g).some(faceUp),
+      cond: (g, c, p) => !c.declared && fieldMons(g).some(faceUp),   // not after it declared an attack this turn, negated or replayed (rulings 3, 5, 6)
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Banish which face-up monster?', fieldMons(g).filter(faceUp), 1, 1, 'bad'); },
       after: (g, c) => { addRule(g, (g2, a) => a.type === 'attack' && a.c === c, { end: g.turnNo }); },
       res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) { const n = D(t).n; move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${n} was banished.`); } } }] },
@@ -293,7 +294,7 @@ E.addScripts({
         res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'Iron Chain Dragon': { effs: [
     { type: 'ign', label: 'Banish Iron Chains for ATK', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && /Iron Chain/.test(D(x).n)),
-      res: function* (g, c, p) { const xs = g.p[p].gy.filter(x => isMon(x) && /Iron Chain/.test(D(x).n)); for (const x of xs) move(g, x, 'ban', { reason: 'effect' }); if (!xs.length) return; log(g, `${PN(g, p)} banished ${xs.length} Iron Chain monster(s).`); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200 * xs.length, end: true }); log(g, `Iron Chain Dragon gained ${200 * xs.length} ATK.`); } } },
+      res: function* (g, c, p) { const xs = g.p[p].gy.filter(x => isMon(x) && /Iron Chain/.test(D(x).n)); for (const x of xs) move(g, x, 'ban', { reason: 'effect' }); if (!xs.length) return; log(g, `${PN(g, p)} banished ${xs.length} Iron Chain monster(s).`); if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200 * xs.length, end: true, own: true }); log(g, `Iron Chain Dragon gained ${200 * xs.length} ATK.`); } } },
     { type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl,
       res: function* (g, c, p) { mill(g, opp(p), 3); } }] },
   'Thunder King Rai-Oh': {
@@ -370,7 +371,8 @@ E.addScripts({
 
 /* Helpers used above (hoisted functions). */
 function unionOn(g, m) { return allField(g).some(x => x.equipTo === m.u && isMon(x)); }
-function fortressPool(g, c, p) { return g.p[p].hand.filter(x => isMachine(x)); }
+// under Macro Cosmos / Dimensional Fissure the copy being summoned can't be discarded for its own cost: it would be banished (ruling 11)
+function fortressPool(g, c, p) { return g.p[p].hand.filter(x => isMachine(x) && !(x === c && L.gyBanBy(g, x, { reason: 'cost' }))); }
 function fortressOk(g, c, p) { if (freeM(g, p) < 0) return false; return fortressPool(g, c, p).reduce((s, x) => s + lv(x), 0) >= 8; }
 function* fortressCost(g, c, p) {
   let sum = 0; const out = [];

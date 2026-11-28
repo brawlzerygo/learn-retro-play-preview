@@ -26,8 +26,38 @@ const isEffectMon = c => isMon(c) && !['normal', 'token'].includes(D(c).k) && D(
 const fieldSpells = g => [g.p[0].fz, g.p[1].fz].filter(Boolean);
 // Necrovalley face-up on the field
 const nvUp = g => fieldSpells(g).some(x => faceUp(x) && nm(x) === 'Necrovalley');
-// Necrovalley's 3rd effect: an effect that targets a card in the GY is negated at resolution
-function nvNeg(g, c) { if (!nvUp(g)) return false; log(g, `Necrovalley negated ${name(c)}'s effect.`); return true; }
+// Necrovalley's GY negation is the engine's now (nvRules below, resolveChain's gyNegate): a link whose targets are in a GY never reaches
+// its res. The old per-card checks stay as no-ops so a script reads the same.
+function nvNeg() { return false; }
+/* Necrovalley, read from each format's own text (2026-11-28 audit), shared with Gravekeeper's Priestess (on: when it applies):
+ Edison: "② Neither player can banish cards from GY(s). ③ Negate any card effect that targets a card(s) in the GY." Only targeting effects
+   are negated (site ruling: Red-Eyes Darkness Metal Dragon, Goyo Guardian, Treeborn Frog aren't; archive: Gigaplant, Rekindling, Ancient
+   Sacred Wyvern aren't), plus the four the site names though they don't target (Question, Fiber Jar, Penguin Knight, Agido).
+ Goat: "Cards in the Graveyard cannot be banished. Negate any card effect that would move a card in the Graveyard to a different place."
+   Targeting effects are negated, and any effect's move of a card out of a GY doesn't happen; not costs, and not a card's own effect from
+   the GY or what is sent to it (Sinister Serpent, Sangan, Mystic Tomato: archive).
+ Both: summon procedures that banish from the GY can't be done (Chaos Sorcerer, BLS - Envoy, Dark Necrofear: archive and site rb).
+ Gravekeeper's Chief: "Your GY is unaffected by Necrovalley". */
+const NV_ALSO = ['Question', 'Fiber Jar', 'Penguin Knight', 'Agido'];
+const NV_TGT_RE = /\b(?:target|select)s?\b[^.;:]{0,80}?\b(?:in|from) (?:your|either|any|their|your opponent's|the|each)?\s*(?:player's |players' )?(?:Graveyards?|GYs?)\b/i;
+const nvTargetsGY = (c, eff) => !!eff.target && /gy/.test(String(eff.target)) && NV_TGT_RE.test(D(c).ps || D(c).tx || '');
+// a card whose own text puts it out of Necrovalley's reach (Rite of Spirit: "unaffected by Necrovalley"; Gravekeeper's Stele: "can't be
+// negated by the effect of Necrovalley")
+const nvImmune = c => !!c && /(?:unaffected by|(?:can't|cannot) be negated by(?: the effect of)?) "?Necrovalley/i.test(D(c).ps || D(c).tx || '');
+const nvSafe = (g, q) => q != null && monsOf(g, q).some(x => faceUp(x) && nm(x) === "Gravekeeper's Chief" && !negd(g, x));
+L.nvRules = (on = () => true) => ({
+  forbid: (g, src, a) => on(g, src) && (((a.type === 'banish' && a.from === 'gy') && !(a.c && nvSafe(g, a.c.owner)))
+    // Goat: an effect that targets the GY can't even be activated (archive: "neither player may activate Book of Life"; Netrep: it "will
+    // negate and prevent the activation of any effects that target the Graveyard"); read from the text and the script's target step
+    || (E.format() === 'goat' && a.type === 'activate' && !!a.c && !!a.eff && !nvImmune(a.c) && !nvSafe(g, a.p) && nvTargetsGY(a.c, a.eff))
+    || (a.type === 'activate' && GY_BANISH(a) && !nvSafe(g, a.p))
+    || (a.type === 'ss' && a.proc && !!a.c && L.banishesFromGY(a.c, 'proc') && !nvSafe(g, a.p))),
+  gyNegate: (g, src, Lk) => on(g, src) && !nvImmune(Lk.c) && ((Lk.tGY || []).some(x => !nvSafe(g, x.owner)) || (E.format() !== 'goat' && NV_ALSO.includes(nm(Lk.c)))),
+  // only a card that was already in the GY when the effect was activated, and not the card whose arrival set the effect off (Winged Sage
+  // Falcos, Mystical Knight of Jackal: the monster they destroyed goes to the Deck, archive)
+  gyHold: (g, src, c, to, o) => { const R = g.resolvingL; return E.format() === 'goat' && on(g, src) && !!R && R.c !== c && !nvImmune(R.c) && o.reason !== 'cost' && !nvSafe(g, c.owner)
+    && !!R.gyAt && R.gyAt.has(c.u) && !(R.ev && (R.ev.c === c || (R.ev.cs && R.ev.cs.includes(c)))); },
+});
 // Imperial Iron Wall / Necrovalley: can cards be banished (from the GY)?
 const noBanish = (g, from) => forbid(g, { type: 'banish', from });
 const aCount = g => fieldMons(g).concat(stOnField(g)).reduce((s, x) => s + ctr(x, 'A'), 0);
@@ -94,8 +124,7 @@ const SC = n => E.SCRIPTS[n];
 const effIs = (a, n, i) => nm(a.c) === n && SC(n) && SC(n).effs && SC(n).effs[i] === a.eff;
 const BANISHERS = ['Dark Armed Dragon', 'Allure of Darkness', 'Bottomless Trap Hole', 'Dimensional Prison', 'Blackwing - Vayu the Emblem of Honor',
   'Miracle Fusion', 'Gold Sarcophagus', 'Cyber Valley', 'Nobleman of Extermination', 'Macro Cosmos', 'D.D. Crow', 'Nobleman of Crossout', 'Book of Life'];
-const GY_BANISH = a => ['Dark Armed Dragon', 'Blackwing - Vayu the Emblem of Honor', 'D.D. Crow', 'Book of Life'].includes(nm(a.c)) || effIs(a, 'Black Rose Dragon', 1);
-const GY_TARGET = a => effIs(a, 'Tragoedia', 2);
+const GY_BANISH = a => !!a.c && !!a.eff && L.banishesFromGY(a.c, a.eff);   // read from the card's text (engine), not a list of names
 
 E.addScripts({
   /* ----- Diva FLIP ----- */
@@ -117,7 +146,7 @@ E.addScripts({
         move(g, c, 'ban', { reason: 'effect' }); move(g, h, 'ban', { reason: 'effect' }); log(g, `${PN(g, p)} banished Cyber Valley and ${name(h)}.`);
         if (t && t.zone === 'gy') { move(g, t, 'deckTop', { reason: 'effect' }); log(g, `${D(t).n} was put on top of the Deck.`); } } }] },
   // PARTIAL: the negation is optional here (the card says it is mandatory); the engine has no mandatory Quick Effects.
-  // PARTIAL: "Cannot be Special Summoned" is enforced while it is in the GY only (hand and Deck summons are not blocked).
+  // "Cannot be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere (hand and Deck too).
   'Doomcaliber Knight': {
     cont: { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src },
     effs: [{ type: 'quick', ds: true, label: 'Tribute: negate a monster effect', tags: { destroy: 1 },
@@ -186,8 +215,8 @@ E.addScripts({
         g.p[p].hand.some(x => canNS(x) && nsOk(g, p, x)),
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c, p) { yield* effectNS(g, p, g.p[p].hand.filter(x => canNS(x) && nsOk(g, p, x)), { setOk: true }); } }] },
-  // PARTIAL: blocks banishing by this batch's cards and the activation of the known banishing cards (list above).
-  // ENGINE: move(..., 'ban') does not check forbid({type:'banish'}), so triggers like Caius still banish.
+  // Every banish checks this forbid in move() (2026-11-28 audit: Caius, Allure of Darkness and Nobleman of Crossout with it chained);
+  // activations of the known banishing cards are blocked while it applies (site ruling; list above).
   'Imperial Iron Wall': { effs: [{ type: 'act', res: function* (g) { touch(g); } }],
     cont: { forbid: (g, src, a) => a.type === 'banish' || (a.type === 'activate' && (BANISHERS.includes(nm(a.c)) || effIs(a, 'Black Rose Dragon', 1))) } },
   'Scrap-Iron Scarecrow': { effs: [{ type: 'act', cond: (g, c, p) => g.aw && g.aw.a.ctrl !== p,
@@ -219,11 +248,10 @@ E.addScripts({
   "Gravekeeper's Stele": { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].gy.filter(x => isMon(x) && isGK(x)).length >= 2,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, "Add which 2 Gravekeeper's monsters to your hand?", g.p[p].gy.filter(x => isMon(x) && isGK(x)), 2, 2, 'good'); },
     res: function* (g, c, p, L) { const ts = L.t.filter(x => x.zone === 'gy'); for (const t of ts) move(g, t, 'hand', { reason: 'effect' }); if (ts.length) log(g, `${PN(g, p)} added ${ts.map(x => D(x).n).join(', ')} to the hand.`); } }] },
-  // PARTIAL: effects that target the GY are negated for this batch's cards (checked at resolution); for other cards only the
-  // activation of known GY-banishing / GY-targeting Ignition effects is blocked. ENGINE: a generic "negate if it targets the GY" hook.
+  // Necrovalley: nvRules above (the engine negates targeting links at resolution and stops the banishes in move()).
   'Necrovalley': { effs: [{ type: 'act', res: function* (g) { touch(g); } }],
     cont: { atk: (g, src, c) => isGK(c) ? 500 : 0, def: (g, src, c) => isGK(c) ? 500 : 0,
-      forbid: (g, src, a) => (a.type === 'banish' && a.from === 'gy') || (a.type === 'activate' && (GY_BANISH(a) || GY_TARGET(a))) } },
+      ...L.nvRules() } },
   'Royal Tribute': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].fz && faceUp(g.p[p].fz) && nm(g.p[p].fz) === 'Necrovalley',
     res: function* (g, c, p) { for (const q of [p, opp(p)]) { const ms = g.p[q].hand.filter(isMon); for (const x of ms) move(g, x, 'gy', { reason: 'discard' }); log(g, ms.length ? `${PN(g, q)} discarded ${ms.map(x => D(x).n).join(', ')}.` : `${PN(g, q)} had no monsters in hand.`); } } }] },
   'Rite of Spirit': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(x => isMon(x) && isGK(x)),
@@ -276,7 +304,7 @@ E.addScripts({
   'Black Garden': { effs: [{ type: 'act', res: function* (g) { touch(g); } },
     { type: 'trig', loc: 'fz', mand: true,
       on: (g, ev, c) => ev.type === 'summon' && !ev.byGarden && !g.gardenSS && ev.how !== 'flip' && ev.how !== 'gemini' && faceUp(c),
-      res: function* (g, c, p, L) { const cs = L.ev.cs.filter(onField); for (const m of cs) if (faceUp(m)) { const A = atk(g, m); addMod(g, m, { atk: -(A - Math.floor(A / 2)) }); log(g, `${name(m)}'s ATK was halved.`); }
+      res: function* (g, c, p, L) { const cs = L.ev.cs.filter(onField); for (const m of cs) if (faceUp(m)) { const A = atk(g, m); addMod(g, m, { set: Math.floor(A / 2), which: 'atk' }); log(g, `${name(m)}'s ATK was halved.`); }
         if (cs.length) { const to = opp(cs[0].ctrl); const t = token(g, to, { n: 'Rose Token', a: 'DARK', r: 'Plant', lv: 2, atk: 800, def: 800 }, 'atk'); if (t) { log(g, `${PN(g, p)} Special Summoned a Rose Token to ${PN(g, to)}'s field.`); emit(g, { type: 'summon', cs: [t], how: 'special', p, byEffect: true, byGarden: true }); } } } },
     { type: 'ign', loc: 'fz', tags: { ss: 1, destroy: 1 }, label: 'Destroy Plants: revive a monster',
       cond: (g, c, p) => { const s = fieldMons(g).filter(x => faceUp(x) && race(x) === 'Plant').reduce((a, x) => a + atk(g, x), 0); return g.p[p].gy.some(x => isMon(x) && baseAtk(x) === s); },

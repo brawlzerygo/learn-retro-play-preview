@@ -77,7 +77,7 @@ function counterNegs(g, ev, owner) {
   ev.f46 = ev.f46 || {};
   if (!ev.f46[owner]) {
     const ks = [];
-    for (const L2 of g.chain) if (L2.negated && L2.negBy === owner && L2.p !== owner && !L2.f46seen) {
+    for (const L2 of (ev.chainEnd ? ev.chainLinks : g.chain)) if (L2.negated && L2.negBy === owner && L2.p !== owner && !L2.f46seen) {   // resolved cards leave at the chain's end (engine)
       L2.f46seen = true;
       if (L2.cardAct && isSpell(L2.c)) ks.push('spell'); else if (L2.cardAct && isTrap(L2.c)) ks.push('trap'); else if (isMon(L2.c) && L2.eff.type !== 'act') ks.push('monster');
     }
@@ -163,7 +163,7 @@ E.addScripts({
   'Vanguard of the Dragon': { effs: [
     { type: 'ign', label: 'Send a Dragon: +300 ATK', cond: (g, c, p) => g.p[p].hand.some(x => isMon(x) && race(x) === 'Dragon'),
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send a Dragon monster from your hand to the GY', g.p[p].hand.filter(x => isMon(x) && race(x) === 'Dragon'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300 }); log(g, `${name(c)} gained 300 ATK.`); } } },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300, own: true }); log(g, `${name(c)} gained 300 ATK.`); } } },
     { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon a Dragon Normal Monster',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to === 'gy' && ev.prevCtrl === c.owner && !ev.battle && ev.reason !== 'cost' && ev.by != null && ev.by !== c.owner,
       cond: (g, c, p) => freeM(g, p) >= 0 && allCards(g, 'gy').some(x => D(x).k === 'normal' && race(x) === 'Dragon'),
@@ -274,7 +274,7 @@ E.addScripts({
         const i = yield* choose(g, p, 'Victory Viper XX03: activate which effect?', opts); L2.data.mode = opts[i];
         if (L2.data.mode.startsWith('Destroy')) { yield* tgt(g, p, L2, 'Destroy which face-up Spell/Trap?', sts, 1, 1, 'bad'); L2.tags = { destroy: 1 }; } },
       res: function* (g, c, p, L2) { const m = L2.data.mode || '';
-        if (m.startsWith('This')) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 400 }); log(g, `${name(c)} gained 400 ATK.`); } }
+        if (m.startsWith('This')) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 400, own: true }); log(g, `${name(c)} gained 400 ATK.`); } }
         else if (m.startsWith('Destroy')) destroy(g, live(L2), { by: p, src: c });
         else if (onField(c) && faceUp(c)) { const tk = token(g, p, { n: 'Option Token', a: attr(c), r: race(c), lv: lv(c), atk: 0, def: 0 }, 'atk'); if (tk) { tk.flags.f46opt = c.u; g.seq++; log(g, `${PN(g, p)} Special Summoned an Option Token.`); emit(g, { type: 'summon', cs: [tk], how: 'special', p, byEffect: true }); } } } },
       { type: 'trig', loc: 'any', mand: true, label: 'Remove the Option Tokens',

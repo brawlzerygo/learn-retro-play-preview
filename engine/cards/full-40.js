@@ -84,10 +84,11 @@ const chain3 = { type: 'trig', mand: true,
   on: (g, ev, c) => {
     const R = g.resolvingL; let top = null, k = 0;
     if (R && R.link) { top = R; k = R.link; }
-    else if (g.chain.length && ev.type === 'move' && ev.reason === 'rule' && ev.from === 'st' && ev.to === 'gy' && isST(ev.c)) { k = g.chain.length + 1; top = { link: k, c: ev.c }; }
+    else if ((g.chain.length || ev.chainEnd) && ev.type === 'move' && ev.reason === 'rule' && ev.from === 'st' && ev.to === 'gy' && isST(ev.c)) { k = ev.chainEnd ? ev.chainLinks.length : g.chain.length + 1; top = ev.chainEnd ? ev.chainLinks[k - 1] : { link: k, c: ev.c }; }
     if (!top) return false;
-    const base = g.chain[0] || R; if (!base) return false; const rec = base.f40c || (base.f40c = { max: 0, names: [], fired: {} });
-    for (const x of [...g.chain, top]) if (x.link && !rec.names[x.link]) rec.names[x.link] = D(x.c).n;
+    const ch = ev.chainEnd ? ev.chainLinks : g.chain;   // resolved Spells/Traps leave when the whole chain is done (engine)
+    const base = ch[0] || R; if (!base) return false; const rec = base.f40c || (base.f40c = { max: 0, names: [], fired: {} });
+    for (const x of [...ch, top]) if (x.link && !rec.names[x.link]) rec.names[x.link] = D(x.c).n;
     rec.max = Math.max(rec.max, k);
     if (rec.max < 3 || rec.fired[c.u]) return false;
     const ns = rec.names.filter(Boolean); if (new Set(ns).size !== ns.length) return false;
@@ -246,6 +247,7 @@ E.addScripts({
         const xs = g.p[p].hand.filter(isTrap); const n = Math.min(xs.length, g.p[p].st.filter(z => !z).length); if (!n) return;
         const pk = yield* pick(g, p, 'Which Traps from your hand can be activated during this attack?', xs, 1, n, 'good');
         for (const x of pk) { if (freeST(g, p) < 0) break; move(g, x, 'st', { ctrl: p, pos: 'set', reason: 'effect', by: p }); x.turnIn = g.turnNo - 1; x.flags.f40jet = true; }
+        if (g.aw) g.aw.reopen = true;   // the readied Traps can still answer this attack (the engine closes the attack's moment after a chain)
         log(g, `${PN(g, p)} readied ${pk.length} Trap Card${pk.length > 1 ? 's' : ''} from the hand.`); } },
     { type: 'trig', loc: 'any', res: noop, on: (g) => {
       if (g.aw || g.chain.length) return false;
@@ -276,7 +278,7 @@ E.addScripts({
 
   /* ----- K ----- */
   'Kahkki, Guerilla of Dark World': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy a monster',
-    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ev.reason === 'discard' && !ruleDiscard(g, ev),
+    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ev.reason === 'discard' && !ev.asCost && !ruleDiscard(g, ev),
     cond: g => fieldMons(g).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which monster?', fieldMons(g), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p, src: c }); } }] },
@@ -451,7 +453,7 @@ E.addScripts({
       addRule(g, (g2, a) => a.type === 'attack' && a.c && a.c.ctrl === p && a.c.u !== keep && race(a.c) === 'Spellcaster', { end: g.turnNo }); } }] },
   'Magna Drago': { effs: [{ type: 'trig', mand: true, label: 'Gain 200 ATK',
     on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl,
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200 }); log(g, `${name(c)} gained 200 ATK.`); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200, own: true }); log(g, `${name(c)} gained 200 ATK.`); } } }] },
   'Magna-Slash Dragon': { effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Send a Continuous Spell: destroy a Spell/Trap',
     cond: (g, c, p) => g.p[p].st.some(x => x && faceUp(x) && isSpell(x) && D(x).sub === 'Continuous') && stOf(g, opp(p)).length > 0,
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which face-up Continuous Spell to the GY?', g.p[p].st.filter(x => x && faceUp(x) && isSpell(x) && D(x).sub === 'Continuous'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },

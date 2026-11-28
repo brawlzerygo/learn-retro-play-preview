@@ -224,7 +224,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || t.zone !== 'm') return; move(g, t, 'deck', { reason: 'effect', by: p });
       const h = g.p[p].hand.slice(); for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, p);
       log(g, `${PN(g, p)} shuffled ${D(t).n} and ${h.length} card${h.length === 1 ? '' : 's'} from the hand into the Deck.`);
-      if (h.length) draw(g, p, Math.min(h.length, g.p[p].deck.length) || h.length); } }] },
+      if (h.length) draw(g, p, h.length); } }] },
   'Multiply': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && name(m) === 'Kuriboh'),
     cost: function* (g, c, p) { const [m] = yield* pick(g, p, 'Tribute which Kuriboh?', monsOf(g, p).filter(m => faceUp(m) && name(m) === 'Kuriboh'), 1, 1, 'cost'); if (m) { move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Kuriboh.`); } },
     res: function* (g, c, p) { const n = nFreeM(g, p); if (n) tokens(g, p, { n: 'Kuriboh Token', a: 'DARK', r: 'Fiend', lv: 1, atk: 300, def: 200 }, n, 'def', { noTribute: true }); } }] },

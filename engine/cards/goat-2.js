@@ -18,9 +18,8 @@ function* discardAll(g, p) { const h = g.p[p].hand.slice(); for (const x of h) m
 // Excavate from the top until a monster that can be Normal Summoned/Set; returns [monster or null, the other cards]
 function excavate(g, p) { const deck = g.p[p].deck, out = []; for (let i = deck.length - 1; i >= 0; i--) { const x = deck[i]; if (canNS(x)) return [x, out]; out.push(x); } return [null, out]; }
 const sendAll = (g, xs) => { for (const x of xs) if (x.zone === 'deck') move(g, x, 'gy', { reason: 'effect' }); };
-// Spell Counter watchers: a counter each time a Spell resolves (seen as it leaves the Spell/Trap Zone for the GY), no chain link.
-// PARTIAL: Continuous, Equip and Field Spells stay on the field after resolving, so they don't add a counter.
-const spellCounter = (max) => ({ type: 'trig', on: (g, ev, c) => { if (ev.type === 'move' && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule' && isSpell(ev.c) && !['Continuous', 'Equip', 'Field'].includes(D(ev.c).sub) && (!max || ctr(c, 'spell') < max)) { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); } return false; }, res: function* () {} });
+// Spell Counter watchers: a counter each time a Spell Card activation resolves (the engine's spellResolved event), no chain link.
+const spellCounter = (max) => ({ type: 'trig', on: (g, ev, c) => { if (L.spellCtrEv(g, ev, c) >= 0 && (!max || ctr(c, 'spell') < max)) { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); } return false; }, res: function* () {} });
 
 E.addScripts({
   /* ----- Burn ----- */
@@ -123,7 +122,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { const o = L2.data.orig; if (o.eff.target) yield* o.eff.target(g, c, p, L2); },
     res: function* (g, c, p, L2) { const o = L2.data.orig; log(g, `Serial Spell copies ${name(o.c)}.`); yield* o.eff.res(g, c, p, L2); } }] },
   'Reload': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.some(x => x !== c),
-    res: function* (g, c, p) { const h = g.p[p].hand.slice(); for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, p); log(g, `${PN(g, p)} shuffled ${h.length} card${h.length > 1 ? 's' : ''} into the Deck.`); draw(g, p, Math.min(h.length, g.p[p].deck.length)); } }] },
+    res: function* (g, c, p) { const h = g.p[p].hand.slice(); for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, p); log(g, `${PN(g, p)} shuffled ${h.length} card${h.length > 1 ? 's' : ''} into the Deck.`); draw(g, p, h.length); } }] },
   'The Shallow Grave': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => [p, opp(p)].some(q => g.p[q].gy.some(isMon)),
     res: function* (g, c, p) { for (const q of [p, opp(p)]) { const ms = g.p[q].gy.filter(isMon); if (!ms.length || freeM(g, q) < 0) continue; const [x] = yield* pick(g, q, 'Special Summon which monster from your GY face-down?', ms, 1, 1, 'good'); if (x) ss(g, q, x, 'set'); } } }] },
   'Spell Reproduction': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.filter(x => x !== c && isSpell(x)).length >= 2,
@@ -142,8 +141,10 @@ E.addScripts({
       cond: (g, c, p) => g.p[p].gy.some(isSpell),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which Spell from your GY to your hand?', g.p[p].gy.filter(isSpell), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } },
-    { type: 'trig', mand: true, label: 'Banish the destroyed monster', on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
-      res: function* (g, c, p, L2) { const t = L2.ev.c; if (t.zone === 'gy') { move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${name(t)} was banished.`); } } }] },
+  ],
+    // 2005 text: "A monster that is destroyed by this monster as a result of battle is removed from play instead of going to the Graveyard":
+    // a replacement (engine damageStep, self.battleBanish), so it never reaches the GY (2026-11-28 audit: Sangan searched; equal ATK, both banished)
+    self: { battleBanish: true } },
   // PARTIAL: Trap activations (cards and effects) are blocked; the static effects of Continuous Traps already face-up
   // (Gravity Bind's attack lock) keep applying, since the engine can't negate a Spell/Trap's static effect yet.
   'Jinzo': { cont: { forbid: (g, src, a) => a.type === 'activate' && isTrap(a.c) } },
@@ -154,7 +155,7 @@ E.addScripts({
         target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which monster?', fieldMons(g), 1, 1, 'bad'); },
         res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
   'Sacred Crane': { effs: [{ type: 'trig', mand: true, label: 'Draw 1 card', on: (g, ev, c) => evSummoned(ev, c, ['special', 'fusion', 'ritual']),
-    res: function* (g, c, p) { if (g.p[p].deck.length) draw(g, p, 1); } }] },
+    res: function* (g, c, p) { draw(g, p, 1); } }] },
   // 2005: pay 2000; both players Special Summon as many of their banished monsters as they can.
   'Dimension Fusion': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 2000 && g.p[p].ban.some(isMon) && freeM(g, p) >= 0,
     cost: function* (g, c, p) { pay(g, p, 2000); },

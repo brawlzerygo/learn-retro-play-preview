@@ -290,7 +290,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { const u = L2.ev.snap.flags.rf; const t = fieldMons(g).find(x => x.u === u);
         if (t) { move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${D(t).n} was banished.`); } } }] },
   'Ready for Intercepting': { effs: [{ type: 'act', cond: g => fieldMons(g).some(m => faceUp(m) && ['Warrior', 'Spellcaster'].includes(race(m))),
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Turn which Warrior or Spellcaster face-down?', fieldMons(g).filter(m => faceUp(m) && ['Warrior', 'Spellcaster'].includes(race(m))), 1, 1, 'bad'); },
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Turn which Warrior or Spellcaster face-down?', fieldMons(g).filter(m => L.canFaceDown(m) && ['Warrior', 'Spellcaster'].includes(race(m))), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && t.zone === 'm') setFaceDown(g, t); } }] },
   'Really Eternal Rest': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: g => fieldMons(g).some(m => allField(g).some(x => x.zone === 'st' && x.equipTo === m.u)),
@@ -336,7 +336,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { addMod(g, t, { atk: 500, end: true }); log(g, `${name(t)} gained 500 ATK this turn.`); } } }] },
   'Reload': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.some(x => x !== c),
     res: function* (g, c, p) { const h = g.p[p].hand.slice(); for (const x of h) move(g, x, 'deck', { reason: 'effect' }); shuffleDeck(g, p); log(g, `${PN(g, p)} shuffled ${h.length} card${h.length > 1 ? 's' : ''} into the Deck.`);
-      const mine = h.filter(x => x.owner === p).length; draw(g, p, Math.min(h.length, g.p[p].deck.length)); if (mine < h.length) log(g, 'The opponent’s cards went back to their Deck.'); } }] },
+      const mine = h.filter(x => x.owner === p).length; draw(g, p, h.length); if (mine < h.length) log(g, 'The opponent’s cards went back to their Deck.'); } }] },
   // While face-up, every monster goes back to its owner (checked at each game event; no chain link). A monster that has no
   // free zone to go back to is destroyed. Monsters still under the wrong control can't attack.
   // PARTIAL: between a control change and the next game event the monster stays put (it can't attack in that gap).
@@ -406,7 +406,7 @@ E.addScripts({
 
   /* ----- S ----- */
   'Sacred Crane': { effs: [{ type: 'trig', mand: true, label: 'Draw 1 card', on: (g, ev, c) => evSummoned(ev, c, ['special', 'fusion', 'ritual', 'synchro']),
-    res: function* (g, c, p) { if (g.p[p].deck.length) draw(g, p, 1); } }] },
+    res: function* (g, c, p) { draw(g, p, 1); } }] },
   // Destroyed by a card effect and sent to the GY (from anywhere, per the rulings): in its owner's next Standby Phase it comes
   // back and destroys every Spell and Trap on the field. The mark lives on the card object, cleared when it moves again.
   'Sacred Phoenix of Nephthys': { effs: [

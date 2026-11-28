@@ -361,7 +361,7 @@ E.addScripts({
         cond: (g, c, p) => majNegTarget(g, p).length > 0,
         target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Negate which monster?', majNegTarget(g, p), 1, 1, 'bad'); },
         res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || negd(g, t)) return; tempFlag(g, t, 'negated'); g.seq++; log(g, `${name(t)}'s effects were negated until the End Phase.`);
-          if (onField(c) && faceUp(c)) { const a = atk(g, t); addMod(g, c, { atk: a, end: true }); log(g, `${name(c)} gained ${a} ATK.`); } } },
+          if (onField(c) && faceUp(c)) { const a = atk(g, t); addMod(g, c, { atk: a, end: true, own: true }); log(g, `${name(c)} gained ${a} ATK.`); } } },
       majReturn('Red Dragon Archfiend')] },
   'Majestic Star Dragon': { noSynchro: true, proc: majProc('Stardust Dragon'),
     effs: [
@@ -409,7 +409,7 @@ E.addScripts({
   'Mist Valley Shaman': { effs: [{ type: 'ign', opt: true, label: 'Return a monster: +500 ATK',
     cond: (g, c, p) => monsOf(g, p).some(x => x !== c),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Return which monster to the hand?', monsOf(g, p).filter(x => x !== c), 1, 1, 'cost'); const n = D(x).n; move(g, x, 'hand', { reason: 'cost' }); log(g, `${PN(g, p)} returned ${n} to the hand.`); },
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true }); log(g, 'Mist Valley Shaman gained 500 ATK.'); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, end: true, own: true }); log(g, 'Mist Valley Shaman gained 500 ATK.'); } } }] },
   'Mist Valley Soldier': { effs: [{ type: 'trig', mand: true, label: 'Return the monster it battled',
     on: (g, ev, c) => { if (ev.type !== 'dsEnd' || (ev.a !== c && ev.t !== c)) return false; const o = ev.a === c ? ev.t : ev.a; return !!o && onField(o) && o.ctrl !== c.ctrl; },
     res: function* (g, c, p, L2) { const o = L2.ev.a === c ? L2.ev.t : L2.ev.a; if (o && onField(o) && o.ctrl !== p) { const n = name(o); move(g, o, 'hand', { reason: 'effect' }); log(g, `${n} returned to its owner's hand.`); } } }] },
@@ -466,7 +466,7 @@ E.addScripts({
       cost: function* (g, c, p, L2) { L2.data.ms = monsOf(g, p).filter(x => x !== c); },
       res: function* (g, c, p, L2) { const ms = L2.data.ms.filter(x => onField(x) && x.ctrl === p);
         const us = ms.map(x => x.u); addRule(g, (g2, a) => a.type === 'attack' && us.includes(a.c.u), { end: g.turnNo });
-        if (!onField(c) || !faceUp(c)) return; const n = ms.reduce((s, x) => s + atk(g, x), 0); addMod(g, c, { atk: n, end: true }); log(g, `Morphtronic Magnen Bar gained ${n} ATK. The other 2 monsters can't attack this turn.`); } }] },
+        if (!onField(c) || !faceUp(c)) return; const n = ms.reduce((s, x) => s + atk(g, x), 0); addMod(g, c, { atk: n, end: true, own: true }); log(g, `Morphtronic Magnen Bar gained ${n} ATK. The other 2 monsters can't attack this turn.`); } }] },
   'Morphtronic Map': { cont: { atk: (g, src, m) => morphMon(m) ? 300 * ctr(src, 'morph') : 0 },
     effs: [actNoop,
       { type: 'trig', loc: 'fz', on: (g, ev, c) => { if (posChangeEv(ev) && c.flags.mapGrp !== ev.group) { c.flags.mapGrp = ev.group; addCtr(g, c, 'morph', 1); } return false; }, res: noop },

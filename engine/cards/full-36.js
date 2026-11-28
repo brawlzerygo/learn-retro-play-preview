@@ -113,7 +113,7 @@ E.addScripts({
       for (const x of xs) ss(g, p, x, 'def'); shuffleDeck(g, p); } })] },
   'Broww, Huntsman of Dark World': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Draw',
     on: (g, ev, c) => {
-      if (!(ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ['discard', 'cost'].includes(ev.reason))) return false;
+      if (!(ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && ev.reason === 'discard' && !ev.asCost)) return false;
       // the hand size limit is not a card effect (it leaves the hand at 6 or more in your End Phase)
       if (g.phase === 'end' && ev.by == null && g.tp === c.owner && g.p[c.owner].hand.length >= 6 && !g.chain.length) return false;
       c.f36opp = byOpp(g, ev, c); return true; },
@@ -179,7 +179,7 @@ E.addScripts({
     res: function* (g, c, p) {
       const cs = g.p[p].hand.filter(x => isMon(x) && race(x) === 'Fairy'); if (!cs.length || freeM(g, p) < 0) return;
       const [x] = yield* pick(g, p, 'Special Summon a Fairy from your hand', cs, 1, 1, 'good'); if (!x || !ss(g, p, x, 'atk')) return;
-      const A = stat(g, x, 'atk'); addMod(g, x, { atk: -(A - Math.floor(A / 2)) }); x.flags.f36end = g.turnNo;
+      const A = stat(g, x, 'atk'); addMod(g, x, { set: Math.floor(A / 2), which: 'atk' }); x.flags.f36end = g.turnNo;
       log(g, `${name(x)}'s ATK was halved. It will be destroyed in the End Phase.`); } }, endDestroy] },
   'Cell Explosion Virus': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => !!g.aw && g.aw.a.ctrl !== p && ctr(g.aw.a, 'A') > 0,
@@ -375,7 +375,7 @@ E.addScripts({
     cond: (g, c, p) => oppFaceUp(g, p).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Copy the original ATK/DEF of which monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || !onField(c) || !faceUp(c)) return;
-      addMod(g, c, { set: baseAtk(t), which: 'atk' }); addMod(g, c, { set: num(D(t).def), which: 'def' }); log(g, `Copycat's ATK/DEF became ${baseAtk(t)}/${num(D(t).def)}.`); } }] },
+      addMod(g, c, { set: baseAtk(t), which: 'atk', own: true }); addMod(g, c, { set: num(D(t).def), which: 'def', own: true }); log(g, `Copycat's ATK/DEF became ${baseAtk(t)}/${num(D(t).def)}.`); } }] },
   'Corruption Cell A': { effs: [{ type: 'act', cond: (g, c, p) => oppFaceUp(g, p).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Place an A-Counter on which monster?', oppFaceUp(g, p), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) { addCtr(g, t, 'A', 1); log(g, `${name(t)} got an A-Counter.`); } } }] },
@@ -423,7 +423,7 @@ E.addScripts({
     cond: (g, c, p) => allField(g).some(x => spellCtrOk(g, c, x)),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Place a Spell Counter on which card?', allField(g).filter(x => spellCtrOk(g, c, x)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !spellCtrOk(g, c, t)) return; addCtr(g, t, 'spell', 1); log(g, `${name(t)} got a Spell Counter.`);
-      if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 600, end: true }); log(g, 'Crusader of Endymion gained 600 ATK.'); } } }] },
+      if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 600, end: true, own: true }); log(g, 'Crusader of Endymion gained 600 ATK.'); } } }] },
   // Original 2010 text: "Tribute 1 DARK monster with an ATK of 1000 or less. Check your opponent's monsters on the field and
   // the cards in their hand, and destroy all monsters with 1500 or more ATK. Your opponent checks all cards they draw for
   // 3 turns (your opponent's turns), and destroys any monster with 1500 or more ATK." The modern rewrite (no damage until
@@ -462,7 +462,7 @@ E.addScripts({
     { type: 'ign', opt: true, label: 'Banish a Normal Monster: gain its ATK',
       cond: (g, c, p) => g.p[p].gy.some(isNormal),
       cost: function* (g, c, p, L2) { const [x] = yield* pick(g, p, 'Banish a Normal Monster from your GY', g.p[p].gy.filter(isNormal), 1, 1, 'cost'); L2.data.n = x ? baseAtk(x) : 0; if (x) { move(g, x, 'ban', { reason: 'cost', by: p }); log(g, `${PN(g, p)} banished ${D(x).n}.`); } },
-      res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: L2.data.n, f36cu: true }); log(g, `Cu Chulainn the Awakened gained ${L2.data.n} ATK.`); } },
+      res: function* (g, c, p, L2) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: L2.data.n, f36cu: true, own: true }); log(g, `Cu Chulainn the Awakened gained ${L2.data.n} ATK.`); } },
     { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && c.mods.some(m => m.f36cu && m.turn < g.turnNo)) { c.mods = c.mods.filter(m => !(m.f36cu && m.turn < g.turnNo)); g.seq++; } return false; } }] },
   // The sent monster is a cost; the target is a "Six Samurai" monster in either GY (it can be the one just sent).
   'Cunning of the Six Samurai': { effs: [{ type: 'act', tags: { ss: 1 },
@@ -515,7 +515,7 @@ E.addScripts({
   'Darkblaze Dragon': { effs: [
     { type: 'trig', mand: true, label: 'Double ATK and DEF',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.from === 'gy' && ev.to === 'm' && ev.reason === 'summon',
-      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: baseAtk(c), def: num(D(c).def) }); log(g, `Darkblaze Dragon's ATK and DEF were doubled.`); } },
+      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: baseAtk(c), def: num(D(c).def), own: true }); log(g, `Darkblaze Dragon's ATK and DEF were doubled.`); } },
     { type: 'trig', mand: true, label: 'Inflict damage', on: (g, ev, c) => battleKill(ev, c),
       res: function* (g, c, p, L2) { const n = baseAtk(L2.ev.c); if (n > 0) damage(g, opp(p), n, { src: c, srcP: p }); } }] },
 });

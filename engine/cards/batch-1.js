@@ -21,6 +21,16 @@ const decreeOn = (g, src) => allField(g).some(x => x !== src && faceUp(x) && D(x
 const decreeBlocked = (g, x) => allField(g).some(y => y !== x && faceUp(y) && D(y).n === 'Royal Decree' && y.u < x.u); // two Decrees: the older one applies
 const trapLive = (g, c) => faceUp(c) && !decreeOn(g, c);
 const maskOn = g => allField(g).some(x => D(x).n === 'Mask of Restrict' && trapLive(g, x));
+// a "?" ATK isn't "1500 or less" outside the field, so Sangan can't add Gren Maju Da Eiza or Maju Garzett (Goat Sangan ruling)
+const atkLE = (x, n) => /^\d+$/.test(String(D(x).atk)) && baseAtk(x) <= n;
+/* Deck Devastation Virus (2026-11-27 audit): the cost may Tribute a face-down DARK whose ATK is 2000 or more (archive: a Set Fusilier
+ Dragon), never a face-down Soul Exchange target; drawn monsters with 1500 or less ATK are destroyed at once, without a chain (engine onDraw;
+ "?" ATK counts as 0 in the hand: ruling 2). */
+const ddvCost = (g, p) => L.tributeCands(g, p).filter(x => attr(x) === 'DARK' && (faceUp(x) ? atk(g, x) : x.ctrl === p ? baseAtk(x) : -1) >= 2000);
+function ddvDrawn(g, cs) { if (!g.b1ddv || !g.b1ddv.length) return; for (const r of g.b1ddv) { if (g.turnNo > r.until) continue;
+  const xs = cs.filter(x => x.owner === r.victim && x.zone === 'hand' && isMon(x) && baseAtk(x) <= 1500); if (!xs.length) continue;
+  for (const x of xs) move(g, x, 'gy', { reason: 'effect', destroyed: true, by: r.p }); log(g, `Deck Devastation Virus destroyed ${xs.map(name).join(', ')}.`); } }
+L.onDraw(ddvDrawn);
 const mirrorOn = g => allField(g).some(x => D(x).n === 'Light-Imprisoning Mirror' && trapLive(g, x));
 const isFlipMon = c => isMon(c) && /FLIP:/.test(D(c).tx || '');
 const ssed = c => ['special', 'synchro', 'fusion', 'ritual'].includes(c.summonType) || D(c).k === 'token';
@@ -34,30 +44,9 @@ function allAssign(preds, pool, limit = 8) {
   const out = []; const rec = (i, used) => { if (out.length >= limit) return; if (i === preds.length) { const k = used.map(c => c.u).sort().join(); if (!out.some(m => m.map(c => c.u).sort().join() === k)) out.push(used.slice()); return; } for (const c of pool) if (!used.includes(c) && isMon(c) && preds[i](c)) { used.push(c); rec(i + 1, used); used.pop(); } };
   rec(0, []); return out;
 }
-/* What a chain link would destroy, as far as it is certain (Starlight Road, My Body as a Shield, Prime Material Dragon). */
-function destroyList(g, Lk) {
-  if (!Lk || Lk.negated || !Lk.tags || !Lk.tags.destroy) return [];
-  const n = D(Lk.c).n, p = Lk.p, o = 1 - p;
-  const byName = {
-    'Heavy Storm': () => stOnField(g).filter(x => x !== Lk.c),
-    'Torrential Tribute': () => fieldMons(g),
-    'Mirror Force': () => monsOf(g, o).filter(x => x.pos === 'atk'),
-    'Black Rose Dragon': () => allField(g).filter(x => Lk.eff.type === 'trig'),
-    'Lightning Vortex': () => oppFaceUp(g, p),
-    'Elemental HERO Absolute Zero': () => monsOf(g, o),
-    'Red Dragon Archfiend': () => Lk.eff.on && Lk.ev && Lk.ev.type === 'afterCalc' ? monsOf(g, o).filter(x => x.pos !== 'atk') : [],
-    'Bottomless Trap Hole': () => (Lk.data.cs || []).filter(x => onField(x) && faceUp(x) && atk(g, x) >= 1500),
-    'Deck Devastation Virus': () => monsOf(g, o).filter(x => (faceUp(x) ? atk(g, x) : baseAtk(x)) <= 1500),
-    'Fossil Dyna Pachycephalo': () => fieldMons(g).filter(ssed),
-    'Smashing Ground': () => { const f = oppFaceUp(g, p); if (!f.length) return []; const m = Math.max(...f.map(x => def(g, x))); return f.filter(x => def(g, x) === m).slice(0, 1); },
-    'Ally of Justice Catastor': () => Lk.ev ? [Lk.ev.a === Lk.c ? Lk.ev.t : Lk.ev.a].filter(x => x && onField(x)) : [],
-    'Exploder Dragonwing': () => Lk.ev ? [Lk.ev.a === Lk.c ? Lk.ev.t : Lk.ev.a].filter(x => x && onField(x)) : [],
-  };
-  if (byName[n]) return byName[n]();
-  return (Lk.t || []).filter(x => x && onField(x));
-}
+/* What a chain link would destroy: the engine's wouldDestroy (Starlight Road, My Body as a Shield, Prime Material Dragon). */
+const destroyList = (g, Lk) => L.wouldDestroy(g, Lk);
 const wouldDestroyMine = (g, Lk, p) => destroyList(g, Lk).filter(x => x.ctrl === p);
-const wouldDestroyMon = (g, Lk) => destroyList(g, Lk).filter(x => x.zone === 'm');
 
 /* Synchro material rules the engine's synCombos doesn't read (checked as a Summon rule). */
 const SYNREQ = {
@@ -75,7 +64,6 @@ function synLegal(g, sx, mats) {
   if (deb && (race(sx) !== 'Dragon' || mats.some(x => x !== deb && lv(x) === 4))) return false;
   return true;
 }
-const KYCOO_BANISH = ['Dark Armed Dragon', 'Blackwing - Vayu the Emblem of Honor', 'Mezuki', 'Destiny HERO - Malicious', 'Red-Eyes Wyvern', 'D.D. Crow', 'Soul Release', 'Book of Life', 'Kycoo the Ghost Destroyer', 'Black Rose Dragon', 'Burial from a Different Dimension'];
 
 /* The hub: rules and bookkeeping for this batch, run on every event by the HOOK effect below (no prompts here). */
 function blockedTrig(g, t) {
@@ -141,38 +129,39 @@ const S = {
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'ban', { reason: 'effect', by: p }); log(g, `${name(t)} was banished.`); } } }] },
   'Fossil Dyna Pachycephalo': { cont: { forbid: (g, src, a) => a.type === 'ss' },
     effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
+      destroys: g => fieldMons(g).filter(ssed),
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(ssed), { by: p, src: c }); } }] },
   'Nobleman of Crossout': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: g => fieldMons(g).some(x => x.pos === 'set'),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Set monster?', fieldMons(g).filter(x => x.pos === 'set'), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || t.pos !== 'set') return; const flip = isFlipMon(t), n = D(t).n;
       if (!destroy(g, [t], { by: p, banish: true, src: c }).length) return;
-      if (flip) for (const P of [0, 1]) { const xs = g.p[P].deck.filter(x => D(x).n === n); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (xs.length) log(g, `${PN(g, P)} banished ${xs.length} ${n} from the Deck.`); } } }] },
+      // Imperial Iron Wall chained: the target is destroyed, nothing else (site ruling)
+      if (flip && !L.banBlocked(g, t, 'deck', { by: p })) for (const P of [0, 1]) { const xs = g.p[P].deck.filter(x => D(x).n === n); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (xs.length) log(g, `${PN(g, P)} banished ${xs.length} ${n} from the Deck.`); } } }] },
   'Deck Devastation Virus': { effs: [
     { type: 'act', tags: { destroy: 1 },
-      cond: (g, c, p) => !maskOn(g) && L.tributeCands(g, p).some(x => faceUp(x) && attr(x) === 'DARK' && atk(g, x) >= 2000),
-      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a DARK with 2000 or more ATK', L.tributeCands(g, p).filter(x => faceUp(x) && attr(x) === 'DARK' && atk(g, x) >= 2000), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
+      cond: (g, c, p) => !maskOn(g) && ddvCost(g, p).length > 0,
+      destroys: (g, c, p) => monsOf(g, opp(p)).filter(x => faceUp(x) && atk(g, x) <= 1500),   // face-up only: a face-down one's ATK isn't known (My Body as a Shield ruling)
+      cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a DARK with 2000 or more ATK', ddvCost(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
       res: function* (g, c, p) { const o = opp(p); log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand.`);
         destroy(g, monsOf(g, o).filter(x => (faceUp(x) ? atk(g, x) : baseAtk(x)) <= 1500), { by: p, src: c });
         const hs = g.p[o].hand.filter(x => isMon(x) && baseAtk(x) <= 1500); for (const x of hs) move(g, x, 'gy', { reason: 'effect', destroyed: true, by: p }); if (hs.length) log(g, `${hs.map(name).join(', ')} in the hand ${hs.length > 1 ? 'were' : 'was'} destroyed.`);
-        g.b1ddv = (g.b1ddv || []).filter(r => r.u !== c.u); g.b1ddv.push({ u: c.u, p, victim: o, until: g.turnNo + (g.tp === o ? 6 : 5), drawn: [] }); } },
-    { type: 'trig', loc: 'any', mand: true, label: 'Check the drawn cards',
-      on: (g, ev, c) => { if (ev.type !== 'move' || ev.reason !== 'draw' || !g.b1ddv) return false; const r = g.b1ddv.find(r => r.u === c.u && r.victim === ev.c.owner && g.turnNo <= r.until); if (!r) return false; r.drawn.push(ev.c); return true; },
-      res: function* (g, c, p) { const r = (g.b1ddv || []).find(r => r.u === c.u); if (!r) return; const xs = r.drawn.filter(x => x.zone === 'hand' && isMon(x) && baseAtk(x) <= 1500); r.drawn = [];
-        for (const x of xs) move(g, x, 'gy', { reason: 'effect', destroyed: true, by: r.p }); if (xs.length) log(g, `Deck Devastation Virus destroyed ${xs.map(name).join(', ')}.`); } }] },
+        // until the end of their 3rd turn, the activation turn counting as the first (ruling 4): their turns T, T+2, T+4 when it is activated
+        // on their turn, T+1, T+3, T+5 on yours
+        g.b1ddv = (g.b1ddv || []).filter(r => r.u !== c.u); g.b1ddv.push({ u: c.u, p, victim: o, until: g.turnNo + (g.tp === o ? 4 : 5) }); } }] },
   'Pulling the Rug': { effs: [{ type: 'act',
-    cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && t.eff.type === 'trig' && t.ev && t.ev.type === 'summon' && ['normal', 'tribute'].includes(t.ev.how) && t.ev.cs.includes(t.c) && isMon(t.c)); },
+    cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && t.eff.type === 'trig' && t.ev && t.ev.type === 'summon' && ['normal', 'tribute'].includes(t.ev.how) && isMon(t.c)); },   // any monster's effect triggered by the Normal Summon, not only the summoned one's (site ruling 3, archive: King Tiger Wanghu)
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
   /* ----- Vayu Turbo ----- */
   "Vanity's Fiend": { hook: true, cont: { forbid: (g, src, a) => a.type === 'ss' }, effs: [] },
-  'Mind Crush': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.length > 0,
+  'Mind Crush': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.length > 0 && g.p[opp(p)].hand.length > 0,   // both players need a card in hand (site ruling 1, archive)
     target: function* (g, c, p, L2) { const o = opp(p); const names = [...new Set([...g.p[o].hand, ...g.p[o].deck, ...g.p[o].gy, ...g.p[o].ban, ...fieldOf(g, o)].filter(x => !isExtraD(D(x)) && D(x).k !== 'token').map(x => D(x).n))].sort();
       if (!names.length) return; const i = yield* choose(g, p, 'Declare a card name', names); L2.data.n = names[i]; log(g, `${PN(g, p)} declared ${names[i]}.`); },
     res: function* (g, c, p, L2) { const o = opp(p), n = L2.data.n; const xs = g.p[o].hand.filter(x => D(x).n === n);
       if (xs.length) { for (const x of xs) move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, o)} discarded ${xs.length} ${n}.`); }
       else { log(g, `${PN(g, o)} revealed the hand.`); const h = g.p[p].hand; if (h.length) { const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)} at random.`); } } } }] },
   /* ----- Hybrid ----- */
-  'Starlight Road': { effs: [{ type: 'act',
+  'Starlight Road': { effs: [{ type: 'act', tags: { ss: 1, ssOpt: 1 },   // Royal Oppression can negate it (Starlight ruling 11); the summon is optional, so Vanity's Fiend doesn't stop it
     cond: (g, c, p, x) => wouldDestroyMine(g, x.top, p).length >= 2,
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { const Lk = L2.data.L, was = onField(Lk.c); Lk.negBy = p; negate(g, Lk, true);
@@ -200,7 +189,7 @@ const S = {
       log(g, `${PN(g, p)} used ${mats.map(x => D(x).n).join(' + ')} as Fusion Material.`);
       ss(g, p, fx, 'atk', { how: 'fusion', group: grp }); } }] },
   'My Body as a Shield': { effs: [{ type: 'act',
-    cond: (g, c, p, x) => !g.inDS && x.top && x.top.p !== p && g.p[p].lp > 1500 && wouldDestroyMon(g, x.top).length > 0,
+    cond: (g, c, p, x) => !g.inDS && x.top && x.top.p !== p && g.p[p].lp > 1500 && L.destroysSome(g, x.top, y => y.zone === 'm'),
     cost: function* (g, c, p, L2) { pay(g, p, 1500); L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
   /* ----- Diva Zombie ----- */
@@ -219,15 +208,15 @@ const S = {
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && isZombie(t)) ss(g, p, t); } }] },
   'Mystic Tomato': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && attr(x) === 'DARK' && baseAtk(x) <= 1500),
-    res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'DARK' && baseAtk(x) <= 1500); const [x] = yield* pick(g, p, 'Special Summon a DARK with 1500 or less ATK', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
+    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isMon(x) && attr(x) === 'DARK' && atkLE(x, 1500)),
+    res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'DARK' && atkLE(x, 1500)); const [x] = yield* pick(g, p, 'Special Summon a DARK with 1500 or less ATK', cands, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   'Pyramid Turtle': { effs: [{ type: 'trig', loc: 'gy', tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.some(x => isZombie(x) && L.num(D(x).def) <= 2000),
     res: function* (g, c, p) { const cands = g.p[p].deck.filter(x => isZombie(x) && L.num(D(x).def) <= 2000); const [x] = yield* pick(g, p, 'Special Summon a Zombie with 2000 or less DEF', cands, 1, 1, 'good');
       if (x) { const i = yield* choose(g, p, `${name(x)}: which position?`, ['Attack Position', 'Defense Position']); ss(g, p, x, i ? 'def' : 'atk'); } shuffleDeck(g, p); } }] },
   'Sangan': { effs: [{ type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => fromFieldToGY(ev, c),
-    res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && baseAtk(x) <= 1500, 'Add a monster with 1500 or less ATK'); } }] },
+    res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && atkLE(x, 1500), 'Add a monster with 1500 or less ATK'); } }] },
   'Zombie Master': { effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Send a monster: revive a Zombie',
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(isMon) && (allCards(g, 'gy').some(x => isZombie(x) && lv(x) <= 4) || g.p[p].hand.some(x => isZombie(x) && lv(x) <= 4)),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send a monster from your hand to the GY', g.p[p].hand.filter(isMon), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); },
@@ -319,7 +308,7 @@ const S = {
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a face-up Level 4 Gemini', L.tributeCands(g, p).filter(x => faceUp(x) && isGemini(x) && lv(x) === 4), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which card?', allField(g).filter(x => x !== c), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { if (destroy(g, live(L2), { by: p, src: c }).length) draw(g, p, 1); } }] },
-  // PARTIAL: if the monster leaves the field any other way (bounced, banished), Call of the Haunted is destroyed too.
+  // The link (engine move): Call of the Haunted is destroyed only when its monster is destroyed, and a negated one (Jinzo) leaves its monster.
   'Call of the Haunted': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.some(isMon),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which monster from your GY?', g.p[p].gy.filter(isMon), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'atk')) link(g, c, t); } }] },
@@ -330,8 +319,10 @@ const S = {
   'Sea Dragon Lord Gishilnodon': { hook: true, effs: [{ type: 'trig', mand: true,
     on: (g, ev, c) => ev.type === 'move' && ev.wasField && ev.to === 'gy' && ev.snap && ev.snap.faceUp && ev.snap.mon && ev.snap.lv <= 3,
     res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { set: 3000, which: 'atk', end: true }); log(g, 'Sea Dragon Lord Gishilnodon’s ATK became 3000.'); } } }] },
-  // PARTIAL: "can't banish from either GY" covers the listed cards that banish from a GY (KYCOO_BANISH), not every card.
-  'Kycoo the Ghost Destroyer': { cont: { forbid: (g, src, a) => a.type === 'activate' && a.p !== src.ctrl && KYCOO_BANISH.includes(D(a.c).n) },
+  // "Your opponent can't banish cards from either GY": no effect that banishes from a GY, as cost or effect, and no summon procedure that
+  // does (Chaos Sorcerer, Gigantes): read from each card's text by the engine (banishesFromGY), not a list of names.
+  'Kycoo the Ghost Destroyer': { cont: { forbid: (g, src, a) => a.p != null && a.p !== src.ctrl && ((a.type === 'banish' && a.from === 'gy') || (!!a.c &&
+      ((a.type === 'activate' && L.banishesFromGY(a.c, a.eff)) || (a.type === 'ss' && a.proc && L.banishesFromGY(a.c, 'proc'))))) },
     effs: [{ type: 'trig', label: 'Banish up to 2 monsters from their GY', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl,
       cond: (g, c, p) => g.p[opp(p)].gy.some(isMon),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish up to 2 monsters from their GY', g.p[opp(p)].gy.filter(isMon), 1, 2, 'bad'); },
@@ -356,7 +347,7 @@ const S = {
         else destroy(g, [c], { rule: true }); } }] },
   'Prime Material Dragon': { cont: { dmg: (g, src, p, n, o) => (o && o.battle) ? undefined : { gain: n } },
     effs: [{ type: 'quick', ds: true, label: 'Discard to negate',
-      cond: (g, c, p, x) => g.p[p].hand.length > 0 && x.top && wouldDestroyMon(g, x.top).length > 0,
+      cond: (g, c, p, x) => g.p[p].hand.length > 0 && x.top && L.destroysSome(g, x.top, y => y.zone === 'm'),
       cost: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; yield* discardN(g, p, 1, null, 'Send a card from your hand to the GY'); },
       res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
   'Red-Eyes Darkness Metal Dragon': { proc: { label: 'Special Summon (banish a face-up Dragon)', cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && isDragon(x)),
@@ -375,7 +366,7 @@ const S = {
     cost: function* (g, c, p) { yield* discardN(g, p, 1, x => isDragon(x) && D(x).tu && baseAtk(x) <= 1000, 'Discard a Dragon Tuner with 1000 or less ATK'); },
     res: function* (g, c, p) { draw(g, p, 2); } }] },
   'Giant Trunade': { effs: [{ type: 'act', cond: (g, c) => stOnField(g).some(x => x !== c),
-    res: function* (g, c, p) { const xs = stOnField(g).filter(x => x !== c && !g.chain.some(l => l.c === x && !['Continuous', 'Equip', 'Field'].includes(D(x).sub)));
+    res: function* (g, c, p) { const xs = stOnField(g).filter(x => x !== c && !x.pendLeave && !g.chain.some(l => l.c === x && !['Continuous', 'Equip', 'Field'].includes(D(x).sub)));   // a resolved chained card waiting to leave isn't returned (site ruling; 2026-11-28 audit)
       for (const x of xs) move(g, x, 'hand', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.length} Spell/Trap card${xs.length > 1 ? 's' : ''} returned to the hand.`); } }] },
   'Instant Fusion': { effs: [
     { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 1000 && freeM(g, p) >= 0 && !(g.b1if && g.b1if[p] === g.turnNo) && g.p[p].extra.some(fx => D(fx).k === 'fusion' && L.num(D(fx).lv) <= 5 && !L.forbid(g, { type: 'ss', c: fx, p, how: 'fusion' })),
@@ -411,7 +402,7 @@ const S = {
   'Ancient Fairy Dragon': { effs: [
     { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Special Summon a Level 4 or lower monster',
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(x => isMon(x) && lv(x) <= 4 && !isExtraD(D(x))),
-      after: (g, c, p) => { g.noBP[p] = true; },
+      after: (g, c, p) => { E.lib.lockBP(g, p); },   // the Battle Phase lock belongs to the activation (lifted if it is negated)
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(x => isMon(x) && lv(x) <= 4 && !isExtraD(D(x))); const [x] = yield* pick(g, p, 'Special Summon a Level 4 or lower monster from your hand', cs, 1, 1, 'good'); if (x) ss(g, p, x); } },
     { type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Destroy a Field Spell',
       cond: g => !!(g.p[0].fz || g.p[1].fz),

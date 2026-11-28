@@ -170,7 +170,7 @@ E.addScripts({
     cont: { loc: 'gy', dmg: (g, src, p, n, o) => o.battle && g.battle && SC12(g).locus.some(e => e.turn === g.turnNo && e.p === p && [g.battle.a, g.battle.t].some(x => x && x.u === e.u)) ? 0 : undefined },
     effs: [{ type: 'act', ds: true, cond: (g, c, p) => monsOf(g, p).some(x => x.pos === 'atk') && !(g.inDS && g.battle && g.battle.calcDone),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which of your Attack Position monsters?', monsOf(g, p).filter(x => x.pos === 'atk'), 1, 1, 'good'); },
-      res: function* (g, c, p, L2) { if (g.p[opp(p)].deck.length) draw(g, opp(p), 1); const t = live(L2)[0]; if (!t || !faceUp(t) || t.pos !== 'atk') return;
+      res: function* (g, c, p, L2) { draw(g, opp(p), 1); const t = live(L2)[0]; if (!t || !faceUp(t) || t.pos !== 'atk') return;
         addMod(g, t, { atk: 1000, end: true }); log(g, `${name(t)} gained 1000 ATK and can attack 2 monsters this turn.`);
         if (!(t.flags.maxAttacks > 2 && t.flags.maxAttacksTurn === g.turnNo)) { t.flags.maxAttacks = 2; t.flags.maxAttacksTurn = g.turnNo; }
         const u = t.u, turn = g.turnNo; t.flags.locus = turn; SC12(g).locus.push({ u, p: opp(p), turn });

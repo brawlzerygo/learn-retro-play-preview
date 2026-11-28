@@ -33,7 +33,7 @@ const flipDown = { type: 'ign', opt: true, label: 'Flip it face-down',
 function discardRandom(g, p, by) { const h = g.p[p].hand; if (!h.length) return null; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard', by }); log(g, `${PN(g, p)} discarded ${name(x)} at random.`); return x; }
 function* tributeCost(g, p, text, filter = () => true) { const [x] = yield* pick(g, p, text, monsOf(g, p).filter(filter), 1, 1, 'cost'); if (!x) return null; const nm = shownName(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); return x; }
 // Both players take damage at the same time (Ring of Destruction style): lower the opponent's LP first, then damage() checks both.
-function bothDamage(g, p, n, src) { const o = opp(p); g.p[o].lp -= n; log(g, `${PN(g, o)} took ${n} damage.`); emit(g, { type: 'damage', p: o, n, battle: false, src, srcP: p }); damage(g, p, n, { src, srcP: p }); }
+function bothDamage(g, p, n, src) { L.damageMany(g, [[opp(p), n], [p, n]], { src, srcP: p }); }
 // Equip Spells
 const equipAct = (filter = () => true, text = 'Equip to which face-up monster?') => ({ type: 'act',
   cond: g => fieldMons(g).some(m => faceUp(m) && filter(m)),
@@ -369,8 +369,8 @@ E.addScripts({
     effs: [equipAct()] },
   'Metalzoa': { effs: [lockInstall, metalSummon('Zoa')] },
   'Metamorphosis': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => monsOf(g, p).some(m => metaTargets(g, p, lv(m)).length),
-    cost: function* (g, c, p, L2) { const [m] = yield* pick(g, p, 'Tribute which monster?', monsOf(g, p).filter(m => metaTargets(g, p, lv(m)).length), 1, 1, 'cost'); L2.data.lv = lv(m); const nm = shownName(m); move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); },
+    cond: (g, c, p) => L.tribPool(g, p, { known: true }).some(m => metaTargets(g, p, lv(m)).length),   // not Mind Control's monster; a Soul Exchange target if face-up (rulings)
+    cost: function* (g, c, p, L2) { const [m] = yield* pick(g, p, 'Tribute which monster?', L.tribPool(g, p, { known: true }).filter(m => metaTargets(g, p, lv(m)).length), 1, 1, 'cost'); L2.data.lv = lv(m); const nm = shownName(m); move(g, m, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); },
     res: function* (g, c, p, L2) { const fs = metaTargets(g, p, L2.data.lv); if (!fs.length || freeM(g, p) < 0) return; const [f] = yield* pick(g, p, `Special Summon which Level ${L2.data.lv} Fusion Monster?`, fs, 1, 1, 'good'); if (f) ss(g, p, f, 'atk'); } }] },
   // Ruling: once activated it resolves even if their LP dropped to 3000 or less.
   'Meteor of Destruction': { effs: [{ type: 'act', cond: (g, c, p) => g.p[opp(p)].lp > 3000,
@@ -393,7 +393,7 @@ E.addScripts({
   'Mid Shield Gardna': { effs: [flipDown, { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => { armMSG(g, c); return false; } }] },
   'Millennium Scorpion': { effs: [{ type: 'trig', mand: true, label: 'Gain 500 ATK',
     on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500 }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, own: true }); log(g, `${name(c)} gained 500 ATK.`); } } }] },
   'Milus Radiant': { cont: { atk: (g, src, m) => faceUp(m) ? (attr(m) === 'EARTH' ? 500 : attr(m) === 'WIND' ? -400 : 0) : 0 } },
   // PARTIAL: "by your opponent's card" is read from the move's own player when the effect gave one, else the turn player.
   'Minar': { effs: [{ type: 'trig', loc: 'gy', mand: true, label: 'Inflict 1000 damage',

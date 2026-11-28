@@ -77,9 +77,10 @@ E.addScripts({
     effs: [
       { type: 'quick', label: 'Tribute to negate', speed: 2,
         cond: (g, c, p, x) => x.top && !x.top.negated && x.top.c !== c,
-        cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; g.stardust = g.stardust || {}; g.stardust[c.u] = g.turnNo; move(g, c, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed ${D(c).n}.`); },
-        res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } },
-      { type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Return to the field', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && g.stardust && g.stardust[c.u] === g.turnNo,
+        // as Stardust Dragon: the End Phase return needs this negation resolved (not negated itself) and the card still in that GY visit
+        cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; move(g, c, 'gy', { reason: 'cost' }); L.data.at = c.moved; log(g, `${PN(g, p)} Tributed ${D(c).n}.`); },
+        res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); if (c.zone === 'gy' && c.moved === L.data.at) (g.stardust || (g.stardust = {}))[c.u] = { t: g.turnNo, at: c.moved }; } },
+      { type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Return to the field', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && g.stardust && g.stardust[c.u] && g.stardust[c.u].t === g.turnNo && g.stardust[c.u].at === c.moved,
         cond: (g, c, p) => freeM(g, p) >= 0, res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c); } },
       { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Special Summon Stardust Dragon',
         on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.from === 'm',
@@ -126,7 +127,7 @@ E.addScripts({
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon a Level 4 DARK Machine from your GY', g.p[p].gy.filter(x => isMon(x) && lv(x) === 4 && attr(x) === 'DARK' && race(x) === 'Machine'), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'def', { negate: true }); } }] },
   'Dekoichi the Battlechanted Locomotive': { effs: [{ type: 'trig', mand: true, label: 'Draw', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
-    res: function* (g, c, p) { const n = 1 + monsOf(g, p).filter(x => faceUp(x) && D(x).n === 'Bokoichi the Freightening Car').length; draw(g, p, Math.min(n, g.p[p].deck.length) || 1); } }] },
+    res: function* (g, c, p) { const n = 1 + monsOf(g, p).filter(x => faceUp(x) && D(x).n === 'Bokoichi the Freightening Car').length; draw(g, p, n); } }] },
   'Overload Fusion': { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => ovGeneric(g, p) || ovDragonOk(g, p),
     res: function* (g, c, p) {
@@ -145,7 +146,7 @@ E.addScripts({
     // PARTIAL: Polymerization-style summons through fusionSummon use exactly 2 materials (its recipe is "1 or more"); Overload Fusion lets you pick any number.
     effs: [
       { type: 'trig', mand: true, label: 'Send all your other cards to the GY',
-        on: (g, ev, c) => { if (!evSummoned(ev, c, ['fusion'])) return false; const n = g.events.filter(e => e.type === 'move' && e.reason === 'fusion' && e.group === ev.group).length || 2; c.flags.baseAtk = 800 * n; c.flags.ovMats = n; addMod(g, c, { def: 800 * n }); log(g, `Chimeratech Overdragon's original ATK/DEF became ${800 * n}.`); return true; },
+        on: (g, ev, c) => { if (!evSummoned(ev, c, ['fusion'])) return false; const n = g.events.filter(e => e.type === 'move' && e.reason === 'fusion' && e.group === ev.group).length || 2; c.flags.baseAtk = 800 * n; c.flags.ownBaseAtk = true; c.flags.ovMats = n; addMod(g, c, { def: 800 * n, own: true }); log(g, `Chimeratech Overdragon's original ATK/DEF became ${800 * n}.`); return true; },
         res: function* (g, c, p) { const xs = fieldOf(g, p).filter(x => x !== c); for (const x of xs) move(g, x, 'gy', { reason: 'effect', by: p }); if (xs.length) log(g, `${PN(g, p)} sent ${xs.length} card(s) to the GY.`); } },
       // ENGINE: canAttack() allows at most 2 attacks a turn (flags.extraAttack); Overdragon should attack monsters once per material.
       { type: 'trig', on: (g, ev, c) => { if (ev.type === 'attack' && ev.a === c && !ev.direct && (c.flags.ovMats || 0) >= 2) c.flags.extraAttack = g.turnNo; return false; }, res: function* () {} }] },
@@ -289,7 +290,7 @@ E.addScripts({
     proc: { label: 'Special Summon (3 face-up Continuous Spells)', cond: (g, c, p) => contSpells(g, p).length >= 3 },
     effs: [
       { type: 'trig', mand: true, label: 'Discard and draw', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl && g.battle && g.battle.a === c,
-        res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand; if (h.length) { const [x] = yield* pick(g, o, 'Send which card from your hand to the GY?', h, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${PN(g, o)} sent ${D(x).n} to the GY.`); } } if (g.p[p].deck.length) draw(g, p, 1); } },
+        res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand; if (h.length) { const [x] = yield* pick(g, o, 'Send which card from your hand to the GY?', h, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${PN(g, o)} sent ${D(x).n} to the GY.`); } } draw(g, p, 1); } },
       { type: 'trig', loc: 'gy', on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.to === 'gy') c.flags.dqField = !!ev.wasField; return false; }, res: function* () {} },
       { type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Special Summon from the GY',
         on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner && c.flags.dqField,

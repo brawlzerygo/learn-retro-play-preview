@@ -86,9 +86,7 @@ E.addScripts({
       addRule(g, (g2, a) => a.type === 'activate' && a.c === x && a.eff.type === 'act', { end: g.turnNo }); } }] },
   'Fairy Wind': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c) => stOnField(g).some(x => x !== c && faceUp(x)),
     res: function* (g, c, p) { const n = destroy(g, stOnField(g).filter(x => x !== c && faceUp(x)), { by: p, src: c }).length; if (!n) return;
-      const d = 300 * n; const order = [p, opp(p)].sort((a, b) => (g.p[a].lp <= d) - (g.p[b].lp <= d));
-      if (g.p[order[0]].lp <= d && g.p[order[1]].lp <= d) { g.p[order[0]].lp -= d; log(g, `${PN(g, order[0])} took ${d} damage.`); damage(g, order[1], d, { src: c, srcP: p }); }
-      else for (const q of order) damage(g, q, d, { src: c, srcP: p }); } }] },
+      const d = 300 * n; L.damageMany(g, [[p, d], [opp(p), d]], { src: c, srcP: p }); } }] },
   'Familiar Knight': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Each player can summon a Level 4',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
     res: function* (g, c, p) { for (const q of [p, opp(p)]) { const cs = g.p[q].hand.filter(x => isMon(x) && lv(x) === 4); if (!cs.length || freeM(g, q) < 0) continue;
@@ -224,7 +222,7 @@ E.addScripts({
       cond: (g, c, p) => monsOf(g, p).some(x => x !== c && race(x) === 'Pyro'),
       cost: function* (g, c, p, L2) { const cs = monsOf(g, p).filter(x => x !== c && race(x) === 'Pyro'); const xs = yield* pick(g, p, 'Tribute up to 2 Pyro monsters', cs, 1, 2, 'cost');
         for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); L2.data.n = xs.length; },
-      res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000 * L2.data.n }); log(g, `${name(c)} gained ${1000 * L2.data.n} ATK.`); } } },
+      res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000 * L2.data.n, own: true }); log(g, `${name(c)} gained ${1000 * L2.data.n} ATK.`); } } },
       { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end',
         res: function* (g, c, p) { if (onField(c)) destroy(g, [c], { by: p }); } }] },
   'Gaia the Dragon Champion': { mats: [x => named(x, 'Gaia The Fierce Knight'), x => named(x, 'Curse of Dragon')], effs: [] },

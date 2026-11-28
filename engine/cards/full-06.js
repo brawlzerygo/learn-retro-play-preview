@@ -24,7 +24,7 @@ const TYPES = ['Aqua', 'Beast', 'Beast-Warrior', 'Dinosaur', 'Dragon', 'Fairy', 
   'Pyro', 'Reptile', 'Rock', 'Sea Serpent', 'Spellcaster', 'Thunder', 'Warrior', 'Winged Beast', 'Zombie'];
 const flipUp = (g, c, pos) => { c.pos = pos; g.seq++; log(g, `${name(c)} was flipped face-up.`); emit(g, { type: 'flip', c, p: c.ctrl }); };
 function* discard(g, p, n, text, not) { const h = g.p[p].hand.filter(x => x !== not); const xs = yield* pick(g, p, text, h, n, n, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'discard' }); if (xs.length) log(g, `${PN(g, p)} discarded ${xs.map(name).join(', ')}.`); return xs; }
-// "Cannot be Special Summoned" style. PARTIAL: one cont per card, so it only blocks a Special Summon from the GY.
+// "Cannot be Special Summoned" style (a GY lock kept from before; the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere).
 const noSSFromGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src };
 // A Special Summon-only monster (Nomi) that can be revived once it was properly summoned: c.used.proper (kept across zones).
 const nomiGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src && !src.used.proper };
@@ -82,10 +82,9 @@ const scorpion = (label, modes) => ({ effs: [{ type: 'trig', when: true, label,
     const ms = modes.filter(m => m.ok(g, c, p)); const i = ms.length > 1 ? yield* choose(g, p, `${D(c).n}: which effect?`, ms.map(m => m.label)) : 0;
     L2.data.m = modes.indexOf(ms[i]); if (ms[i].target) yield* ms[i].target(g, c, p, L2); },
   res: function* (g, c, p, L2) { yield* modes[L2.data.m].res(g, c, p, L2); } }] });
-// Does this chain link destroy a monster on the field? (Destruction Jammer)
-// PARTIAL: read from the link's targets and its card text, so an effect that "may" destroy a monster can be caught too.
-const destroysMonster = (g, L2) => !!(L2 && L2.tags && L2.tags.destroy && !L2.negated && (L2.cardAct || !isST(L2.c)) &&
-  ((L2.t || []).some(t => t && t.zone === 'm') || (!(L2.t || []).length && /destroy[^.]*\b(monsters?|cards? on the field|all cards)\b|monsters?[^.]*\bdestroyed\b/i.test(txt(L2.c)))));
+// Does this chain link destroy a monster on the field? (Destruction Jammer): the engine's wouldDestroy, so an effect that may or may not
+// destroy one (Snipe Hunter, Reign-Beaux) doesn't count (ruling 1); not a Continuous Spell/Trap's own effect (ruling 2).
+const destroysMonster = (g, L2) => !!(L2 && !L2.negated && (L2.cardAct || !isST(L2.c)) && L.destroysSome(g, L2, t => t.zone === 'm'));
 // Dimension Fortress Weapon: does activating this effect send cards from the Deck to the GY?
 const millsDeck = c => /\b(from|of) (your|their|the|each player's|either player's|his|its owner's) (own )?Deck to the (GY|Graveyard)\b|\btop \S+ cards? of (your|their|the) Deck\b[^.]*\bto the (GY|Graveyard)\b/i.test(txt(c));
 
@@ -128,9 +127,9 @@ E.addScripts({
 
   /* ----- Darkness ----- */
   // PARTIAL: the engine has no face-down Attack Position, so the monster is always Set in face-down Defense Position.
-  'Darkness Approaches': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.filter(x => x !== c).length >= 2 && fieldMons(g).some(faceUp),
+  'Darkness Approaches': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].hand.filter(x => x !== c).length >= 2 && fieldMons(g).some(L.canFaceDown),
     cost: function* (g, c, p) { yield* discard(g, p, 2, 'Discard 2 cards', c); },
-    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Set which face-up monster?', fieldMons(g).filter(faceUp), 1, 1, 'bad'); },
+    target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Set which face-up monster?', fieldMons(g).filter(L.canFaceDown), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t)) setFaceDown(g, t); } }] },
   // "Cannot be Special Summoned" (PARTIAL: only from the GY, see noSSFromGY). Attacks twice, piercing.
   'Darkness Destroyer': { cont: noSSFromGY, self: { maxAttacks: () => 2, piercing: true }, effs: [] },
@@ -223,7 +222,7 @@ E.addScripts({
       res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } },
     { type: 'trig', mand: true, label: '+200 ATK',
       on: (g, ev) => ev.type === 'move' && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule' && isSpell(ev.c) && ['Normal', 'Quick-Play'].includes(D(ev.c).sub),
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200, end: true }); log(g, 'Des Volstgalph gained 200 ATK.'); } } }] },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 200, end: true, own: true }); log(g, 'Des Volstgalph gained 200 ATK.'); } } }] },
   // Port of goat-7.js: effect damage to its controller becomes 0.
   'Des Wombat': { cont: { dmg: (g, src, p, n, o) => p === src.ctrl && !(o && o.battle) ? 0 : n }, effs: [] },
 
@@ -274,7 +273,7 @@ E.addScripts({
     effs: [markProper,
       { type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Destroy a monster (no Battle Phase)',
         cond: (g, c, p) => monsOf(g, opp(p)).length > 0 && !(g.phase === 'main2' && g.goBattle),
-        after: (g, c, p) => { g.noBP[p] = true; },
+        after: (g, c, p) => { E.lib.lockBP(g, p); },
         target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which monster?', monsOf(g, opp(p)), 1, 1, 'bad'); },
         res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; const up = faceUp(t), A = up ? atk(g, t) : 0;
           if (destroy(g, [t], { by: p }).length && up && A > 0) damage(g, opp(p), A, { src: c, srcP: p }); } },

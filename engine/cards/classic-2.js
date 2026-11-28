@@ -89,7 +89,7 @@ E.addScripts({
     cond: (g, c, p) => oppFaceUp(g, p).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Copy which of their face-up monsters?', oppFaceUp(g, p), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || !onField(c) || !faceUp(c)) return;
-      addMod(g, c, { set: baseAtk(t), which: 'atk' }); addMod(g, c, { set: num(D(t).def), which: 'def' }); g.seq++; log(g, `Copycat became ${baseAtk(t)} ATK and ${num(D(t).def)} DEF.`); } }] },
+      addMod(g, c, { set: baseAtk(t), which: 'atk', own: true }); addMod(g, c, { set: num(D(t).def), which: 'def', own: true }); g.seq++; log(g, `Copycat became ${baseAtk(t)} ATK and ${num(D(t).def)} DEF.`); } }] },
   'Crass Clown': { effs: [{ type: 'trig', mand: true, label: 'Return a monster to the hand',
     on: (g, ev, c) => ev.type === 'pos' && ev.c === c && c.pos === 'atk',
     cond: (g, c, p) => monsOf(g, opp(p)).length > 0,

@@ -213,7 +213,7 @@ E.addScripts({
       res: function* (g, c, p) {
         if (c.zone !== 'hand' || !ss(g, p, c, 'atk')) return;
         const f = g.f42dir && fieldMons(g).find(x => x.u === g.f42dir.first);
-        if (f && faceUp(f)) { const A = atk(g, f), Dv = stat(g, f, 'def'); addMod(g, c, { set: A, which: 'atk' }); addMod(g, c, { set: Dv, which: 'def' }); log(g, `Ogre of the Scarlet Sorrow became ${A} ATK and ${Dv} DEF.`); }
+        if (f && faceUp(f)) { const A = atk(g, f), Dv = stat(g, f, 'def'); addMod(g, c, { set: A, which: 'atk', own: true }); addMod(g, c, { set: Dv, which: 'def', own: true }); log(g, `Ogre of the Scarlet Sorrow became ${A} ATK and ${Dv} DEF.`); }
         c.flags.f42ogre = g.turnNo; g.seq++; } }] },
   'Oilman': { cont: unionCont(true),
     effs: [...unionEffs(x => race(x) === 'Machine', 'Equip Oilman to which Machine?'),
@@ -324,9 +324,7 @@ E.addScripts({
     res: function* (g, c, p) {
       // simultaneous: if both would drop to 0, the duel is a draw
       const q = opp(p);
-      if (g.p[p].lp <= 800 && g.p[q].lp <= 800) { g.p[p].lp -= 800; log(g, `${PN(g, p)} took 800 damage.`); damage(g, q, 800, { src: c, srcP: p }); return; }
-      if (g.p[p].lp <= 800) { damage(g, q, 800, { src: c, srcP: p }); damage(g, p, 800, { src: c, srcP: p }); return; }
-      damage(g, p, 800, { src: c, srcP: p }); damage(g, q, 800, { src: c, srcP: p }); } }] },
+      L.damageMany(g, [[p, 800], [q, 800]], { src: c, srcP: p }); } }] },
 
   /* ----- P ----- */
   'Paladin of the Cursed Dragon': { effs: [watch, { type: 'ign', opt: true, tags: { ss: 1 }, label: 'Special Summon a Zombie from their GY',
@@ -404,7 +402,7 @@ E.addScripts({
         const ms = monsOf(g, src.ctrl); return ms.length > 0 && ms.every(m => faceUp(m) && has(g, m, 'noAttackTarget')); } } },
   'Plague Wolf': { effs: [
     { type: 'ign', opt: true, label: 'Double its ATK',
-      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { set: 2 * baseAtk(c), which: 'atk', end: true }); c.flags.f42wolf = g.turnNo; g.seq++; log(g, `Plague Wolf's ATK became ${2 * baseAtk(c)}.`); } },
+      res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { set: 2 * baseAtk(c), which: 'atk', end: true, own: true }); c.flags.f42wolf = g.turnNo; g.seq++; log(g, `Plague Wolf's ATK became ${2 * baseAtk(c)}.`); } },
     { type: 'trig', mand: true, opt: true, tags: { destroy: 1 }, label: 'Destroy Plague Wolf',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.flags.f42wolf === g.turnNo,
       res: function* (g, c, p) { if (onField(c)) destroy(g, [c], { by: p }); } }] },
@@ -477,7 +475,7 @@ E.addScripts({
       addMod(g, m, { atk: n + 300, end: true, f42roar: true }); g.seq++; log(g, `${name(m)} gained ${n + 300} ATK for damage calculation.`); } }] },
   'Prime Material Falcon': { effs: [{ type: 'quick', ds: true, label: 'Discard: negate the effect',
     cond: (g, c, p, x) => { const T = x.top; if (!T || T.negated || !isMon(T.c) || T.eff.type === 'act' || !(T.tags && T.tags.destroy) || !g.p[p].hand.length) return false;
-      return (T.t || []).some(t => t && isST(t) && onField(t)) || /destroy[^.]*(Spell|Trap)/i.test(D(T.c).tx || ''); },
+      return L.destroysSome(g, T, t => isST(t)); },
     cost: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; const [x] = yield* pick(g, p, 'Send 1 card from your hand to the GY', g.p[p].hand, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); } },
     res: function* (g, c, p, L2) { const T = L2.data.L; T.negBy = p; negate(g, T, true); } }] },
   'Prometheus, King of the Shadows': { effs: [{ type: 'trig', mand: true, label: 'Banish DARK monsters for ATK',
@@ -486,7 +484,7 @@ E.addScripts({
       const ds = g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK'); if (!ds.length) return;
       const xs = yield* pick(g, p, 'Banish 1 or more DARK monsters from your GY', ds, 1, ds.length, 'good');
       for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (xs.length) log(g, `${PN(g, p)} banished ${xs.map(x => D(x).n).join(', ')}.`);
-      if (xs.length && onField(c) && faceUp(c)) { addMod(g, c, { atk: 400 * xs.length, end: true }); log(g, `Prometheus, King of the Shadows gained ${400 * xs.length} ATK.`); } } }] },
+      if (xs.length && onField(c) && faceUp(c)) { addMod(g, c, { atk: 400 * xs.length, end: true, own: true }); log(g, `Prometheus, King of the Shadows gained ${400 * xs.length} ATK.`); } } }] },
   'Proof of Powerlessness': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => monsOf(g, p).some(m => faceUp(m) && lv(m) >= 7),
     res: function* (g, c, p) {

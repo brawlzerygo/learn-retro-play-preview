@@ -82,9 +82,8 @@ const metalSummon = { type: 'trig', loc: 'deck', tags: { ss: 1 }, label: 'Tribut
 // Royal Magical Library (port of goat-7.js): a Spell Counter when a Spell resolves (seen as it leaves the field after
 // resolving, or as a Continuous/Equip/Field Spell is activated from the hand).
 const spellCounter = max => ({ type: 'trig', res: noop, on: (g, ev, c) => {
-  if (ev.type !== 'move' || !isSpell(ev.c) || ctr(c, 'spell') >= max) return false;
-  const stays = ['Continuous', 'Equip', 'Field'].includes(D(ev.c).sub);
-  if ((!stays && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule') || (stays && ev.from === 'hand' && ev.reason === 'activate')) { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
+  if (L.spellCtrEv(g, ev, c) < 0 || ctr(c, 'spell') >= max) return false;   // a Spell Card activation resolved while this card was face-up (engine event, 2026-11-27 audit)
+  { addCtr(g, c, 'spell', 1); log(g, `${name(c)} got a Spell Counter (${ctr(c, 'spell')}).`); }
   return false; } });
 
 const ritualEffs = rn => ({ type: 'act', tags: { ss: 1 },
@@ -171,7 +170,7 @@ E.addScripts({
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(m => m.flags.f13eria === c.u && faceUp(m)), { by: p }); } }] },
   // A Continuous Effect (ruling): the ATK is gained with no chain link.
   'Raging Flame Sprite': { self: { directAttack: true }, effs: [{ type: 'trig', res: noop,
-    on: (g, ev, c) => { if (ev.type === 'damage' && ev.battle && ev.direct && ev.src === c && ev.p !== c.ctrl && onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000 }); g.seq++; log(g, 'Raging Flame Sprite gained 1000 ATK.'); } return false; } }] },
+    on: (g, ev, c) => { if (ev.type === 'damage' && ev.battle && ev.direct && ev.src === c && ev.p !== c.ctrl && onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, own: true }); g.seq++; log(g, 'Raging Flame Sprite gained 1000 ATK.'); } return false; } }] },
   // PARTIAL: the End Phase destruction uses a chain link (the ruling says it doesn't start a Chain).
   'Raging Mad Plants': { effs: [
     { type: 'act', ds: true, cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && race(x) === 'Plant'),
@@ -192,14 +191,14 @@ E.addScripts({
         cond: (g, c, p) => [...monsOf(g, p), ...g.p[p].gy].some(x => x !== c && isMon(x) && attr(x) === 'DARK'),
         cost: function* (g, c, p, L2) { const xs = [...monsOf(g, p).filter(x => x !== c && (faceUp(x) ? attr(x) === 'DARK' : attr(x) === 'DARK')), ...g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK')];
           const grp = g.group; for (const x of xs) move(g, x, 'ban', { reason: 'cost', by: p, group: grp }); L2.data.n = xs.filter(x => x.zone === 'ban').length; log(g, `${PN(g, p)} banished ${xs.length} DARK monster${xs.length === 1 ? '' : 's'}.`); },
-        res: function* (g, c, p, L2) { if (onField(c) && faceUp(c) && L2.data.n) { addMod(g, c, { atk: 500 * L2.data.n }); log(g, `${name(c)} gained ${500 * L2.data.n} ATK.`); } } }] },
+        res: function* (g, c, p, L2) { if (onField(c) && faceUp(c) && L2.data.n) { addMod(g, c, { atk: 500 * L2.data.n, own: true }); log(g, `${name(c)} gained ${500 * L2.data.n} ATK.`); } } }] },
   'Rainbow Dragon': {
     proc: { label: 'Special Summon (7 Crystal Beasts with different names)', cond: (g, c, p) => cbNames(g, p).size >= 7 },
     effs: [lockEff, markProper,
       { type: 'quick', ds: true, label: 'Send your Crystal Beasts to the GY: +1000 ATK each',
         cond: (g, c, p) => c.turnIn !== g.turnNo && monsOf(g, p).some(x => faceUp(x) && isCB(x)),
         cost: function* (g, c, p, L2) { const xs = monsOf(g, p).filter(x => faceUp(x) && isCB(x)); const grp = g.group; for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p, group: grp }); L2.data.n = xs.length; log(g, `${PN(g, p)} sent ${xs.map(x => D(x).n).join(', ')} to the GY.`); },
-        res: function* (g, c, p, L2) { if (onField(c) && faceUp(c) && L2.data.n) { addMod(g, c, { atk: 1000 * L2.data.n }); log(g, `${name(c)} gained ${1000 * L2.data.n} ATK.`); } } },
+        res: function* (g, c, p, L2) { if (onField(c) && faceUp(c) && L2.data.n) { addMod(g, c, { atk: 1000 * L2.data.n, own: true }); log(g, `${name(c)} gained ${1000 * L2.data.n} ATK.`); } } },
       { type: 'ign', label: 'Banish your GY Crystal Beasts: shuffle the field into the Deck',
         cond: (g, c, p) => c.turnIn !== g.turnNo && g.p[p].gy.some(isCB),
         cost: function* (g, c, p) { const xs = g.p[p].gy.filter(isCB); const grp = g.group; for (const x of xs) move(g, x, 'ban', { reason: 'cost', by: p, group: grp }); log(g, `${PN(g, p)} banished ${xs.length} Crystal Beast monster${xs.length === 1 ? '' : 's'}.`); },
@@ -352,8 +351,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which face-up monster?', oppFaceUp(g, p).filter(m => atk(g, m) <= g.p[opp(p)].lp), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const n = atk(g, t);
       if (!destroy(g, [t], { by: p, src: c }).length || n <= 0) return;
-      const o = opp(p); g.p[o].lp -= n; log(g, `${PN(g, o)} took ${n} damage.`); emit(g, { type: 'damage', p: o, n, battle: false, src: c, srcP: p });
-      damage(g, p, n, { src: c, srcP: p }); } }] },
+      L.damageMany(g, [[opp(p), n], [p, n]], { src: c, srcP: p }); } }] },   // both at once, through the damage statics (Des Wombat)
   // Port of classic-4.js. PARTIAL: monsters that can attack directly still can (the engine has no "must attack this" rule).
   'Ring of Magnetism': { cont: { ...eqBonus(-500, -500), grant: (g, src, m, flag) => flag === 'noAttackTarget' && !!src.equipTo && m.ctrl === src.ctrl && m.u !== src.equipTo && fieldMons(g).some(x => x.u === src.equipTo && x.ctrl === src.ctrl) },
     effs: [equipAct(() => true, 'Equip to which of your face-up monsters?', { own: true, hint: 'cost' })] },
@@ -429,7 +427,7 @@ E.addScripts({
     { type: 'ign', opt: true, label: 'Flip this card face-down', cond: (g, c) => faceUp(c) && c.turnIn !== g.turnNo && !c.posChanged,
       res: function* (g, c) { if (onField(c) && faceUp(c)) { setFaceDown(g, c); c.posChanged = true; } } },
     { type: 'trig', mand: true, label: '+300 ATK and DEF', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300, def: 300, end: true }); log(g, 'Royal Keeper gained 300 ATK and DEF.'); } } }] },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300, def: 300, end: true, own: true }); log(g, 'Royal Keeper gained 300 ATK and DEF.'); } } }] },
   'Royal Knight': { effs: [{ type: 'trig', mand: true, label: 'Gain LP equal to its DEF', on: (g, ev, c) => battleKill(ev, c),
     res: function* (g, c, p, L2) { const n = L2.ev.snap ? L2.ev.snap.def : 0; if (n) gain(g, p, n); } }] },
   'Royal Magical Library': { effs: [spellCounter(3),

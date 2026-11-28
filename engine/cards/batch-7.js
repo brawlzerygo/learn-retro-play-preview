@@ -52,9 +52,6 @@ function removeBushido(g, p, n) { for (const x of stOf(g, p)) { if (!n) break; c
 const isShienEff = c => isMon(c) && /Shien/.test(name(c)) && D(c).k === 'effect';
 // cards whose effects negate Trap effects (Double Snare)
 const NEG_TRAP = ['Jinzo', 'Royal Decree', 'Tyrant Dragon', 'Sorcerer of Dark Magic', 'Fiend Skull Dragon', "The Dragon's Bead", 'Jinzo - Returner'];
-// Spells/Traps that destroy without targeting (Fake Trap, Morphtronic Forcefield)
-const ST_WIPE = ['Heavy Storm', "Harpie's Feather Duster"];
-const MON_WIPE = ['Dark Hole', 'Raigeki', 'Torrential Tribute', 'Lightning Vortex', 'Mirror Force', 'Offerings to the Doomed', 'Fissure'];
 // cards whose activation targets a card in the GY (The End of Anubis)
 const GY_TARGET = ['Monster Reborn', 'Call of the Haunted', 'Premature Burial', 'Dark Grepher', 'Symbols of Duty', 'Magician of Faith', 'Pot of Avarice', 'Return of the Doomed'];
 
@@ -80,7 +77,7 @@ E.addScripts({
       const st = deck[i], rest = deck.slice(i + 1);
       move(g, st, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(st)} to the hand.`);
       for (const x of rest) move(g, x, 'gy', { reason: 'effect' }); if (rest.length) log(g, `${PN(g, p)} sent ${rest.length} card(s) from the Deck to the GY.`); } }] },
-  'Witch of the Black Rose': { cont: noSSFromGY, // PARTIAL: "Cannot be Special Summoned" is enforced from the GY only
+  'Witch of the Black Rose': { cont: noSSFromGY, // "Cannot be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere
     effs: [{ type: 'trig', mand: true, on: (g, ev, c) => evSummoned(ev, c, ['normal', 'tribute']),
       cond: (g, c, p) => fieldOf(g, p).every(x => x === c),
       res: function* (g, c, p) { const before = g.p[p].hand.length; draw(g, p, 1); const x = g.p[p].hand.length > before ? g.p[p].hand[g.p[p].hand.length - 1] : null; if (!x) return;
@@ -158,9 +155,7 @@ E.addScripts({
     cond: (g, c, p, x) => { const top = x.top; if (!spellTrapAct(top) || top.negated || !(top.tags && top.tags.destroy)) return false;
       const mine = monsOf(g, p).filter(m => faceUp(m) && morphMon(m)); if (!mine.length) return false;
       if (!g.p[p].deck.some(isMorph)) return false;
-      if (top.t.some(t => mine.includes(t))) return true;
-      if (top.data && Array.isArray(top.data.cs) && top.data.cs.some(t => mine.includes(t))) return true; // Bottomless Trap Hole style
-      const n = D(top.c).n; if (n === 'Mirror Force') return mine.some(m => m.pos === 'atk'); return MON_WIPE.includes(n) && n !== 'Fissure'; },
+      return L.wouldDestroy(g, top).some(t => mine.includes(t)); },   // certain only: not Fissure or Smashing Ground (ruling 2)
     target: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); yield* search(g, p, isMorph, 'Add a Morphtronic card'); } }] },
 
@@ -203,7 +198,7 @@ E.addScripts({
   'Dragoness the Wicked Knight': { effs: [] },
 
   /* ----- Psychic ----- */
-  'Overdrive Teleporter': { cont: noSSFromGY, // PARTIAL: "Cannot be Special Summoned" is enforced from the GY only
+  'Overdrive Teleporter': { cont: noSSFromGY, // "Cannot be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere
     effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Pay 2000: summon 2 Psychics',
       cond: (g, c, p) => !c.flags.odt && g.p[p].lp > 2000 && nFreeM(g, p) >= 2 && g.p[p].deck.filter(x => isMon(x) && lv(x) === 3 && race(x) === 'Psychic').length >= 2,
       cost: function* (g, c, p) { c.flags.odt = true; pay(g, p, 2000); },
@@ -377,7 +372,7 @@ E.addScripts({
   'Rush Recklessly': { effs: [{ type: 'act', cond: g => fieldMons(g).some(faceUp),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Which monster gains 700 ATK?', fieldMons(g).filter(faceUp), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = live(L)[0]; if (t && faceUp(t)) { addMod(g, t, { atk: 700, end: true }); log(g, `${name(t)} gained 700 ATK.`); } } }] },
-  'Macro Cosmos': { // ENGINE: "any card sent to the GY is banished instead" needs a hook in move()
+  'Macro Cosmos': { cont: { gyBan: 'all' },   // ② "Any card sent to the GY is banished instead": a replacement in move() (2026-11-28 audit)
     effs: [{ type: 'act', res: function* (g, c, p) {
       const hs = [...g.p[p].hand, ...g.p[p].deck].filter(x => D(x).n === 'Helios - The Primordial Sun');
       if (!hs.length || freeM(g, p) < 0 || !(yield* yn(g, p, 'Special Summon Helios - The Primordial Sun?'))) return;
@@ -429,7 +424,7 @@ E.addScripts({
   'Fake Trap': { effs: [{ type: 'act',
     cond: (g, c, p, x) => { const top = x.top; if (!top || top.p === p || top.negated || !(top.tags && top.tags.destroy)) return false;
       const mine = stOf(g, p).filter(t => t !== c && isTrap(t)); if (!mine.length) return false;
-      return top.t.some(t => mine.includes(t)) || ST_WIPE.includes(D(top.c).n); },
+      return L.wouldDestroy(g, top).some(t => mine.includes(t)); },
     target: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L) {
       const L2 = L.data.L, prot = stOf(g, p).filter(t => t !== c && isTrap(t) && t.zone === 'st'); if (!prot.length) return;

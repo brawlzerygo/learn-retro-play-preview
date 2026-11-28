@@ -124,16 +124,9 @@ const trapTrig = o => ({ type: 'trig', loc: 'any', label: o.label,
   target: o.target,
   res: function* (g, c, p, L2) { if (onField(c)) yield* o.res(g, c, p, L2); if (onField(c) && c.zone === 'st') move(g, c, 'gy', { reason: 'rule' }); } });
 
-// A Spell Card activated and resolved, read from the moves (as full-15.js). Returns the player who activated it, or -1.
-// PARTIAL: a Set Continuous/Equip/Field Spell flipped face-up to activate is not seen (no event for it).
+// A Spell Card activated and resolved: the player who activated it, or -1.
 const STAYS = ['Continuous', 'Equip', 'Field'];
-function spellResolvedBy(ev) {
-  if (ev.type !== 'move' || !isSpell(ev.c)) return -1;
-  const stays = STAYS.includes(D(ev.c).sub);
-  if (!stays && ev.from === 'st' && ev.to === 'gy' && ev.reason === 'rule') return ev.prevCtrl;
-  if (stays && ev.from === 'hand' && ev.reason === 'activate') return ev.c.ctrl;
-  return -1;
-}
+function spellResolvedBy(ev) { return L.spellResolvedBy(ev); }   // the engine's spellResolved event (2026-11-27 audit): Set Spells flipped up count, a negated activation doesn't
 
 /* ----- A-Counters ----- */
 const isAlien = c => /Alien/.test(name(c));
@@ -483,7 +476,7 @@ E.addScripts({
   'Zombyra the Dark': {
     self: { cantAttack: (g, c) => !monsOf(g, opp(c.ctrl)).some(t => !(faceUp(t) && has(g, t, 'noAttackTarget'))) },
     effs: [{ type: 'trig', mand: true, label: 'Lose 200 ATK', on: (g, ev, c) => battleKill(ev, c),
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: -200 }); log(g, `${name(c)} lost 200 ATK.`); } } }] },
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: -200, own: true }); log(g, `${name(c)} lost 200 ATK.`); } } }] },
 
   /* ===== Aliens ===== */
   // When a Reptile you control is destroyed by battle with an opponent's attacking monster and sent to the GY: take control of

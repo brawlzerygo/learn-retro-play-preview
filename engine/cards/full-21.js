@@ -113,7 +113,7 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.from === 'hand' && ev.to === 'gy' && effMove(ev) && byOpp(g, ev, c),
     res: function* (g, c, p) { damage(g, opp(p), 2000, { src: c, srcP: p }); } }] },
   'Emes the Infinity': { effs: [{ type: 'trig', mand: true, label: '+700 ATK', on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
-    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 700 }); log(g, 'Emes the Infinity gained 700 ATK.'); } } }] },
+    res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 700, own: true }); log(g, 'Emes the Infinity gained 700 ATK.'); } } }] },
   'Empress Judge': { effs: [] },
   'Enraged Muka Muka': { self: { atk: (g, c) => 400 * g.p[c.ctrl].hand.length, def: (g, c) => 400 * g.p[c.ctrl].hand.length } },
   // Flip: control lasts while Eria is face-up on the field (checked at every game event).
@@ -138,7 +138,7 @@ E.addScripts({
     self: { noBattleDestroy: true, replaceDestroy: (g, c, o) => !o.battle && !o.rule && (o.src ? isST(o.src) : stResolving(g)) },
     effs: [lockInstall,
       { type: 'trig', mand: true, opt: true, label: '+500 ATK', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-        res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500 }); log(g, 'Exodia Necross gained 500 ATK.'); } } },
+        res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 500, own: true }); log(g, 'Exodia Necross gained 500 ATK.'); } } },
       { type: 'trig', mand: true, label: 'Destroyed (Exodia pieces missing)',
         on: (g, ev, c) => onField(c) && faceUp(c) && !PIECES.every(n => g.p[c.ctrl].gy.some(x => named(x, n))),
         res: function* (g, c) { if (onField(c) && faceUp(c) && !PIECES.every(n => g.p[c.ctrl].gy.some(x => named(x, n)))) destroy(g, [c], { rule: true }); } }] },
