@@ -68,10 +68,9 @@ E.addScripts({
     res: function* (g, c, p) { yield* search(g, p, x => D(x).n === 'Assault Mode Activate', 'Add Assault Mode Activate'); } }] },
   // Scripted from its Edison text (tx): it negates any activation, not only destroying ones.
   'Stardust Dragon Assault Mode': {
-    // PARTIAL: only blocked from being summoned out of the hand; a copy milled to the GY could be revived by other cards.
-    cont: { loc: 'hand', forbid: (g, src, a) => a.c === src && ['ns', 'set', 'ss'].includes(a.type) },
+    // its summoning condition is read from its text by the engine (Group B); it works in the Damage Step like Stardust Dragon (E4)
     effs: [
-      { type: 'quick', label: 'Tribute to negate', speed: 2,
+      { type: 'quick', ds: true, label: 'Tribute to negate', speed: 2,
         cond: (g, c, p, x) => x.top && !x.top.negated && x.top.c !== c,
         // as Stardust Dragon: the End Phase return needs this negation resolved (not negated itself) and the card still in that GY visit
         cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; move(g, c, 'gy', { reason: 'cost' }); L.data.at = c.moved; log(g, `${PN(g, p)} Tributed ${D(c).n}.`); },
@@ -113,7 +112,7 @@ E.addScripts({
   'Batteryman AA': { self: {
     atk: (g, c) => { const aa = monsOf(g, c.ctrl).filter(x => faceUp(x) && D(x).n === 'Batteryman AA'); return aa.every(x => x.pos === 'atk') ? 1000 * aa.length : 0; },
     def: (g, c) => { const aa = monsOf(g, c.ctrl).filter(x => faceUp(x) && D(x).n === 'Batteryman AA'); return aa.every(x => x.pos === 'def') ? 1000 * aa.length : 0; } } },
-  'Battery Charger': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && isBatt(x) && D(x).n !== 'Batteryman Industrial Strength'),
+  'Battery Charger': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.canPay(g, p, 500, c) && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && isBatt(x) && D(x).n !== 'Batteryman Industrial Strength'),
     cost: function* (g, c, p) { pay(g, p, 500); },
     res: function* (g, c, p) { const cands = g.p[p].gy.filter(x => isMon(x) && isBatt(x)); const [x] = yield* pick(g, p, 'Special Summon a Batteryman from your GY', cands, 1, 1, 'good'); if (x) ss(g, p, x); } }] },
 
@@ -131,21 +130,21 @@ E.addScripts({
       let useDragon = dr && !gen; if (dr && gen) useDragon = (yield* choose(g, p, 'Fusion Summon which monster?', ['Chimeratech Overdragon', 'Another DARK Machine Fusion'])) === 0;
       if (!useDragon) { yield* fusionSummon(g, p, { from: ['m', 'gy'], banish: true, filter: fx => attr(fx) === 'DARK' && race(fx) === 'Machine' && D(fx).n !== 'Chimeratech Overdragon' }); return; }
       const pool = ovPool(g, p); const fx = g.p[p].extra.find(x => D(x).n === 'Chimeratech Overdragon');
-      const [cd] = yield* pick(g, p, 'Banish which Cyber Dragon?', pool.filter(x => D(x).n === 'Cyber Dragon'), 1, 1, 'cost');
+      const [cd] = yield* pick(g, p, 'Banish which Cyber Dragon?', pool.filter(x => name(x) === 'Cyber Dragon'), 1, 1, 'cost');
       const mach = pool.filter(x => x !== cd && race(x) === 'Machine');
       const ms = yield* pick(g, p, 'Banish which Machine monsters (1 or more)?', mach, 1, mach.length, 'good');
       const grp = g.group; const mats = [cd, ...ms];
       for (const m of mats) move(g, m, 'ban', { reason: 'fusion', group: grp });
       log(g, `${PN(g, p)} banished ${mats.map(x => D(x).n).join(' + ')} as Fusion Material.`);
       if (freeM(g, p) >= 0) ss(g, p, fx, 'atk', { how: 'fusion', group: grp }); } }] },
-  'Chimeratech Overdragon': { mats: [x => D(x).n === 'Cyber Dragon', x => race(x) === 'Machine'],
+  'Chimeratech Overdragon': { mats: [x => name(x) === 'Cyber Dragon', x => race(x) === 'Machine'],
+    self: { maxAttacks: (g, c) => Math.max(1, c.flags.ovMats || 1) },   // "can attack monsters a number of times each Battle Phase, up to the number of Fusion Material Monsters"
     // PARTIAL: Polymerization-style summons through fusionSummon use exactly 2 materials (its recipe is "1 or more"); Overload Fusion lets you pick any number.
     effs: [
       { type: 'trig', mand: true, label: 'Send all your other cards to the GY',
         on: (g, ev, c) => { if (!evSummoned(ev, c, ['fusion'])) return false; const n = g.events.filter(e => e.type === 'move' && e.reason === 'fusion' && e.group === ev.group).length || 2; c.flags.baseAtk = 800 * n; c.flags.ownBaseAtk = true; c.flags.ovMats = n; addMod(g, c, { def: 800 * n, own: true }); log(g, `Chimeratech Overdragon's original ATK/DEF became ${800 * n}.`); return true; },
         res: function* (g, c, p) { const xs = fieldOf(g, p).filter(x => x !== c); for (const x of xs) move(g, x, 'gy', { reason: 'effect', by: p }); if (xs.length) log(g, `${PN(g, p)} sent ${xs.length} card(s) to the GY.`); } },
-      // ENGINE: canAttack() allows at most 2 attacks a turn (flags.extraAttack); Overdragon should attack monsters once per material.
-      { type: 'trig', on: (g, ev, c) => { if (ev.type === 'attack' && ev.a === c && !ev.direct && (c.flags.ovMats || 0) >= 2) c.flags.extraAttack = g.turnNo; return false; }, res: function* () {} }] },
+      { type: 'trig', on: () => false, res: function* () {} }] },   // (kept so the effect indexes don't move; its attacks are self.maxAttacks)
 
   /* ----- Bushi ----- */
   'Destiny HERO - Dasher': { effs: [
@@ -192,8 +191,8 @@ E.addScripts({
     res: function* (g, c, p, L) { const ts = L.t.filter(t => t.zone === 'gy'); for (const t of ts) move(g, t, isExtraD(D(t)) ? 'extra' : 'deck', { reason: 'effect', by: p }); if (ts.length) log(g, `${ts.map(x => D(x).n).join(', ')} ${ts.length > 1 ? 'were' : 'was'} shuffled into the Deck.`); } }] },
   'Wall of Revealing Light': {
     cont: { forbid: (g, src, a) => a.type === 'attack' && a.c.ctrl !== src.ctrl && atk(g, a.c) <= (src.flags.wall || 0) },
-    effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000,
-      cost: function* (g, c, p) { const k = Math.min(8, Math.floor((g.p[p].lp - 1) / 1000)); const i = yield* choose(g, p, 'Pay how many LP?', [...Array(k).keys()].map(i => String(1000 * (i + 1)))); const n = 1000 * (i + 1); pay(g, p, n); c.flags.wall = n; },
+    effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 1000, c),
+      cost: function* (g, c, p) { const k = Math.floor(E.lib.lpPayable(g, p) / 1000); const i = yield* choose(g, p, 'Pay how many LP?', [...Array(k).keys()].map(i => String(1000 * (i + 1)))); const n = 1000 * (i + 1); pay(g, p, n); c.flags.wall = n; },
       res: function* (g, c, p) { if (g.aw && g.aw.a && g.aw.a.ctrl !== p && onField(c) && atk(g, g.aw.a) <= (c.flags.wall || 0)) L.stopAttack(g); } }] },
   // PARTIAL: Field Spells can't be Set in this engine, so under Anti-Spell Fragrance they can't be activated at all.
   'Anti-Spell Fragrance': { cont: { forbid: (g, src, a) => a.type === 'activate' && a.eff && a.eff.type === 'act' && isSpell(a.c) && (a.c.zone === 'hand' || a.c.turnIn === g.turnNo || (g.tp !== a.p && a.c.turnIn === g.turnNo - 1)) },
@@ -224,7 +223,7 @@ E.addScripts({
   'Messenger of Peace': { cont: { forbid: (g, src, a) => a.type === 'attack' && atk(g, a.c) >= 1500 },
     effs: [{ type: 'act', res: function* () {} },
       { type: 'trig', loc: 'st', mand: true, label: 'Pay 100 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c),
-        res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 100 && (yield* yn(g, p, 'Pay 100 LP to keep Messenger of Peace?'))) pay(g, p, 100); else destroy(g, [c], { by: p, rule: true }); } }] },
+        res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 100) && (yield* yn(g, p, 'Pay 100 LP to keep Messenger of Peace?'))) pay(g, p, 100); else destroy(g, [c], { by: p, rule: true }); } }] },
   'Begone, Knave!': { effs: [{ type: 'act', res: function* () {} },
     { type: 'trig', loc: 'st', mand: true, label: 'Return the monster to the hand', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src && isMon(ev.src) && faceUp(c),
       res: function* (g, c, p, L) { const m = L.ev.src; if (m && onField(m)) { move(g, m, 'hand', { reason: 'effect', by: p }); log(g, `${D(m).n} returned to the hand.`); } } }] },
@@ -233,7 +232,7 @@ E.addScripts({
     cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [y] = yield* pick(g, p, 'Send which other Fairy from your hand to the GY?', g.p[p].hand.filter(y => y !== c && isMon(y) && race(y) === 'Fairy'), 1, 1, 'cost'); move(g, c, 'gy', { reason: 'cost' }); move(g, y, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(c).n} and ${D(y).n} to the GY.`); },
     res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
   'Seven Tools of the Bandit': { effs: [{ type: 'act',
-    cond: (g, c, p, x) => spellTrapAct(x.top) && isTrap(x.top.c) && !x.top.negated && g.p[p].lp > 1000,
+    cond: (g, c, p, x) => spellTrapAct(x.top) && isTrap(x.top.c) && !x.top.negated && E.lib.canPay(g, p, 1000, c),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     target: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
@@ -243,7 +242,8 @@ E.addScripts({
     cond: (g, c, p) => stOf(g, p).some(isUmi) && fieldOf(g, opp(p)).length > 0,
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Send which face-up "Umi" to the GY?', stOf(g, p).filter(isUmi), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} sent ${D(x).n} to the GY.`); },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Send up to 2 of their cards to the GY', fieldOf(g, opp(p)), 1, 2, 'bad'); },
-    res: function* (g, c, p, L) { const ts = live(L); for (const t of ts) move(g, t, 'gy', { reason: 'effect', by: p }); if (ts.length) log(g, `${ts.map(x => D(x).n).join(', ')} ${ts.length > 1 ? 'were' : 'was'} sent to the GY.`); } }] },
+    // ruling 3: a target you took control of before it resolved stays ("cards your opponent controls")
+    res: function* (g, c, p, L) { const ts = live(L).filter(t => t.ctrl !== p); for (const t of ts) move(g, t, 'gy', { reason: 'effect', by: p }); if (ts.length) log(g, `${ts.map(x => D(x).n).join(', ')} ${ts.length > 1 ? 'were' : 'was'} sent to the GY.`); } }] },
   'Warrior of Atlantis': { effs: [{ type: 'ign', loc: 'hand', label: 'Discard: add A Legendary Ocean',
     cond: (g, c, p) => g.p[p].deck.some(x => D(x).n === 'A Legendary Ocean'),
     cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} discarded ${D(c).n}.`); },
@@ -284,7 +284,7 @@ E.addScripts({
     proc: { label: 'Special Summon (3 face-up Continuous Spells)', cond: (g, c, p) => contSpells(g, p).length >= 3 },
     effs: [
       { type: 'trig', mand: true, label: 'Discard and draw', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl && g.battle && g.battle.a === c,
-        res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand; if (h.length) { const [x] = yield* pick(g, o, 'Send which card from your hand to the GY?', h, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${PN(g, o)} sent ${D(x).n} to the GY.`); } } draw(g, p, 1); } },
+        res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand; if (h.length) { const [x] = yield* pick(g, o, 'Send which card from your hand to the GY?', h, 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${PN(g, o)} sent ${D(x).n} to the GY.`); draw(g, p, 1); } } } },   // ruling 4: no draw if nothing was sent
       { type: 'trig', loc: 'gy', on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.to === 'gy') c.flags.dqField = !!ev.wasField; return false; }, res: function* () {} },
       { type: 'trig', loc: 'gy', tags: { ss: 1 }, label: 'Special Summon from the GY',
         on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner && c.flags.dqField,
@@ -337,7 +337,7 @@ function ovPool(g, p) { return [...monsOf(g, p), ...g.p[p].gy.filter(isMon)]; }
 function ovGeneric(g, p) { return canFusion(g, p, { from: ['m', 'gy'], filter: fx => attr(fx) === 'DARK' && race(fx) === 'Machine' && D(fx).n !== 'Chimeratech Overdragon' }); }
 function ovDragonOk(g, p) {
   if (!g.p[p].extra.some(x => D(x).n === 'Chimeratech Overdragon')) return false;
-  const pool = ovPool(g, p); const cd = pool.find(x => D(x).n === 'Cyber Dragon');
+  const pool = ovPool(g, p); const cd = pool.find(x => name(x) === 'Cyber Dragon');
   if (!cd || !pool.some(x => x !== cd && race(x) === 'Machine')) return false;
   return freeM(g, p) >= 0 || monsOf(g, p).length > 0;
 }

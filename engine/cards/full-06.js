@@ -85,7 +85,7 @@ E.addScripts({
   // "Once per turn: roll a die: 1-2 destroy all monsters your opponent controls, 3-5 destroy 1 of them, 6 destroy all monsters you control" (Zorc too).
   'Dark Master - Zorc': { effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Roll a die',
     res: function* (g, c, p) {
-      if (!onField(c)) return; const r = yield* roll(g, p);
+      const r = yield* roll(g, p);   // it resolves even if Zorc has left the field (goat-11)
       if (r <= 2) destroy(g, monsOf(g, opp(p)), { by: p });
       else if (r <= 5) { const ms = monsOf(g, opp(p)); if (ms.length) { const [t] = yield* pick(g, p, 'Destroy which of their monsters?', ms, 1, 1, 'bad'); if (t) destroy(g, [t], { by: p }); } }
       else destroy(g, monsOf(g, p), { by: p });
@@ -366,7 +366,7 @@ E.addScripts({
   // It stops the activation of effects that would send cards from the Deck to the GY (optional ones and costs, read from the text).
   'Dimension Fortress Weapon': { cont: { forbid: (g, src, a) => a.type === 'activate' && a.c && a.eff && !a.eff.mand && !/FLIP:/.test(D(a.c).tx || '') && millsDeck(a.c) }, effs: [] },
   // Port of goat-2.js, with the Edison rulings: only face-up banished monsters, Special Summon-only ones only if properly summoned.
-  'Dimension Fusion': { effs: [markProper, { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 2000 && allCards(g, 'ban').some(dimOk) && (freeM(g, p) >= 0 || freeM(g, opp(p)) >= 0),
+  'Dimension Fusion': { effs: [markProper, { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.canPay(g, p, 2000, c) && allCards(g, 'ban').some(dimOk) && (freeM(g, p) >= 0 || freeM(g, opp(p)) >= 0),
     cost: function* (g, c, p) { L.pay(g, p, 2000); },
     res: function* (g, c, p) { for (const q of [p, opp(p)]) { const ms = g.p[q].ban.filter(x => dimOk(x) && !forbid(g, { type: 'ss', c: x, p: q, how: 'special' })); const n = Math.min(ms.length, nFreeM(g, q)); if (!n) continue;
       const xs = n < ms.length ? yield* pick(g, q, `Special Summon ${n} of your banished monsters`, ms, n, n, 'good') : ms; const grp = g.group; for (const x of xs) ss(g, q, x, 'atk', { group: grp }); } } }] },

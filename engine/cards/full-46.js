@@ -369,7 +369,7 @@ E.addScripts({
       res: function* (g, c, p) { if (monsOf(g, p).length) return; const cs = g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WATER' && lv(x) <= 4); if (!cs.length) return;
         const [x] = yield* pick(g, p, 'Special Summon which Level 4 or lower WATER monster?', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } }] },
   'Weed Out': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => g.p[p].lp > 500 && fieldMons(g).some(x => x.pos === 'atk' && lv(x) === 3),
+    cond: (g, c, p) => E.lib.canPay(g, p, 500, c) && fieldMons(g).some(x => x.pos === 'atk' && lv(x) === 3),
     cost: function* (g, c, p) { pay(g, p, 500); },
     res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.pos === 'atk' && faceUp(x) && lv(x) === 3), { by: p, src: c }); } }] },
   'Weeping Idol': { effs: [{ type: 'ign', loc: 'hand', tags: { ss: 1 }, label: 'Banish a Tuner: Special Summon this card',
@@ -382,7 +382,7 @@ E.addScripts({
     res: function* (g, c, p) { const o = opp(p); addRule(g, (g2, a) => a.type === 'activate' && a.p === o && a.c && isST(a.c) && a.eff && a.eff.type === 'act', { end: g.turnNo }); log(g, `${PN(g, o)} can't activate Spell or Trap Cards this turn.`); } }] },
   // PARTIAL: its tie works both ways through link() (either one leaving the field destroys the other).
   'Wicked Rebirth': { effs: [{ type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => g.p[p].lp > 800 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => D(x).k === 'synchro'),
+    cond: (g, c, p) => E.lib.canPay(g, p, 800, c) && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => D(x).k === 'synchro'),
     cost: function* (g, c, p) { pay(g, p, 800); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Synchro Monster from your GY?', g.p[p].gy.filter(x => D(x).k === 'synchro'), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0];
@@ -399,7 +399,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && !!c.f46dud,
       res: function* (g, c, p) { const rs = c.f46dud || []; c.f46dud = null; const ts = fieldMons(g).filter(x => rs.some(r => r.u === x.u && r.turnIn === x.turnIn)); if (ts.length) destroy(g, ts, { by: p, src: c }); } }] },
   'Wild Fire': { effs: [{ type: 'act', tags: { destroy: 1 },
-    cond: (g, c, p) => g.p[p].lp > 500 && stOf(g, p).some(x => x !== c && faceUp(x) && /Blaze Accelerator/.test(name(x))) && fieldMons(g).length > 0 && !forbid(g, { type: 'ss', c: { id: null, owner: p, flags: {}, zone: 'tok' }, p, how: 'special' }),
+    cond: (g, c, p) => E.lib.canPay(g, p, 500, c) && stOf(g, p).some(x => x !== c && faceUp(x) && /Blaze Accelerator/.test(name(x))) && fieldMons(g).length > 0 && !forbid(g, { type: 'ss', c: { id: null, owner: p, flags: {}, zone: 'tok' }, p, how: 'special' }),
     cost: function* (g, c, p) { pay(g, p, 500); },
     target: function* (g, c, p, L2) { const bs = stOf(g, p).filter(x => x !== c && faceUp(x) && /Blaze Accelerator/.test(name(x))); L2.t = bs.length > 1 ? yield* pick(g, p, 'Destroy which Blaze Accelerator card?', bs, 1, 1, 'cost') : bs; },
     res: function* (g, c, p, L2) { const b = live(L2).filter(faceUp)[0]; if (!b) return; destroy(g, [b], { by: p, src: c });

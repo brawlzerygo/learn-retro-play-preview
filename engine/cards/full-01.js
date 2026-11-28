@@ -70,16 +70,18 @@ function tagOut(self, n = 1, except = self, gbOnly = false) {
     } };
 }
 /* Contact Fusion: shuffle the listed monsters you control into the Deck. */
-function contactSets(g, p, preds) {
-  const pool = monsOf(g, p).filter(faceUp), out = [];
+// fd: face-down monsters you control count too (Gladiator Beast Gyzarus/Heraklinos/Gaiodiaz site rulings: "Face-up & face-down Fusion
+// Material Monsters you control may be used"); the Neos Fusions keep face-up only (no ruling says otherwise).
+function contactSets(g, p, preds, fd) {
+  const pool = fd ? monsOf(g, p) : monsOf(g, p).filter(faceUp), out = [];
   const rec = (i, used) => { if (out.length > 6) return; if (i === preds.length) { out.push(used.slice()); return; } for (const x of pool) if (!used.includes(x) && preds[i](x)) { used.push(x); rec(i + 1, used); used.pop(); } };
   rec(0, []);
   const seen = new Set(); return out.filter(m => { const k = m.map(x => x.u).sort().join(','); if (seen.has(k)) return false; seen.add(k); return true; });
 }
-function contactProc(preds, label) {
-  return { extra: true, how: 'fusion', label, cond: (g, c, p) => contactSets(g, p, preds).length > 0,
+function contactProc(preds, label, fd) {
+  return { extra: true, how: 'fusion', label, cond: (g, c, p) => contactSets(g, p, preds, fd).length > 0,
     cost: function* (g, c, p, grp) {
-      const cs = contactSets(g, p, preds); let mats = cs[0];
+      const cs = contactSets(g, p, preds, fd); let mats = cs[0];
       if (cs.length > 1) { const i = yield* choose(g, p, 'Shuffle which monsters into the Deck?', cs.map(m => m.map(nm).join(' + '))); mats = cs[i]; }
       for (const m of mats) move(g, m, 'deck', { reason: 'fusion', group: grp });
       log(g, `${PN(g, p)} shuffled ${mats.map(nm).join(' + ')} into the Deck.`);
@@ -125,7 +127,7 @@ E.addScripts({
   // Edison text: Gyzarus-style tag out of 2; the 2010 card text keeps "except Gladiator Beast Spartacus".
   'Gladiator Beast Gaiodiaz': {
     mats: [() => false, () => false], // can't be Fusion Summoned with Polymerization
-    proc: contactProc([x => nm(x) === 'Gladiator Beast Spartacus', gbMon], 'Special Summon (shuffle Spartacus + 1 Gladiator Beast)'),
+    proc: contactProc([x => nm(x) === 'Gladiator Beast Spartacus', gbMon], 'Special Summon (shuffle Spartacus + 1 Gladiator Beast)', true),
     effs: [battledHook, tagOut('Gladiator Beast Gaiodiaz', 2, 'Gladiator Beast Spartacus'),
       { type: 'trig', mand: true, label: 'Damage equal to its DEF', on: (g, ev, c) => battleKill(ev, c),
         res: function* (g, c, p, L2) { damage(g, opp(p), num(D(L2.ev.c).def), { src: c, srcP: p }); } }] },
@@ -143,8 +145,12 @@ E.addScripts({
     { type: 'trig', mand: true, ownChain: true, tags: { ss: 1 }, label: 'Special Summon 2 Gladiator Beasts', on: (g, ev, c) => endBP(g, ev, c) && c.flags.gb,
       cond: (g, c, p) => g.p[p].deck.some(y => gbMon(y) && nm(y) !== 'Gladiator Beast Secutor'),
       res: function* (g, c, p) {
-        let cs = g.p[p].deck.filter(y => gbMon(y) && nm(y) !== 'Gladiator Beast Secutor'); if (!cs.length) return;
-        const xs = cs.length > 2 ? yield* pick(g, p, 'Special Summon which 2 Gladiator Beasts from your Deck?', cs, 2, 2, 'good') : cs;
+        // ruling 4: with fewer than 2 in the Deck nothing is summoned (the Deck is still shuffled)
+        let cs = g.p[p].deck.filter(y => gbMon(y) && nm(y) !== 'Gladiator Beast Secutor'); if (cs.length < 2) { shuffleDeck(g, p); return; }
+        let xs = cs.length > 2 ? yield* pick(g, p, 'Special Summon which 2 Gladiator Beasts from your Deck?', cs, 2, 2, 'good') : cs;
+        // one free zone: the player picks which one is summoned; the other is destroyed (E4)
+        if (xs.length === 2 && nFreeM(g, p) === 1) { const ok = xs.filter(x => !forbid(g, { type: 'ss', c: x, p, how: 'special' }));
+          if (ok.length === 2) { const [first] = yield* pick(g, p, 'Only 1 free zone: Special Summon which one? (the other is destroyed)', ok, 1, 1, 'good'); if (first) xs = [first, ...xs.filter(x => x !== first)]; } }
         for (const x of xs) { if (freeM(g, p) >= 0 && !forbid(g, { type: 'ss', c: x, p, how: 'special' })) gbSS(g, p, x, yield* posPick(g, p, x)); else { move(g, x, 'gy', { reason: 'rule', destroyed: true }); log(g, `${nm(x)} had no zone and was destroyed.`); } }
         shuffleDeck(g, p); } }] },
   'Gladiator Beast Spartacus': { effs: [noSSHook, battledHook, tagOut('Gladiator Beast Spartacus'),
@@ -276,7 +282,7 @@ E.addScripts({
   // PARTIAL: the engine keeps hand cards in their owner's hand, so the monster taken changes owner.
   'Amazoness Chain Master': { effs: [{ type: 'trig', loc: 'gy', label: 'Pay 1500: take a monster from their hand',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => g.p[p].lp > 1500 && g.p[opp(p)].hand.length > 0,
+    cond: (g, c, p) => E.lib.canPay(g, p, 1500) && g.p[opp(p)].hand.length > 0,
     cost: function* (g, c, p) { pay(g, p, 1500); },
     res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand; if (!h.length) return; log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand: ${h.map(nm).join(', ')}.`);
       const ms = h.filter(isMon); if (!ms.length) return; const [x] = yield* pick(g, p, 'Add which monster to your hand?', ms, 1, 1, 'bad'); if (!x) return;

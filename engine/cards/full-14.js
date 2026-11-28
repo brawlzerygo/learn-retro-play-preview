@@ -102,7 +102,7 @@ const lvFour = (g, p, x) => isMon(x) && lv(x) === 4 && !isExtraD(D(x)) && !['rit
 
 /* ----- Sasuke Samurai #2 and Skull Knight #2 (shared with their Goat names) ----- */
 const sasuke2 = { effs: [{ type: 'ign', opt: true, label: 'Pay 800: no Spells or Traps this turn',
-  cond: (g, c, p) => g.p[p].lp > 800,
+  cond: (g, c, p) => E.lib.canPay(g, p, 800),
   cost: function* (g, c, p) { pay(g, p, 800); },
   res: function* (g, c, p) { addRule(g, (g2, a) => a.type === 'activate' && a.c && isST(a.c), { end: g.turnNo }); log(g, 'Spell and Trap Cards can’t be activated until the End Phase.'); } }] };
 // "If you Tribute Summon (or Tribute Set) a Fiend by Tributing this monster": the player who Tributed it Summons another
@@ -132,7 +132,7 @@ E.addScripts({
   // Port of goat-4.js. PARTIAL: the Spell negation (not optional on the card) is a Spell Speed 3 response here.
   'Ryu Senshi': { effs: [
     { type: 'quick', ds: true, label: 'Pay 1000: negate the Normal Trap',
-      cond: (g, c, p, x) => { const t = x.top; return !!(t && t.cardAct && isTrap(t.c) && D(t.c).sub === 'Normal' && !t.negated) && g.p[p].lp > 1000; },
+      cond: (g, c, p, x) => { const t = x.top; return !!(t && t.cardAct && isTrap(t.c) && D(t.c).sub === 'Normal' && !t.negated) && E.lib.canPay(g, p, 1000); },
       cost: function* (g, c, p, L2) { pay(g, p, 1000); L2.data.L = g.chain[g.chain.length - 1]; },
       res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) negLink(g, L2.data.L, p, false); } },
     negTargeting((g, c, t) => isSpell(t.c), 'Negate the Spell targeting it', true)] },
@@ -309,7 +309,7 @@ E.addScripts({
   // before a link resolves).
   'Skull Archfiend of Lightning': { effs: [
     { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Pay 500 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } },
+      res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500)) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } },
     { type: 'quick', speed: 3, ds: true, label: 'Roll a die',
       cond: (g, c, p, x) => { const t = x.top; return !!(t && !t.negated && t.p !== p && t.c !== c && (t.t || []).includes(c) && faceUp(c) && !(t.data && t.data.f14die)); },
       target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; L2.data.L.data.f14die = true; },
@@ -408,7 +408,7 @@ E.addScripts({
   // You pick first (the target), then the opponent picks one of yours when it is activated (ruling).
   'Soul Demolition': { effs: [{ type: 'act', res: noop },
     { type: 'quick', loc: 'st', label: 'Pay 500: both banish a monster from the GY',
-      cond: (g, c, p) => g.p[p].lp > 500 && monsOf(g, p).some(m => faceUp(m) && race(m) === 'Fiend') && g.p[p].gy.some(isMon) && g.p[opp(p)].gy.some(isMon),
+      cond: (g, c, p) => E.lib.canPay(g, p, 500) && monsOf(g, p).some(m => faceUp(m) && race(m) === 'Fiend') && g.p[p].gy.some(isMon) && g.p[opp(p)].gy.some(isMon),
       cost: function* (g, c, p) { pay(g, p, 500); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish which monster from their GY?', g.p[opp(p)].gy.filter(isMon), 1, 1, 'bad');
         const [x] = yield* pick(g, opp(p), 'Banish which monster from their GY?', g.p[p].gy.filter(isMon), 1, 1, 'bad'); L2.data.o = x; },
@@ -451,7 +451,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'deckTop', { reason: 'effect', by: p }); log(g, `${name(t)} was put on top of the Deck.`); } } }] },
   'Soul Rope': { effs: [trapTrig({ label: 'Pay 1000: Special Summon a Level 4 monster', tags: { ss: 1 },
     on: (g, ev, c) => ev.type === 'move' && ev.destroyed && !ev.battle && ev.wasField && ev.to === 'gy' && ev.prevCtrl === c.ctrl && ev.snap && ev.snap.mon && !g.inDS,
-    cond: (g, c, p) => g.p[p].lp > 1000 && freeM(g, p) >= 0 && g.p[p].deck.some(x => lvFour(g, p, x)),
+    cond: (g, c, p) => E.lib.canPay(g, p, 1000) && freeM(g, p) >= 0 && g.p[p].deck.some(x => lvFour(g, p, x)),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => lvFour(g, p, x)); if (!cs.length || freeM(g, p) < 0) return;
       const [x] = yield* pick(g, p, 'Special Summon a Level 4 monster from your Deck', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } })] },

@@ -110,7 +110,7 @@ E.addScripts({
   // activation, so a Continuous Normal Spell stays). The battle negation works like Dark Ruler Ha Des.
   'Dark Balter the Terrible': { effs: [
     { type: 'quick', label: 'Pay 1000: negate the Normal Spell',
-      cond: (g, c, p, x) => { const t = x.top; return !!(t && t.cardAct && isNormalSpell(t.c) && !t.negated) && g.p[p].lp > 1000; },
+      cond: (g, c, p, x) => { const t = x.top; return !!(t && t.cardAct && isNormalSpell(t.c) && !t.negated) && E.lib.canPay(g, p, 1000); },
       cost: function* (g, c, p, L2) { pay(g, p, 1000); L2.data.L = g.chain[g.chain.length - 1]; },
       res: function* (g, c, p, L2) { negLink(g, L2.data.L, p, false); } },
     { type: 'trig', loc: 'any', res: function* () {},
@@ -462,7 +462,7 @@ E.addScripts({
         const [x] = cs.length > 1 ? yield* pick(g, p, 'Which summoned monster’s ATK counts?', cs, 1, 1, 'cost') : cs;
         const A = onField(x) && faceUp(x) ? atk(g, x) : baseAtk(x); gain(g, opp(p), Math.floor(A / 2)); } }] },
   'Dark Deal': { effs: [{ type: 'act',
-    cond: (g, c, p, x) => { const t = x.top; return !!(t && t.p !== p && t.cardAct && isNormalSpell(t.c) && !t.negated) && g.p[p].lp > 1000 && g.p[p].hand.length > 0; },
+    cond: (g, c, p, x) => { const t = x.top; return !!(t && t.p !== p && t.cardAct && isNormalSpell(t.c) && !t.negated) && E.lib.canPay(g, p, 1000, c) && g.p[p].hand.length > 0; },
     cost: function* (g, c, p, L2) { pay(g, p, 1000); L2.data.T = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { const T = L2.data.T; if (!T || !g.chain.includes(T)) return;
       T.eff = { ...T.eff, cost: null, target: null, res: function* (g2, c2, p2) { randomDiscard(g2, opp(p2), p2); } }; T.t = []; T.data = {};

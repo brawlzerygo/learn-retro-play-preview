@@ -40,7 +40,7 @@ const canNS = c => isMon(c) && !isExtraD(D(c)) && !['ritual', 'token'].includes(
 function excavate(g, p) { const deck = g.p[p].deck, out = []; for (let i = deck.length - 1; i >= 0; i--) { const x = deck[i]; if (canNS(x)) return [x, out]; out.push(x); } return [null, out]; }
 
 /* Polymerization: the Fusion Materials come from the hand and the field (face-down monsters too). When every zone is full,
- at least one material must be on the field. ENGINE: no substitute Fusion Material hook (King of the Swamp, Fusion Substitutes). */
+ at least one material must be on the field. A Fusion substitute (King of the Swamp) stands in for 1 named material (engine assignMats). */
 function matSets(preds, pool, limit = 12) {
   const out = [];
   const rec = (i, used) => { if (out.length >= limit) return; if (i === preds.length) { out.push(used.slice()); return; } for (const c of pool) if (!used.includes(c) && preds[i](c)) { used.push(c); rec(i + 1, used); used.pop(); } };
@@ -53,7 +53,7 @@ function polyOptions(g, p, self) {
   for (const fx of g.p[p].extra) {
     if (D(fx).k !== 'fusion' || forbid(g, { type: 'ss', c: fx, p, how: 'fusion' })) continue;
     const r = fusionRecipe(fx); if (!r) continue;
-    let sets = matSets(r, pool); if (freeM(g, p) < 0) sets = sets.filter(s => s.some(onField));
+    let sets = L.assignMats(r, pool, 12, fx); if (freeM(g, p) < 0) sets = sets.filter(s => s.some(onField));
     if (sets.length) out.push({ fx, sets });
   }
   return out;
@@ -180,7 +180,7 @@ E.addScripts({
       res: function* (g, c, p) { if (onField(c)) draw(g, p, 2); } }] },
   // Pay 800 (cost), revive in Attack Position and equip; when this card is destroyed, destroy the monster (a bounce doesn't).
   'Premature Burial': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 800 && freeM(g, p) >= 0 && g.p[p].gy.some(x => canSS(g, p, x)),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.canPay(g, p, 800, c) && freeM(g, p) >= 0 && g.p[p].gy.some(x => canSS(g, p, x)),
       cost: function* (g, c, p) { pay(g, p, 800); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which monster from your GY?', g.p[p].gy.filter(x => canSS(g, p, x)), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'atk')) { equip(g, c, t); c.flags.pb = t.u; } } },
@@ -282,7 +282,7 @@ E.addScripts({
       for (const x of xs) move(g, x, 'deck', { reason: 'effect', by: p }); shuffleDeck(g, p); log(g, `${PN(g, p)} shuffled ${xs.map(x => D(x).n).join(' and ')} into the Deck.`); } }] },
   // Only a Fusion Monster that was properly Fusion Summoned (ruling). When this card is destroyed, banish the monster.
   'Re-Fusion': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 800 && freeM(g, p) >= 0 && g.p[p].gy.some(x => D(x).k === 'fusion' && (x.f26proper || x.summonType === 'fusion') && canSS(g, p, x)),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.canPay(g, p, 800, c) && freeM(g, p) >= 0 && g.p[p].gy.some(x => D(x).k === 'fusion' && (x.f26proper || x.summonType === 'fusion') && canSS(g, p, x)),
       cost: function* (g, c, p) { pay(g, p, 800); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Fusion Monster from your GY?', g.p[p].gy.filter(x => D(x).k === 'fusion' && (x.f26proper || x.summonType === 'fusion') && canSS(g, p, x)), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c)) { t.f26proper = true; if (ss(g, p, t, 'atk')) { equip(g, c, t); c.flags.rf = t.u; } } } },
@@ -318,7 +318,7 @@ E.addScripts({
   'Recycle': { effs: [actNoop,
     { type: 'trig', loc: 'st', label: 'Pay 300: return a non-Monster card to the bottom of the Deck',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      cond: (g, c, p) => g.p[p].lp > 300 && g.p[p].gy.some(isST),
+      cond: (g, c, p) => E.lib.canPay(g, p, 300) && g.p[p].gy.some(isST),
       cost: function* (g, c, p) { pay(g, p, 300); },
       res: function* (g, c, p) { const cs = g.p[p].gy.filter(isST); if (!cs.length) return; const [x] = yield* pick(g, p, 'Return which non-Monster card to the bottom of your Deck?', cs, 1, 1, 'good');
         if (x) { toBottom(g, x); log(g, `${D(x).n} went to the bottom of ${PN(g, p)}'s Deck.`); } } }] },

@@ -83,8 +83,10 @@ function losesBattle(g, c, a, t) {
   return false;
 }
 /* Fortune Lady Level up */
-const flLevelUp = (opt) => ({ type: 'trig', mand: true, opt, label: 'Level up', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
+const flLevelUp = (opt) => ({ type: 'trig', mand: true, opt, label: 'Level up', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c) && lv(c) < 12,   // at Level 12 nothing happens (max. 12)
   res: function* (g, c) { if (onField(c) && faceUp(c) && lv(c) < 12) { c.flags.lv = lv(c) + 1; log(g, `${name(c)} is now Level ${lv(c)}.`); } } });
+// a Special Summoned monster: Tokens are always Special Summoned (E4: Koa'ki Meiru Tornado)
+const ssed = x => ['special', 'synchro', 'fusion', 'ritual'].includes(x.summonType) || D(x).k === 'token';
 const flStats = n => ({ atk: (g, c) => lv(c) * n, def: (g, c) => lv(c) * n });
 
 E.addScripts({
@@ -199,9 +201,10 @@ E.addScripts({
       cond: (g, c, p) => { const n = monsOf(g, p).filter(x => faceUp(x) && isFL(x)).length; return n > 0 && stOf(g, opp(p)).length >= n; },
       res: function* (g, c, p) { const n = Math.min(monsOf(g, p).filter(x => faceUp(x) && isFL(x)).length, stOf(g, opp(p)).length); if (!n) return; const ts = yield* pick(g, p, `Destroy ${n} Spell/Trap card(s)`, stOf(g, opp(p)), n, n, 'bad'); destroy(g, ts, { by: p }); } }] },
   'Fortune Lady Water': { self: flStats(300), effs: [flLevelUp(true),
-    { type: 'trig', ds: true, label: 'Draw 2',
+    // "Draw 2 cards": mandatory (a draw past the Deck loses)
+    { type: 'trig', mand: true, ds: true, label: 'Draw 2',
       on: (g, ev, c) => evSummoned(ev, c) && !['normal', 'tribute', 'flip', 'gemini'].includes(ev.how),
-      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && isFL(x) && D(x).n !== 'Fortune Lady Water') && g.p[p].deck.length >= 2,
+      cond: (g, c, p) => monsOf(g, p).some(x => x !== c && faceUp(x) && isFL(x) && D(x).n !== 'Fortune Lady Water'),
       res: function* (g, c, p) { draw(g, p, 2); } }] },
   'Rai-Mei': { effs: [{ type: 'trig', loc: 'gy', when: true, label: 'Add a Level 2 or lower LIGHT',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.to === 'gy',
@@ -262,7 +265,7 @@ E.addScripts({
   // at once give one search.
   'Verdant Sanctuary': { effs: [{ type: 'act', res: function* () {} },
     { type: 'trig', loc: 'st', mand: true, label: 'Add an Insect of the same Level',
-      on: (g, ev, c) => faceUp(c) && ev.type === 'move' && ev.wasField && ev.destroyed && ev.to === 'gy' && ev.snap && ev.snap.faceUp && ev.snap.race === 'Insect' && isMon(ev.c),
+      on: (g, ev, c) => faceUp(c) && ev.type === 'move' && ev.wasField && ev.from === 'm' && ev.destroyed && ev.to === 'gy' && ev.snap && ev.snap.faceUp && ev.snap.race === 'Insect' && isMon(ev.c),   // a face-up Insect monster (not one equipped in the S/T Zone)
       res: function* (g, c, p, L2) { const x = L2.ev.c, q = L2.ev.prevCtrl, n = lv(x);
         if (!g.p[q].deck.some(y => isInsect(y) && lv(y) === n)) return;
         if (yield* yn(g, q, `Verdant Sanctuary: add a Level ${n} Insect from your Deck?`)) yield* search(g, q, y => isInsect(y) && lv(y) === n, `Add a Level ${n} Insect`); } }] },
@@ -296,12 +299,12 @@ E.addScripts({
     res: function* (g, c, p) { yield* search(g, p, x => isIC(x) || (isKMMon(x) && lv(x) <= 4), "Add an Iron Core or a Level 4 or lower Koa'ki Meiru"); } }] },
   "Koa'ki Meiru Crusader": { effs: [maint('Reveal a Beast-Warrior', x => isMon(x) && race(x) === 'Beast-Warrior', ICsend),
     { type: 'trig', loc: 'any', label: "Return a Koa'ki Meiru card to the hand",
-      on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.killer === c && ev.prevCtrl !== c.owner && (c.zone === 'm' || c.zone === 'gy'),
+      on: (g, ev, c) => ev.type === 'move' && ev.battle && ev.killer === c && ev.prevCtrl !== c.ctrl && (c.zone === 'm' || c.zone === 'gy'),
       cond: (g, c, p) => g.p[p].gy.some(isKM),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, "Return which Koa'ki Meiru card to your hand?", g.p[p].gy.filter(isKM), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } }] },
   "Koa'ki Meiru Guardian": { effs: [maint('Reveal a Rock monster', x => isMon(x) && race(x) === 'Rock', ICsend),
-    { type: 'quick', label: 'Tribute: negate a monster effect', tags: { destroy: 1 },
+    { type: 'quick', ds: true, label: 'Tribute: negate a monster effect', tags: { destroy: 1 },
       cond: (g, c, p, x) => x.top && !x.top.negated && !x.top.cardAct && isMon(x.top.c) && x.top.c !== c,
       cost: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; move(g, c, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} Tributed Koa'ki Meiru Guardian.`); },
       res: function* (g, c, p, L2) { L2.data.L.negBy = p; negate(g, L2.data.L, true); } }] },
@@ -326,9 +329,9 @@ E.addScripts({
         target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy up to 2 cards', fieldOf(g, opp(p)), 1, 2, 'bad'); },
         res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
   "Koa'ki Meiru Tornado": { effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Destroy their Special Summoned monsters',
-    cond: (g, c, p) => g.p[p].hand.some(isIC) && monsOf(g, opp(p)).some(x => ['special', 'synchro', 'fusion', 'ritual'].includes(x.summonType)),
+    cond: (g, c, p) => g.p[p].hand.some(isIC) && monsOf(g, opp(p)).some(ssed),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Put an Iron Core on top of your Deck', g.p[p].hand.filter(isIC), 1, 1, 'cost'); move(g, x, 'deckTop', { reason: 'cost' }); log(g, `${PN(g, p)} put Iron Core of Koa'ki Meiru on top of the Deck.`); },
-    res: function* (g, c, p) { destroy(g, monsOf(g, opp(p)).filter(x => ['special', 'synchro', 'fusion', 'ritual'].includes(x.summonType)), { by: p }); } }] },
+    res: function* (g, c, p) { destroy(g, monsOf(g, opp(p)).filter(ssed), { by: p }); } }] },
   "Koa'ki Meiru Urnight": { effs: [maint('Reveal a Beast-Warrior', x => isMon(x) && race(x) === 'Beast-Warrior', ICsend),
     { type: 'ign', opt: true, tags: { ss: 1 }, label: "Reveal an Iron Core: summon a Koa'ki Meiru",
       cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].hand.some(isIC) && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isKMMon(x) && lv(x) <= 4 && D(x).n !== "Koa'ki Meiru Urnight"),

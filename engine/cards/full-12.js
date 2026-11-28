@@ -240,11 +240,11 @@ E.addScripts({
     effs: [equipAct(isSpirit, 'Equip Mirror of Yata to which Spirit monster?')] },
 
   'Mirror Wall': { effs: [
-    { type: 'act', res: function* (g, c, p) { const b = g.aw || g.battle; if (b && b.a && b.a.ctrl !== p) halve(g, c, b.a); } },
+    { type: 'act', ds: true, res: function* (g, c, p) { const b = g.aw || g.battle; if (b && b.a && b.a.ctrl !== p) halve(g, c, b.a); } },   // it can be activated in the Damage Step (goat-10)
     { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'attack' && ev.a.ctrl !== c.ctrl && faceUp(c) && !L.negd(g, c)) halve(g, c, ev.a); return false; }, res: noop },   // a lasting effect: not while negated (Jinzo, goat-10)
     { type: 'trig', loc: 'any', on: (g, ev, c) => { if (ev.type === 'move' && ev.c === c && ev.wasField) for (const m of fieldMons(g)) m.mods = m.mods.filter(x => x.mw !== c.u); return false; }, res: noop },
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 2000 LP or destroy it', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 2000 && (yield* yn(g, p, 'Pay 2000 LP to keep Mirror Wall?'))) pay(g, p, 2000); else destroy(g, [c], { rule: true }); } }] },
+      res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 2000) && (yield* yn(g, p, 'Pay 2000 LP to keep Mirror Wall?'))) pay(g, p, 2000); else destroy(g, [c], { rule: true }); } }] },
 
   'Monster Gate': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => monsOf(g, p).length > 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(canNS),
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', monsOf(g, p), 1, 1, 'cost'); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${x.pos === 'set' ? 'a face-down monster' : name(x)}.`); },

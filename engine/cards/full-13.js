@@ -112,7 +112,7 @@ E.addScripts({
       else { const tk = token(g, p, { n: 'Option Token', a: attr(v), r: race(v), lv: lv(v), atk: 0, def: 0 }, 'atk'); if (tk) { addMod(g, tk, { set: atk(g, v), which: 'atk' }); addMod(g, tk, { set: def(g, v), which: 'def' }); link(g, tk, v); log(g, `${PN(g, p)} Special Summoned an Option Token.`); emit(g, { type: 'summon', cs: [tk], how: 'special', p, byEffect: true }); } } } }] },
   'Power Filter': { cont: { forbid: (g, src, a) => a.type === 'ss' && !!a.c && a.c.id != null && D(a.c).atk !== '?' && (a.c.flags && a.c.flags.baseAtk != null ? a.c.flags.baseAtk : L.num(D(a.c).atk)) <= 1000 },
     effs: [{ type: 'act', res: noop }] },
-  'Power Injector': { effs: [{ type: 'ign', opt: true, label: 'Pay 600: Psychics gain 500 ATK', cond: (g, c, p) => g.p[p].lp > 600,
+  'Power Injector': { effs: [{ type: 'ign', opt: true, label: 'Pay 600: Psychics gain 500 ATK', cond: (g, c, p) => E.lib.canPay(g, p, 600),
     cost: function* (g, c, p) { pay(g, p, 600); },
     res: function* (g) { const ms = fieldMons(g).filter(m => faceUp(m) && race(m) === 'Psychic'); for (const m of ms) addMod(g, m, { atk: 500, end: true }); if (ms.length) log(g, `${ms.map(name).join(', ')} gained 500 ATK.`); } }] },
   'Power Invader': { self: { tributes: (g, c, p) => monsOf(g, opp(p)).length >= 2 ? [0] : [] }, effs: [] },
@@ -315,7 +315,7 @@ E.addScripts({
   // ENGINE: no Standby Phase response window, so it is offered at your Standby Phase as an optional effect. PARTIAL: once per Standby Phase.
   'Return Zombie': { effs: [{ type: 'trig', loc: 'gy', label: 'Pay 500: add this card to your hand',
     on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.owner,
-    cond: (g, c, p) => g.p[p].hand.length === 0 && g.p[p].lp > 500,
+    cond: (g, c, p) => g.p[p].hand.length === 0 && E.lib.canPay(g, p, 500),
     cost: function* (g, c, p) { pay(g, p, 500); },
     res: function* (g, c, p) { if (c.zone === 'gy' && g.p[p].hand.length === 0) { move(g, c, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added Return Zombie to the hand.`); } } }] },
   'Revival Gift': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => nFreeM(g, opp(p)) >= 2 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && D(x).tu),
@@ -326,7 +326,7 @@ E.addScripts({
   'Revival Jam': { effs: [
     { type: 'trig', loc: 'gy', when: true, label: 'Pay 1000: revive next Standby Phase',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-      cond: (g, c, p) => g.p[p].lp > 1000,
+      cond: (g, c, p) => E.lib.canPay(g, p, 1000),
       cost: function* (g, c, p) { pay(g, p, 1000); },
       res: function* (g, c) { if (c.zone === 'gy') { c.flags.jamAt = g.turnNo; log(g, 'Revival Jam will return in the next Standby Phase.'); } } },
     { type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Revival Jam returns',
@@ -365,7 +365,7 @@ E.addScripts({
     cont: { grant: (g, src, m, flag) => flag === 'noBattleDamage' && m.ctrl === src.ctrl && faceUp(m) && isRitualMon(m),
       replaceDestroy: (g, src, m, o) => !o.battle && !!o.src && isMon(o.src) && m.ctrl === src.ctrl && m.zone === 'm' && faceUp(m) && isRitualMon(m) } },
   'Ritual Foregone': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 1000 && freeM(g, p) >= 0 && !(g.f13rf && g.f13rf[p] === g.turnNo) && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(isRitualMon),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.canPay(g, p, 1000, c) && freeM(g, p) >= 0 && !(g.f13rf && g.f13rf[p] === g.turnNo) && g.p[p].hand.filter(x => E.lib.ssable(g, p, x)).some(isRitualMon),
       after: (g, c, p) => { (g.f13rf || (g.f13rf = {}))[p] = g.turnNo; },
       cost: function* (g, c, p) { pay(g, p, 1000); },
       res: function* (g, c, p) { const cs = g.p[p].hand.filter(isRitualMon); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which Ritual Monster?', cs, 1, 1, 'good');

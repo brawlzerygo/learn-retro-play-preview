@@ -217,13 +217,13 @@ E.addScripts({
   'Clear World': {
     cont: { forbid: (g, src, a) => {
       if (a.type === 'attack' && a.c) { const q = a.c.ctrl; return ctrlsAttr(g, q, 'DARK') && monsOf(g, q).length >= 2; }
-      if (a.type === 'activate' && a.eff && a.eff.type === 'act' && a.c && isSpell(a.c) && ctrlsAttr(g, a.p, 'WIND') && g.p[a.p].lp <= 500) return true;
+      if (a.type === 'activate' && a.eff && a.eff.type === 'act' && a.c && isSpell(a.c) && ctrlsAttr(g, a.p, 'WIND') && !E.lib.canPay(g, a.p, 500)) return true;
       return false; } },
     effs: [actNoop,
       { type: 'trig', loc: 'fz', mand: true, label: 'Pay 500 LP or destroy Clear World',
         on: (g, ev, c) => { cwWind(g, ev, c); return ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl; },
         res: function* (g, c, p) { if (!onField(c)) return;
-          if (g.p[p].lp > 500 && (yield* choose(g, p, 'Clear World: pay 500 LP or destroy it?', ['Pay 500 LP', 'Destroy Clear World'])) === 0) pay(g, p, 500);
+          if (E.lib.canPay(g, p, 500) && (yield* choose(g, p, 'Clear World: pay 500 LP or destroy it?', ['Pay 500 LP', 'Destroy Clear World'])) === 0) pay(g, p, 500);
           else destroy(g, [c], { by: p, rule: true }); } },
       { type: 'trig', loc: 'fz', mand: true, tags: { destroy: 1 }, label: 'EARTH: destroy a Defense Position monster',
         on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'standby' && ctrlsAttr(g, ev.tp, 'EARTH') && monsOf(g, ev.tp).some(m => faceUp(m) && m.pos === 'def')) { c.flags.cwq = ev.tp; return true; } return false; },
@@ -389,7 +389,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t) { addCtr(g, t, 'A', 1); log(g, `${shown(g, t)} got an A-Counter.`); } } }] },
   'Counselor Lily': { effs: [{ type: 'trig', loc: 'gy', when: true, label: 'Pay 500: the Synchro Monster gains 1000 ATK',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'gy' && ev.reason === 'synchro',
-    cond: (g, c, p) => g.p[p].lp > 500 && !!lilySyn(g, p),
+    cond: (g, c, p) => E.lib.canPay(g, p, 500) && !!lilySyn(g, p),
     cost: function* (g, c, p, L2) { L2.data.s = lilySyn(g, p); pay(g, p, 500); },
     res: function* (g, c, p, L2) { const s = L2.data.s; if (s && onField(s) && faceUp(s)) { addMod(g, s, { atk: 1000, end: true }); log(g, `${name(s)} gained 1000 ATK.`); } } }] },
   'Cranium Fish': {

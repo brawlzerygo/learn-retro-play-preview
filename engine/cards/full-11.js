@@ -146,7 +146,7 @@ E.addScripts({
       const i = modes.length > 1 ? yield* choose(g, p, 'Light of Judgment: which effect?', modes) : 0;
       if (/hand/.test(modes[i])) { log(g, `${PN(g, o)}'s hand: ${h.map(name).join(', ')}.`); const [x] = yield* pick(g, p, 'Discard which card?', h, 1, 1, 'bad'); if (x) { move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, o)} discarded ${name(x)}.`); } }
       else { const [x] = yield* pick(g, p, 'Send which card to the GY?', f, 1, 1, 'bad'); if (x && onField(x)) { move(g, x, 'gy', { reason: 'effect', by: p }); log(g, `${D(x).n} was sent to the GY.`); } } } }] },
-  'Light of Redemption': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 800 && g.p[p].ban.some(x => isMon(x) && attr(x) === 'LIGHT' && !x.faceDown),
+  'Light of Redemption': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 800, c) && g.p[p].ban.some(x => isMon(x) && attr(x) === 'LIGHT' && !x.faceDown),
     cost: function* (g, c, p) { pay(g, p, 800); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which banished LIGHT monster to your hand?', g.p[p].ban.filter(x => isMon(x) && attr(x) === 'LIGHT' && !x.faceDown), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'ban') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } }] },
@@ -298,7 +298,7 @@ E.addScripts({
   // PARTIAL: "can't attack directly" blocks its attacks while the opponent has no monsters (a replayed attack can still go direct).
   'Magical Scientist': { effs: [
     { type: 'ign', tags: { ss: 1 }, label: 'Pay 1000: summon a Fusion Monster',
-      cond: (g, c, p) => g.p[p].lp > 1000 && freeM(g, p) >= 0 && g.p[p].extra.some(x => D(x).k === 'fusion' && lv(x) <= 6),
+      cond: (g, c, p) => E.lib.canPay(g, p, 1000) && freeM(g, p) >= 0 && g.p[p].extra.some(x => D(x).k === 'fusion' && lv(x) <= 6),
       cost: function* (g, c, p) { pay(g, p, 1000); },
       res: function* (g, c, p) { const fs = g.p[p].extra.filter(x => D(x).k === 'fusion' && lv(x) <= 6); if (!fs.length || freeM(g, p) < 0) return;
         const [x] = yield* pick(g, p, 'Special Summon which Level 6 or lower Fusion Monster?', fs, 1, 1, 'good'); if (!x) return;
@@ -317,7 +317,7 @@ E.addScripts({
     res: function* (g, c, p) { destroy(g, stOnField(g).filter(x => x !== c), { by: p, src: c }); } }] },
   'Malevolent Nuzzler': { cont: eqBonus(700, 0), effs: [equipAct(),
     { type: 'trig', loc: 'gy', when: true, label: 'Pay 500: put it on top of your Deck',
-      on: (g, ev, c) => fromFieldToGY(ev, c), cond: (g, c, p) => g.p[p].lp > 500,
+      on: (g, ev, c) => fromFieldToGY(ev, c), cond: (g, c, p) => E.lib.canPay(g, p, 500),
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c, p) { if (c.zone === 'gy') { move(g, c, 'deckTop', { reason: 'effect' }); log(g, 'Malevolent Nuzzler was put on top of the Deck.'); } } }] },
   'Malice Ascendant': { effs: [{ type: 'trig', mand: true, label: 'Send cards from their Deck', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp !== c.ctrl,
@@ -334,7 +334,7 @@ E.addScripts({
       res: function* (g, c, p) { if (c.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, c, 'atk'); } }] },
   'Mask of Brutality': { cont: eqBonus(1000, -1000), effs: [equipAct(),
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 1000 LP or destroy it', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && !!c.equipTo,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 1000 && (yield* yn(g, p, 'Pay 1000 LP to keep Mask of Brutality?'))) pay(g, p, 1000); else destroy(g, [c], { rule: true }); } }] },
+      res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 1000) && (yield* yn(g, p, 'Pay 1000 LP to keep Mask of Brutality?'))) pay(g, p, 1000); else destroy(g, [c], { rule: true }); } }] },
   'Mask of Darkness': { effs: [{ type: 'trig', mand: true, faceDownOk: true, label: 'Add a Trap from the GY', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
     cond: (g, c, p) => g.p[p].gy.some(isTrap),
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which Trap from your GY to your hand?', g.p[p].gy.filter(isTrap), 1, 1, 'good'); },
@@ -381,7 +381,7 @@ E.addScripts({
   'Masked Sorcerer': { effs: [{ type: 'trig', mand: true, label: 'Draw 1 card', on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl,
     res: function* (g, c, p) { draw(g, p, 1); } }] },
   'Master Gig': { effs: [{ type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Pay 1000: destroy monsters',
-    cond: (g, c, p) => g.p[p].lp > 1000 && monsOf(g, p).filter(x => faceUp(x) && isPsy(x)).length <= monsOf(g, opp(p)).length,
+    cond: (g, c, p) => E.lib.canPay(g, p, 1000) && monsOf(g, p).filter(x => faceUp(x) && isPsy(x)).length <= monsOf(g, opp(p)).length,
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g, c, p) { const n = monsOf(g, p).filter(x => faceUp(x) && isPsy(x)).length, ms = monsOf(g, opp(p)); if (!n || n > ms.length) return;
       const xs = yield* pick(g, p, `Destroy ${n} of their monster${n > 1 ? 's' : ''}`, ms, n, n, 'bad'); destroy(g, xs, { by: p }); } }] },
@@ -407,12 +407,12 @@ E.addScripts({
   'Metallizing Parasite - Lunatite': {
     cont: { ...unionCont, grant: (g, src, m, flag) => flag === 'unaffectedSpells' && src.zone === 'st' && !!src.flags.union && src.equipTo === m.u },
     effs: unionEffs(() => true, 'Equip Lunatite to which monster?') },
-  'Mind Haxorz': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 500,
+  'Mind Haxorz': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 500, c),
     cost: function* (g, c, p) { pay(g, p, 500); },
     res: function* (g, c, p) { const o = opp(p); log(g, `${PN(g, o)}'s hand: ${g.p[o].hand.map(name).join(', ') || 'no cards'}.`);
       const sets = fieldOf(g, o).filter(x => x.pos === 'set'); log(g, `${PN(g, o)}'s Set cards: ${sets.map(x => D(x).n).join(', ') || 'none'}.`); } }] },
   'Mind Master': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Pay 800, Tribute a Psychic: summon a Psychic',
-    cond: (g, c, p) => g.p[p].lp > 800 && monsOf(g, p).some(x => isPsy(x) && !named(x, 'Mind Master')) && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isPsy(x) && lv(x) <= 4),
+    cond: (g, c, p) => E.lib.canPay(g, p, 800) && monsOf(g, p).some(x => isPsy(x) && !named(x, 'Mind Master')) && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isPsy(x) && lv(x) <= 4),
     cost: function* (g, c, p) { pay(g, p, 800); const [x] = yield* pick(g, p, 'Tribute 1 Psychic monster', monsOf(g, p).filter(x => isPsy(x) && !named(x, 'Mind Master')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = g.p[p].deck.filter(x => isPsy(x) && lv(x) <= 4); const [x] = yield* pick(g, p, 'Special Summon a Level 4 or lower Psychic from your Deck', cs, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
   // ENGINE: no revealed-hand state; the hand is logged when this card is summoned.

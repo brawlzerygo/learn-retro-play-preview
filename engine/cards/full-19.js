@@ -131,7 +131,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { const k = L2.ev.killer; const who = k ? (onField(k) ? k.ctrl : k.owner) : opp(L2.ev.prevCtrl); damage(g, who, 1000, { src: c, srcP: L2.ev.prevCtrl }); } }] },
   'Aussa the Earth Charmer': charmer('EARTH'),
   'Autonomous Action Unit': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 1500 && freeM(g, p) >= 0 && g.p[opp(p)].gy.filter(x => E.lib.ssable(g, p, x)).some(isMon),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.canPay(g, p, 1500, c) && freeM(g, p) >= 0 && g.p[opp(p)].gy.filter(x => E.lib.ssable(g, p, x)).some(isMon),
       cost: function* (g, c, p) { pay(g, p, 1500); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, "Special Summon which monster from your opponent's GY?", g.p[opp(p)].gy.filter(isMon), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'atk')) { equip(g, c, t); c.flags.f19aau = t.u; } } },
@@ -212,9 +212,9 @@ E.addScripts({
   'Banner of Courage': { cont: { atk: (g, src, m) => m.ctrl === src.ctrl && g.phase === 'battle' && g.tp === src.ctrl ? 200 : 0 }, effs: [{ type: 'act', res: noop }] },
   'Bark of Dark Ruler': { effs: [{ type: 'act', ds: true,
     cond: (g, c, p) => { if (!g.inDS || !g.battle || !g.battle.t) return false; const { a, t } = g.battle; const mine = [a, t].find(x => x.ctrl === p), foe = [a, t].find(x => x.ctrl !== p);
-      return !!mine && !!foe && faceUp(mine) && race(mine) === 'Fiend' && onField(foe) && faceUp(foe) && Math.max(atk(g, foe), def(g, foe)) >= 100 && g.p[p].lp > 100; },
+      return !!mine && !!foe && faceUp(mine) && race(mine) === 'Fiend' && onField(foe) && faceUp(foe) && Math.max(atk(g, foe), def(g, foe)) >= 100 && E.lib.canPay(g, p, 100); },
     cost: function* (g, c, p, L2) { const foe = [g.battle.a, g.battle.t].find(x => x.ctrl !== p); L2.data.foe = foe;
-      const top = Math.min(Math.floor(Math.max(atk(g, foe), def(g, foe)) / 100) * 100, Math.floor((g.p[p].lp - 1) / 100) * 100);
+      const top = Math.min(Math.floor(Math.max(atk(g, foe), def(g, foe)) / 100) * 100, Math.floor(E.lib.lpPayable(g, p) / 100) * 100);
       const opts = []; for (let n = 100; n <= top; n += 100) opts.push(n);
       const i = yield* choose(g, p, 'Pay how many LP?', opts.map(n => n + ' LP')); L2.data.n = opts[i]; pay(g, p, L2.data.n); },
     target: function* (g, c, p, L2) { L2.t = [L2.data.foe]; },

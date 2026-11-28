@@ -388,7 +388,7 @@ E.addScripts({
     res: function* (g, c, p) { for (const m of monsOf(g, opp(p))) { if (m.pos === 'set') flipUp(g, m, 'atk'); else { m.pos = m.pos === 'atk' ? 'def' : 'atk'; g.seq++; emit(g, { type: 'pos', c: m, p: m.ctrl }); } }
       log(g, `The battle positions of ${PN(g, opp(p))}'s monsters were changed.`); } }] },
   'Card Shuffle': { effs: [noop,
-    { type: 'ign', loc: 'st', opt: true, label: 'Pay 300: shuffle a Deck', cond: (g, c, p) => g.p[p].lp > 300,
+    { type: 'ign', loc: 'st', opt: true, label: 'Pay 300: shuffle a Deck', cond: (g, c, p) => E.lib.canPay(g, p, 300),
       cost: function* (g, c, p) { pay(g, p, 300); },
       res: function* (g, c, p) { const i = yield* choose(g, p, 'Shuffle which Deck?', ['Your Deck', 'Your opponent\'s Deck']); const q = i ? opp(p) : p; shuffleDeck(g, q); log(g, `${PN(g, q)}'s Deck was shuffled.`); } }] },
   // PARTIAL: the engine has no response window in the Standby Phase, so it is an optional trigger at its start.
@@ -447,7 +447,7 @@ E.addScripts({
   // blocked while a player couldn't pay (500 LP or less for each face-up Chain Energy).
   'Chain Energy': {
     cont: { forbid: (g, src, a) => {
-      if (a.p == null || g.p[a.p].lp > 500 * chainEnergies(g).length) return false;
+      if (a.p == null || E.lib.canPay(g, a.p, 500 * chainEnergies(g).length)) return false;
       if (a.type === 'ns' || a.type === 'set' || a.type === 'setST') return true;
       if (a.type === 'ss') return !!(a.c && a.c.zone === 'hand');
       if (a.type === 'activate') return a.c.zone === 'hand' && a.eff.type === 'act' && a.c !== src;

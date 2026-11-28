@@ -22,7 +22,7 @@ const isNormalMon = c => isMon(c) && D(c).k === 'normal';
 const toDef = (g, c) => { if (!onField(c) || c.zone !== 'm' || c.pos !== 'atk') return; c.pos = 'def'; g.seq++; log(g, `${name(c)} was changed to Defense Position.`); emit(g, { type: 'pos', c, p: c.ctrl, from: 'atk' }); };
 const discardRandom = (g, p) => { const h = g.p[p].hand; if (!h.length) return null; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)} at random.`); return x; };
 function* discardPick(g, p, n, text, not) { const h = g.p[p].hand.filter(x => x !== not); if (!h.length) return []; const xs = yield* pick(g, p, text, h, Math.min(n, h.length), Math.min(n, h.length), 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'discard' }); if (xs.length) log(g, `${PN(g, p)} discarded ${xs.map(name).join(', ')}.`); return xs; }
-function* tributeOne(g, p, text, cands) { const [x] = yield* pick(g, p, text, cands || monsOf(g, p), 1, 1, 'cost'); if (!x) return null; const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); return x; }
+function* tributeOne(g, p, text, cands) { const [x] = yield* pick(g, p, text, cands || L.tribPool(g, p), 1, 1, 'cost'); if (!x) return null; const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); return x; }
 // where a monster last came to the field from
 function cameFrom(g, x) { for (let i = g.events.length - 1; i >= 0; i--) { const e = g.events[i]; if (e.type === 'move' && e.c === x && e.to === 'm') return e.from; } return null; }
 // Does this card's effect inflict effect damage? (read from its text; battle damage doesn't count)
@@ -190,7 +190,7 @@ const tyrCanAttack = (g, c) => onField(c) && faceUp(c) && c.zone === 'm' && c.po
 E.addScripts({
   /* ----- the Agents ----- */
   'The Agent of Creation - Venus': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Pay 500 LP: summon Mystical Shine Ball',
-    cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Mystical Shine Ball')),
+    cond: (g, c, p) => E.lib.canPay(g, p, 500) && freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck].filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Mystical Shine Ball')),
     cost: function* (g, c, p) { pay(g, p, 500); },
     res: function* (g, c, p) {
       const cs = [...g.p[p].hand, ...g.p[p].deck].filter(x => named(x, 'Mystical Shine Ball')); if (!cs.length || freeM(g, p) < 0) { shuffleDeck(g, p); return; }
@@ -333,7 +333,7 @@ E.addScripts({
 
   /* ----- Toons ----- */
   // Ported from goat-6.js, with the Edison Toon rules. Tributing 1 monster (itself included) is the cost.
-  'Toon Cannon Soldier': toonN({ effs: [{ type: 'ign', label: 'Tribute: 500 damage', cond: (g, c, p) => monsOf(g, p).length > 0,
+  'Toon Cannon Soldier': toonN({ effs: [{ type: 'ign', label: 'Tribute: 500 damage', cond: (g, c, p) => L.tribPool(g, p).length > 0,
     cost: function* (g, c, p) { yield* tributeOne(g, p, 'Tribute 1 monster'); },
     res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } }] }),
   // Its text has no "can't attack that turn" and no attack cost.
@@ -365,7 +365,7 @@ E.addScripts({
     res: function* (g, c, p) { yield* search(g, p, x => /Toon/.test(D(x).n) || named(x, 'Manga Ryu-Ran'), 'Add which "Toon" card to your hand?'); } }] },
   // Paying 1000 LP is the cost; the engine's LP hook waives it under a face-up, not negated Spell Economics (goat-09).
   'Toon World': { effs: [{ type: 'act',
-    cond: (g, c, p) => L.spellLPFree(g, p) || g.p[p].lp > 1000,
+    cond: (g, c, p) => L.spellLPFree(g, p) || E.lib.canPay(g, p, 1000, c),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: noop }] },
 
@@ -418,7 +418,7 @@ E.addScripts({
     const actOf = t => (E.lib.effsOf(t) || []).find(e => e.type === 'act' && e.res);
     const cands = (g, c, p, x) => g.p[p].gy.filter(t => isTrap(t) && D(t).sub === 'Normal' && !named(t, 'Trap of Darkness') && (() => { const e = actOf(t); if (!e) return false; try { return !e.cond || !!e.cond(g, c, p, x || {}); } catch (er) { return false; } })());
     return { effs: [{ type: 'act',
-      cond: (g, c, p, x) => g.p[p].lp <= 3000 && g.p[p].lp > 1000 && cands(g, c, p, x).length > 0,
+      cond: (g, c, p, x) => g.p[p].lp <= 3000 && E.lib.canPay(g, p, 1000, c) && cands(g, c, p, x).length > 0,
       cost: function* (g, c, p) { pay(g, p, 1000); },
       target: function* (g, c, p, L2) {
         const cs = cands(g, c, p, { top: g.chain[g.chain.length - 1] }); if (!cs.length) return;

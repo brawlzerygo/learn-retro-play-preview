@@ -261,7 +261,7 @@ E.addScripts({
       on: (g, ev, c) => { if (ev.type !== 'damage' || !ev.battle || !ev.src) return false; const b = ev.src.flags && ev.src.flags.f16bandit; return !!b && b.u === c.u && b.turn === g.turnNo && ev.p === opp(b.p); },
       res: function* (g, c, p) { const h = g.p[opp(p)].hand; if (!h.length) return; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, opp(p))} discarded ${name(x)} at random.`); } }] },
   'The Selection': { effs: [{ type: 'act', negSummon: true,
-    cond: (g, c, p, x) => !x.top && !!g.attempt && g.p[p].lp > 1000 && g.attempt.cs.some(s => fieldMons(g).some(m => !g.attempt.cs.includes(m) && faceUp(m) && race(m) === race(s))),
+    cond: (g, c, p, x) => !x.top && !!g.attempt && E.lib.canPay(g, p, 1000, c) && g.attempt.cs.some(s => fieldMons(g).some(m => !g.attempt.cs.includes(m) && faceUp(m) && race(m) === race(s))),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g) { if (g.attempt) { g.attempt.negated = true; log(g, 'The summon was negated.'); } } }] },
   // Each player targets 1 monster in their own GY (both need one and a free zone, rulings), then both are Set.
@@ -296,7 +296,7 @@ E.addScripts({
 
   /* ----- Monsters ----- */
   'The Big Saturn': { effs: [lockInstall,
-    { type: 'ign', opt: true, label: 'Discard 1 and pay 1000: +1000 ATK', cond: (g, c, p) => g.p[p].hand.length > 0 && g.p[p].lp > 1000,
+    { type: 'ign', opt: true, label: 'Discard 1 and pay 1000: +1000 ATK', cond: (g, c, p) => g.p[p].hand.length > 0 && E.lib.canPay(g, p, 1000),
       cost: function* (g, c, p) { yield* discard1(g, p, null); pay(g, p, 1000); },
       res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, end: true, own: true }); log(g, `${name(c)} gained 1000 ATK until the End Phase.`); } } },
     // only while its owner controls it (rulings); the damage is its original ATK
@@ -361,7 +361,7 @@ E.addScripts({
   // before her (in zone order); the Zombies should all be unaffected.
   'The Lady in Wight': { cont: { grant: (g, src, c, flag) => ['noBattleDestroy', 'unaffectedSpells', 'unaffectedTraps'].includes(flag) && c.zone === 'm' && faceUp(c) && race(c) === 'Zombie' && lv(c) <= 3 && !named(c, 'The Lady in Wight') } },
   // Sets are still allowed (a Set is not a Summon). PARTIAL: Flip Summons aren't stopped (no forbid action for a Flip Summon).
-  'The Last Warrior from Another Planet': { cont: { forbid: (g, src, a) => a.type === 'ns' || a.type === 'ss' },
+  'The Last Warrior from Another Planet': { cont: { forbid: (g, src, a) => a.type === 'ns' || a.type === 'ss' || a.type === 'flip' },   // "Neither player can Summon": Flip Summons too
     effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy your other monsters',
       on: (g, ev, c) => evSummoned(ev, c, ['special', 'fusion', 'ritual', 'synchro']),
       res: function* (g, c, p) { const xs = monsOf(g, p).filter(x => x !== c); if (xs.length) destroy(g, xs, { by: p }); } }] },

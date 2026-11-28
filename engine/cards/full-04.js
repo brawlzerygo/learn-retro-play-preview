@@ -99,7 +99,7 @@ E.addScripts({
     effs: [lockInstall,
       { type: 'trig', on: (g, ev, c) => { if (ev.type === 'summon' && ev.cs.includes(c) && c.flags.f04proc) c.f04nomi = true; return false; }, res: noop },
       { type: 'ign', opt: true, tags: { destroy: 1 }, label: 'Pay 1000: send all hands and the field to the GY',
-        cond: (g, c, p) => g.p[p].lp > 1000 && !actedThisTurn(g, p),
+        cond: (g, c, p) => E.lib.canPay(g, p, 1000) && !actedThisTurn(g, p),
         cost: function* (g, c, p) { pay(g, p, 1000); },
         after: (g, c, p) => { addRule(g, (g2, a) => a.type === 'activate' && a.p === p, { end: g.turnNo }); log(g, `${PN(g, p)} can't activate other cards or effects this turn.`); },
         res: function* (g, c, p) {
@@ -370,7 +370,7 @@ E.addScripts({
   'Cyber Twin Dragon': { mats: [cyberDragon, cyberDragon], self: { maxAttacks: () => 2 }, effs: [] },
   // Port of goat-6.js
   'Cyber-Stein': { effs: [{ type: 'ign', tags: { ss: 1 }, label: 'Pay 5000: summon a Fusion',
-    cond: (g, c, p) => g.p[p].lp > 5000 && freeM(g, p) >= 0 && steinTargets(g, p).length > 0,
+    cond: (g, c, p) => E.lib.canPay(g, p, 5000) && freeM(g, p) >= 0 && steinTargets(g, p).length > 0,
     cost: function* (g, c, p) { pay(g, p, 5000); },
     res: function* (g, c, p) { const fs = steinTargets(g, p); if (!fs.length || freeM(g, p) < 0) return; const [f] = yield* pick(g, p, 'Special Summon which Fusion Monster?', fs, 1, 1, 'good'); if (f) ss(g, p, f, 'atk'); } }] },
 

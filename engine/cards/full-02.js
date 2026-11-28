@@ -277,7 +277,7 @@ E.addScripts({
   // the opponent's monster loses that much ATK until the End Phase (not more than its ATK)." Once per Damage Step.
   'Attack of the Cornered Rat': (() => {
     const pair = (g, p) => { const b = g.battle; if (!g.inDS || !b || !b.t) return null; const mine = [b.a, b.t].find(x => x && x.ctrl === p && faceUp(x) && D(x).k === 'normal' && lv(x) <= 3); const foe = mine && (mine === b.a ? b.t : b.a); return foe && foe.ctrl !== p && faceUp(foe) && atk(g, foe) >= 100 && g.p[p].lp > 100 ? { foe } : null; };
-    const payIt = function* (g, c, p, L2) { const { foe } = pair(g, p); const max = Math.min(Math.floor(atk(g, foe) / 100), Math.floor((g.p[p].lp - 1) / 100), 60);
+    const payIt = function* (g, c, p, L2) { const { foe } = pair(g, p); const max = Math.min(Math.floor(atk(g, foe) / 100), Math.floor(E.lib.lpPayable(g, p) / 100), 60);
       const i = yield* choose(g, p, `Pay how much LP? (${name(foe)} loses that much ATK)`, [...Array(max).keys()].map(k => String((k + 1) * 100))); const n = (i + 1) * 100;
       pay(g, p, n); c.flags.ratB = g.battle; L2.data.foe = foe; L2.data.n = n; };
     const apply = function* (g, c, p, L2) { const f = L2.data.foe; if (f && onField(f) && faceUp(f)) { addMod(g, f, { atk: -L2.data.n, end: true }); log(g, `${name(f)} lost ${L2.data.n} ATK.`); } };
@@ -446,8 +446,11 @@ E.addScripts({
     cont: { atk: (g, src, m) => src.equipTo === m.u && !glassOn(g) ? 500 : 0 },
     effs: [{ type: 'act', cond: g => fieldMons(g).some(faceUp),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Equip Black Pendant to which face-up monster?', fieldMons(g).filter(faceUp), 1, 1, 'good'); },
+      cost: function* (g, c, p, L2) { c.flags.pendantL = L2; },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && faceUp(t) && onField(c) && equip(g, c, t)) c.flags.pendant = true; } },
-    { type: 'trig', loc: 'any', mand: true, label: '500 damage', on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to === 'gy' && ev.snap && ev.snap.flags && ev.snap.flags.pendant,
+    // "When this card is sent from the field to the GY": also a Set Pendant or one destroyed in response, not when its activation was
+    // negated (goat-09 rulings); it activates in the GY, so Imperial Order on the field doesn't stop it (E4).
+    { type: 'trig', loc: 'gy', mand: true, label: '500 damage', on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to === 'gy' && !(ev.snap && ev.snap.flags && ev.snap.flags.pendantL && ev.snap.flags.pendantL.actNegated),
       res: function* (g, c, p, L2) { const q = L2.ev.prevCtrl != null ? L2.ev.prevCtrl : p; damage(g, opp(q), 500, { src: c, srcP: q }); } }] },
   'Black Potan': { self: { noBattleDestroy: (g, c) => monsOf(g, c.ctrl).some(x => x !== c && faceUp(x) && isTuner(x)) },
     effs: [{ type: 'trig', mand: true, label: 'Gain 800 LP',

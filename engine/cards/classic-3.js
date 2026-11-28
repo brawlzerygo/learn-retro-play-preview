@@ -250,7 +250,7 @@ E.addScripts({
 
   'Puppet Master': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Pay 2000: revive 2 Fiends',
     on: (g, ev, c) => L.evSummoned(ev, c, ['tribute']),
-    cond: (g, c, p) => g.p[p].lp > 2000 && nFreeM(g, p) >= 2 && g.p[p].gy.filter(x => isMon(x) && race(x) === 'Fiend').length >= 2,
+    cond: (g, c, p) => E.lib.canPay(g, p, 2000) && nFreeM(g, p) >= 2 && g.p[p].gy.filter(x => isMon(x) && race(x) === 'Fiend').length >= 2,
     cost: function* (g, c, p) { pay(g, p, 2000); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which 2 Fiends from your GY?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Fiend'), 2, 2, 'good'); },
     res: function* (g, c, p, L2) { const xs = L2.t.filter(x => x.zone === 'gy'); const done = [];
@@ -260,7 +260,7 @@ E.addScripts({
   'Revival Jam': { effs: [
     { type: 'trig', loc: 'gy', when: true, label: 'Pay 1000: revive next Standby Phase',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-      cond: (g, c, p) => g.p[p].lp > 1000,
+      cond: (g, c, p) => E.lib.canPay(g, p, 1000),
       cost: function* (g, c, p) { pay(g, p, 1000); },
       res: function* (g, c, p) { if (c.zone === 'gy') { c.flags.jamAt = g.turnNo; log(g, 'Revival Jam will return in the next Standby Phase.'); } } },
     { type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Revival Jam returns',

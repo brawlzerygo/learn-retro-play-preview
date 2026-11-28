@@ -55,7 +55,9 @@ const spellCounter3 = { type: 'trig', res: noop, on: (g, ev, c) => {
   return false; } };
 const skilled = (target) => ({ effs: [spellCounter3,
   { type: 'ign', tags: { ss: 1 }, label: `Tribute: summon ${target}`,
-    cond: (g, c, p) => ctr(c, 'spell') >= 3 && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].some(x => named(x, target) && canSS(g, p, x)),
+    // Goat archive: "If there is no Buster Blader / Dark Magician ... you can still activate this effect" (Edison: silent, so the general rule:
+    // an effect that Special Summons needs something to summon)
+    cond: (g, c, p) => ctr(c, 'spell') >= 3 && (E.format() === 'goat' || [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].some(x => named(x, target) && canSS(g, p, x))),
     cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(c).n}.`); },
     res: function* (g, c, p) { if (freeM(g, p) < 0) return; const cs = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => named(x, target) && canSS(g, p, x)); if (!cs.length) return;
       const [x] = yield* pick(g, p, `Special Summon ${target} from your hand, Deck or GY`, cs, 1, 1, 'good'); if (x) { const fromDeck = x.zone === 'deck'; ss(g, p, x, 'atk'); if (fromDeck) shuffleDeck(g, p); } } }] });
@@ -146,7 +148,7 @@ E.addScripts({
     pre: function* (g, c, p, L2) { const A = ['DARK', 'LIGHT', 'EARTH', 'WATER', 'FIRE', 'WIND']; L2.data.attr = A[yield* choose(g, p, 'Select 1 Attribute', A)]; },
     post: (g, c, p, L2, t) => { c.flags.f27attr = L2.data.attr; log(g, `${name(t)} is treated as ${L2.data.attr} (Scroll of Bewitchment).`); } })] },
   // PARTIAL: the face-down cards are shown in the log (both players see the log), not only to the activating player.
-  'Seal of the Ancients': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000,
+  'Seal of the Ancients': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 1000, c),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g, c, p) { const fd = fieldOf(g, opp(p)).filter(x => x.pos === 'set');
       log(g, fd.length ? `${PN(g, p)} looked at ${PN(g, opp(p))}'s face-down cards: ${fd.map(x => D(x).n).join(', ')}.` : `${PN(g, opp(p))} has no face-down cards.`); } }] },
@@ -187,7 +189,7 @@ E.addScripts({
   'Senri Eye': { effs: [actNoop,
     { type: 'trig', loc: 'st', opt: true, label: 'Pay 100: look at the top card of their Deck',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      cond: (g, c, p) => g.p[p].lp > 100 && g.p[opp(p)].deck.length > 0,
+      cond: (g, c, p) => E.lib.canPay(g, p, 100) && g.p[opp(p)].deck.length > 0,
       cost: function* (g, c, p) { pay(g, p, 100); },
       res: function* (g, c, p) { const d = g.p[opp(p)].deck, top = d[d.length - 1]; if (top) log(g, `${PN(g, p)} looked at the top card of ${PN(g, opp(p))}'s Deck: ${D(top).n}.`); } }] },
   // Chained straight to your own Normal Spell: discard your whole hand (cost); this card's effect becomes that Spell's.
@@ -195,7 +197,7 @@ E.addScripts({
     cond: (g, c, p, x) => { const t = x.top; return !!(t && t.p === p && t.cardAct && isSpell(t.c) && D(t.c).sub === 'Normal' && !t.negated && t.c !== c) && g.p[p].hand.some(y => y !== c); },
     cost: function* (g, c, p, L2) { L2.data.orig = g.chain[g.chain.length - 1]; yield* discardAll(g, p); },
     target: function* (g, c, p, L2) { const o = L2.data.orig; L2.tags = o.tags || {}; if (o.eff.target) yield* o.eff.target(g, c, p, L2); },
-    res: function* (g, c, p, L2) { const o = L2.data.orig; log(g, `Serial Spell copies ${name(o.c)}.`); yield* o.eff.res(g, c, p, L2); } }] },
+    res: function* (g, c, p, L2) { const o = L2.data.orig; log(g, `Serial Spell copies ${name(o.c)}.`); yield* o.eff.res(g, c, p, L2); L2.keep = false; } }] },   // a copied "stays on the field" (Different Dimension Capsule, Swords) doesn't keep Serial Spell (goat-04)
   'Serpentine Princess': { effs: [{ type: 'trig', loc: 'deck', mand: true, tags: { ss: 1 }, label: 'Summon a Level 3 or lower monster',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.snap && ev.snap.faceUp && (ev.to === 'deck' || ev.to === 'deckTop'),
     res: function* (g, c, p) { const ms = princessTargets(g, p); if (ms.length && freeM(g, p) >= 0) { const [x] = yield* pick(g, p, 'Special Summon which Level 3 or lower monster from your Deck?', ms, 1, 1, 'good'); if (x) ss(g, p, x, 'atk'); } shuffleDeck(g, p); } }] },
@@ -203,7 +205,7 @@ E.addScripts({
   'Shadowknight Archfiend': {
     cont: { dmg: (g, src, p, n, o) => o.battle && o.src === src && p !== src.ctrl && !negd(g, src) ? Math.floor(n / 2) : undefined },
     effs: [{ type: 'trig', mand: true, label: 'Pay 900 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 900) pay(g, p, 900); else destroy(g, [c], { by: p, rule: true }); } },
+      res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 900)) pay(g, p, 900); else destroy(g, [c], { by: p, rule: true }); } },
       archDice([3], 'Roll a die (3 negates and destroys)')] },
   // Only the Monster Zones count (ruling).
   'Shadowslayer': { self: { directAttack: (g, c) => { const ms = monsOf(g, opp(c.ctrl)); return ms.length > 0 && ms.every(m => m.pos !== 'atk'); } } },
@@ -229,7 +231,7 @@ E.addScripts({
   // PARTIAL: the new order is random instead of chosen (the engine's zones have no hidden identity to the opponent anyway).
   'Shifting Shadows': { effs: [actNoop,
     { type: 'ign', loc: 'st', opt: true, label: 'Pay 300: rearrange your face-down monsters',
-      cond: (g, c, p) => g.p[p].lp > 300 && monsOf(g, p).filter(m => m.pos === 'set').length >= 2,
+      cond: (g, c, p) => E.lib.canPay(g, p, 300) && monsOf(g, p).filter(m => m.pos === 'set').length >= 2,
       cost: function* (g, c, p) { pay(g, p, 300); },
       res: function* (g, c, p) { const Z = g.p[p].m, idx = Z.map((m, i) => m && m.pos === 'set' ? i : -1).filter(i => i >= 0); if (idx.length < 2) return;
         const cs = idx.map(i => Z[i]); for (let i = cs.length - 1; i > 0; i--) { const j = Math.floor(g.rnd() * (i + 1)); [cs[i], cs[j]] = [cs[j], cs[i]]; }
@@ -352,7 +354,7 @@ E.addScripts({
   'Sphinx Teleia': {
     self: { cantAttack: (g, c) => c.turnIn === g.turnNo && ['normal', 'tribute', 'special'].includes(c.summonType) },
     effs: [{ type: 'ign', loc: 'hand', tags: { ss: 1 }, label: 'Pay 500: Special Summon',
-      cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && stOnField(g).some(x => faceUp(x) && named(x, 'Pyramid of Light')),
+      cond: (g, c, p) => E.lib.canPay(g, p, 500) && freeM(g, p) >= 0 && stOnField(g).some(x => faceUp(x) && named(x, 'Pyramid of Light')),
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c, p) { if (c.zone === 'hand' && freeM(g, p) >= 0) ss(g, p, c, 'atk'); } },
       { type: 'trig', mand: true, label: 'Damage equal to half its DEF',
@@ -372,7 +374,7 @@ E.addScripts({
       res: function* (g, c, p) { const ms = monsOf(g, opp(p)); if (!ms.length) return; const [x] = yield* pick(g, p, 'Return which of their monsters to the hand?', ms, 1, 1, 'bad');
         if (x && onField(x)) { move(g, x, 'hand', { reason: 'effect', by: p }); log(g, `${D(x).n} returned to the ${isExtraD(D(x)) ? 'Extra Deck' : 'hand'}.`); } } },
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 500 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500 && (yield* yn(g, p, "Pay 500 LP to keep Spirit's Invitation?"))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
+      res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500) && (yield* yn(g, p, "Pay 500 LP to keep Spirit's Invitation?"))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
   // ENGINE: "This card's activation and effect can't be negated" isn't enforced (no hook in negate()).
   'Spiritualism': { effs: [{ type: 'act', cond: (g, c, p) => stOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which Spell/Trap to the hand?', stOf(g, opp(p)), 1, 1, 'bad'); },

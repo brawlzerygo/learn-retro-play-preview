@@ -155,7 +155,7 @@ E.addScripts({
     // "The first time this card would be destroyed by battle each turn" (as Gemini Soldier: applied when damage calculation dooms it)
     { type: 'trig', on: (g, ev, c) => { if (ev.type === 'afterCalc' && (ev.a === c || ev.t === c) && c.flags.battleDoomed && c.flags.gsumSafe !== g.turnNo) { c.flags.battleDoomed = false; c.flags.gsumSafe = g.turnNo; log(g, 'Gemini Summoner was not destroyed by battle.'); } return false; }, res: noop },
     { type: 'quick', opt: true, label: 'Pay 500: summon a Gemini',
-      cond: (g, c, p) => g.phase === 'end' && g.tp !== p && g.p[p].lp > 500 && (g.p[p].hand.some(x => gemMon(x) && (lv(x) < 5 || tributeCands(g, p).length >= (lv(x) >= 7 ? 2 : 1)) && (freeM(g, p) >= 0 || lv(x) >= 5)) || monsOf(g, p).some(x => faceUp(x) && gemMon(x) && !x.flags.gemini)),
+      cond: (g, c, p) => g.phase === 'end' && g.tp !== p && E.lib.canPay(g, p, 500) && (g.p[p].hand.some(x => gemMon(x) && (lv(x) < 5 || tributeCands(g, p).length >= (lv(x) >= 7 ? 2 : 1)) && (freeM(g, p) >= 0 || lv(x) >= 5)) || monsOf(g, p).some(x => faceUp(x) && gemMon(x) && !x.flags.gemini)),
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c, p) {
         const hs = g.p[p].hand.filter(gemMon), fs = monsOf(g, p).filter(x => faceUp(x) && gemMon(x) && !x.flags.gemini);

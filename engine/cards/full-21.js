@@ -276,7 +276,7 @@ E.addScripts({
       for (const x of xs) move(g, x, 'gy', { reason: 'cost', by: p }); L2.data.n = xs.length; log(g, `${PN(g, p)} sent ${xs.length} card${xs.length > 1 ? 's' : ''} to the GY.`); },
     res: function* (g, c, p, L2) { gain(g, p, 1000 * (L2.data.n || 0)); } }] },
   // Excavated Level 3 or lower Normal Monsters are Special Summoned (ones with no zone go to the GY), the rest shuffled back.
-  'Enchanting Fitting Room': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 800 && g.p[p].deck.length > 0,
+  'Enchanting Fitting Room': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.canPay(g, p, 800, c) && g.p[p].deck.length > 0,
     cost: function* (g, c, p) { pay(g, p, 800); },
     res: function* (g, c, p) { const dk = g.p[p].deck; const top = dk.slice(-4).reverse(); if (!top.length) return;
       log(g, `${PN(g, p)} excavated ${top.map(name).join(', ')}.`);

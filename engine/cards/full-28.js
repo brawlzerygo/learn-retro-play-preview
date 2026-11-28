@@ -66,7 +66,7 @@ const lockInstall = { type: 'trig', loc: 'any', res: noop,
 const isArchfiend = c => isMon(c) && /Archfiend/.test(name(c));
 const archCost = n => ({ type: 'trig', mand: true, label: `Pay ${n} LP`, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
   // the card is destroyed when its controller can't pay; Pandemonium removes the cost
-  res: function* (g, c, p) { if (!onField(c) || allField(g).some(x => faceUp(x) && named(x, 'Pandemonium'))) return; if (g.p[p].lp > n) pay(g, p, n); else destroy(g, [c], { by: p, rule: true }); } });
+  res: function* (g, c, p) { if (!onField(c) || allField(g).some(x => faceUp(x) && named(x, 'Pandemonium'))) return; if (E.lib.canPay(g, p, n)) pay(g, p, n); else destroy(g, [c], { by: p, rule: true }); } });
 // ENGINE: no "as a targeting effect resolves" hook, so the roll is an optional Spell Speed 3 response to the targeting link.
 const archDice = (hits, label) => ({ type: 'quick', speed: 3, ds: true, label,
   cond: (g, c, p, x) => { const T = x.top; return !!T && !T.negated && T.p !== p && !(T.f28dice || []).includes(c.u) && T.t.includes(c); },
@@ -114,7 +114,9 @@ E.addScripts({
   'Swords of Revealing Light': { cont: { forbid: (g, src, a) => a.type === 'attack' && a.c && a.c.ctrl !== src.ctrl },
     effs: [{ type: 'act', after: (g, c, p, L2) => { L2.keep = true; },
       res: function* (g, c, p, L2) { L2.keep = true; if (monsOf(g, opp(p)).some(x => x.pos === 'set')) for (const x of monsOf(g, opp(p))) if (x.pos === 'set') flipUp(g, x, 'def'); log(g, `${PN(g, opp(p))}'s monsters can't declare an attack.`); } },
-    { type: 'trig', loc: 'st', mand: true, label: 'Count a turn', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp !== c.ctrl,
+    // the count is the card's duration, not an effect: no chain link, and Imperial Order doesn't stop it (Netrep: "Swords of Revealing Light
+    // will remain on the field for its normal duration"; pass2 goat-02)
+    { type: 'trig', loc: 'st', mand: true, noChain: true, rule: true, label: 'Count a turn', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp !== c.ctrl,
       res: function* (g, c) { if (!onField(c)) return; L.addCtr(g, c, 'swords', 1); if (L.ctr(c, 'swords') >= 3) destroy(g, [c], { rule: true }); } }] },
   // PARTIAL: the new target is any other face-up monster (an Equip Spell's own "equip only to" isn't checked).
   'Tailor of the Fickle': { effs: [{ type: 'act',
@@ -132,7 +134,7 @@ E.addScripts({
   'Token Thanksgiving': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: g => fieldMons(g).some(x => D(x).k === 'token'),
     res: function* (g, c, p) { const out = destroy(g, fieldMons(g).filter(x => D(x).k === 'token'), { by: p, src: c }); if (out.length) gain(g, p, 800 * out.length); } }] },
   // Paying 500 is a cost: a player who can't pay can't declare the attack. Each Toll is paid separately.
-  'Toll': { cont: { forbid: (g, src, a) => a.type === 'attack' && a.c && g.p[a.c.ctrl].lp <= 500 * allField(g).filter(x => faceUp(x) && named(x, 'Toll')).length },
+  'Toll': { cont: { forbid: (g, src, a) => a.type === 'attack' && a.c && !E.lib.canPay(g, a.c.ctrl, 500 * allField(g).filter(x => faceUp(x) && named(x, 'Toll')).length) },
     effs: [actNoop,
       { type: 'trig', loc: 'st', res: noop, on: (g, ev, c) => { if (ev.type !== 'attack' || !ev.a) return false; const paid = c.flags.f28toll || (c.flags.f28toll = {}); const k = `${g.turnNo}:${ev.a.u}:${ev.a.attacks}`;
         if (!paid[k]) { paid[k] = true; pay(g, ev.a.ctrl, 500); } return false; } }] },
@@ -316,11 +318,11 @@ E.addScripts({
       on: (g, ev, c) => { if (!['hand', 'deck'].includes(c.zone) || ev.type !== 'move' || !ev.destroyed || !ev.wasField || ev.prevCtrl !== c.owner) return false;
         const n = D(ev.c).n, other = n === 'Andro Sphinx' ? 'Sphinx Teleia' : n === 'Sphinx Teleia' ? 'Andro Sphinx' : null; if (!other) return false;
         return g.events.some(e => e !== ev && e.type === 'move' && e.group === ev.group && e.destroyed && e.wasField && e.prevCtrl === c.owner && D(e.c).n === other); },
-      cond: (g, c, p) => ['hand', 'deck'].includes(c.zone) && g.p[p].lp > 500 && freeM(g, p) >= 0,
+      cond: (g, c, p) => ['hand', 'deck'].includes(c.zone) && E.lib.canPay(g, p, 500) && freeM(g, p) >= 0,
       ok: g => !g.chain.some(L2 => named(L2.c, 'Theinen the Great Sphinx')),
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c, p) { if (!['hand', 'deck'].includes(c.zone)) return; const fromDeck = c.zone === 'deck'; c.f28own = true; ss(g, p, c, 'atk'); c.f28own = false; if (fromDeck) shuffleDeck(g, p); } },
-    { type: 'trig', when: true, label: 'Pay 500 LP: +3000 ATK', on: (g, ev, c) => evSummoned(ev, c, ['special']), cond: (g, c, p) => g.p[p].lp > 500,
+    { type: 'trig', when: true, label: 'Pay 500 LP: +3000 ATK', on: (g, ev, c) => evSummoned(ev, c, ['special']), cond: (g, c, p) => E.lib.canPay(g, p, 500),
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 3000, end: true, own: true }); log(g, `${name(c)} gained 3000 ATK until the End Phase.`); } } }] },
   'Thestalos the Firestorm Monarch': { effs: [{ type: 'trig', mand: true, label: 'Random discard', on: (g, ev, c) => evSummoned(ev, c, ['tribute']),

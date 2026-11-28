@@ -95,7 +95,7 @@ E.addScripts({
       res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: -400, end: true, own: true }); c.flags.f38pierce = g.turnNo; g.seq++; log(g, 'Exarion Universe lost 400 ATK and inflicts piercing damage this turn.'); } }] },
   // Original 2010 text: no once-per-Duel limit (added by later errata). The cards are swapped, not sent (no "sent to the GY" effects); Extra Deck monsters go back to the Extra Deck.
   'Exchange of the Spirit': { effs: [{ type: 'act',
-    cond: (g, c, p) => g.p[0].gy.length >= 15 && g.p[1].gy.length >= 15 && g.p[p].lp > 1000,
+    cond: (g, c, p) => g.p[0].gy.length >= 15 && g.p[1].gy.length >= 15 && E.lib.canPay(g, p, 1000, c),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g) {
       for (const P of g.p) { const dk = P.deck.slice(), gy = P.gy.slice(); P.deck = []; P.gy = [];
@@ -243,7 +243,7 @@ E.addScripts({
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish a Pyro monster from your GY', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Pyro'), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${D(x).n}.`); } },
       res: function* (g) { if (g.aw) negateAttack(g); } },
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 500 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500 && (yield* yn(g, p, 'Pay 500 LP to keep Firewall?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
+      res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500) && (yield* yn(g, p, 'Pay 500 LP to keep Firewall?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
   'Fish Depth Charge': { effs: [{ type: 'act', tags: { destroy: 1 },
     cond: (g, c, p) => monsOf(g, p).some(x => race(x) === 'Fish') && fieldOf(g, opp(p)).length > 0,
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute a Fish monster', monsOf(g, p).filter(x => race(x) === 'Fish'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${D(x).n}.`); } },
@@ -309,7 +309,7 @@ E.addScripts({
       for (const m of fieldMons(g)) if (m.flags.f38chalT != null && (m.flags.f38chalT !== g.turnNo || (ev.type === 'phase' && ev.ph === 'end'))) { m.flags.negated = m.flags.f38chalPrev; m.flags.f38chalT = null; m.flags.f38chalPrev = null; g.seq++; }
       return false; } }] },
   'Fortune Lady Earth': { self: { atk: (g, c) => lv(c) * 400, def: (g, c) => lv(c) * 400 },
-    effs: [{ type: 'trig', mand: true, label: 'Level up', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
+    effs: [{ type: 'trig', mand: true, label: 'Level up', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c) && lv(c) < 12,
       res: function* (g, c) { if (onField(c) && faceUp(c) && lv(c) < 12) { c.flags.lv = lv(c) + 1; log(g, `${name(c)} is now Level ${lv(c)}.`); c.flags.f38lv = lv(c); damage(g, opp(c.ctrl), 400, { src: c, srcP: c.ctrl }); } } },
       // "When the Level of this card increases" by another effect: seen by comparing its Level at each event (its own level
       // up inflicts the damage in the same resolution). PARTIAL: that damage isn't a chain link of its own.
@@ -317,7 +317,7 @@ E.addScripts({
         res: function* (g, c, p) { damage(g, opp(p), 400, { src: c, srcP: p }); } }] },
   // PARTIAL: "by the effect of a Fortune Lady card" is read as: another Fortune Lady of yours used an effect this turn.
   'Fortune Lady Fire': { self: { atk: (g, c) => lv(c) * 200, def: (g, c) => lv(c) * 200 },
-    effs: [{ type: 'trig', mand: true, opt: true, label: 'Level up', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
+    effs: [{ type: 'trig', mand: true, opt: true, label: 'Level up', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl && faceUp(c) && lv(c) < 12,
       res: function* (g, c) { if (onField(c) && faceUp(c) && lv(c) < 12) { c.flags.lv = lv(c) + 1; log(g, `${name(c)} is now Level ${lv(c)}.`); } } },
       { type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy a monster and inflict its ATK',
         on: (g, ev, c) => evSummoned(ev, c) && SPECIAL(ev) && ev.byEffect && c.pos === 'atk'
@@ -375,7 +375,7 @@ E.addScripts({
         res: function* (g, c, p, L2) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 300 * L2.data.n, end: true, own: true }); log(g, `Gaap gained ${300 * L2.data.n} ATK.`); } } }] },
   // The Extra Deck monster wasn't properly summoned, so it can't be Special Summoned from the GY or banishment.
   'Gale Dogra': { effs: [lockInstall,
-    { type: 'ign', label: 'Pay 3000: send an Extra Deck monster to the GY', cond: (g, c, p) => g.p[p].lp > 3000 && g.p[p].extra.length > 0,
+    { type: 'ign', label: 'Pay 3000: send an Extra Deck monster to the GY', cond: (g, c, p) => E.lib.canPay(g, p, 3000) && g.p[p].extra.length > 0,
       cost: function* (g, c, p) { pay(g, p, 3000); },
       res: function* (g, c, p) { installRules(g); const [x] = yield* pick(g, p, 'Send which Extra Deck monster to the GY?', g.p[p].extra, 1, 1, 'good'); if (x) { move(g, x, 'gy', { reason: 'effect' }); x.f38dogra = true; log(g, `${PN(g, p)} sent ${D(x).n} from the Extra Deck to the GY.`); } } }] },
   'Gambler of Legend': { effs: [{ type: 'ign', opt: true, label: 'Toss a coin 3 times',
@@ -438,7 +438,7 @@ E.addScripts({
       cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && race(x) === 'Dragon'),
       res: function* (g, c, p) { const ds = g.p[p].gy.filter(x => isMon(x) && race(x) === 'Dragon'); for (const x of ds) toDeckOrExtra(g, x); shuffleDeck(g, p); log(g, `${PN(g, p)} returned ${ds.length} Dragon${ds.length === 1 ? '' : 's'} to the Deck.`); } }] },
   'Genetic Woman': { effs: [{ type: 'ign', opt: true, label: 'Pay 1000: add a banished Psychic',
-    cond: (g, c, p) => g.p[p].lp > 1000 && g.p[p].ban.some(x => isMon(x) && race(x) === 'Psychic'),
+    cond: (g, c, p) => E.lib.canPay(g, p, 1000) && g.p[p].ban.some(x => isMon(x) && race(x) === 'Psychic'),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which banished Psychic monster?', g.p[p].ban.filter(x => isMon(x) && race(x) === 'Psychic'), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'ban') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${D(t).n} to the hand.`); } } }] },
@@ -469,6 +469,6 @@ E.addScripts({
       // the battle damage its controller would take from its battles goes to the opponent instead
       cont: { dmg: (g, src, p, n, o) => { if (!o.battle || p !== src.ctrl || !g.battle || (g.battle.a !== src && g.battle.t !== src)) return undefined; damage(g, opp(p), n, { battle: true, src: o.src, srcP: p }); return 0; } },
       effs: [{ type: 'trig', mand: true, label: 'Pay 1000 LP or destroy this Token', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-        res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 1000 && (yield* yn(g, p, 'Pay 1000 LP to keep the Metal Fiend Token?'))) pay(g, p, 1000); else destroy(g, [c], { by: p, rule: true }); } }] },
+        res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 1000) && (yield* yn(g, p, 'Pay 1000 LP to keep the Metal Fiend Token?'))) pay(g, p, 1000); else destroy(g, [c], { by: p, rule: true }); } }] },
 });
 })();

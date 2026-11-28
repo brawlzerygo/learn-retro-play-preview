@@ -295,7 +295,7 @@ E.addScripts({
     res: function* (g, c, p) { draw(g, p, 2); } }] },
 
   /* ----- Counters ----- */
-  'Counter Cleaner': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 500,
+  'Counter Cleaner': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 500, c),
     cost: function* (g, c, p) { pay(g, p, 500); },
     res: function* (g) { for (const x of allField(g)) { x.ctr = {}; if (x.flags.wedge) x.flags.wedge = 0; } g.seq++; log(g, 'All counters on the field were removed.'); } }] },
   'Counter Counter': { effs: [{ type: 'act',

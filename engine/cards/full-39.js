@@ -56,7 +56,7 @@ const nomiMark = { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => { if (
 const noSSFromGY = { loc: 'gy', forbid: (g, src, a) => a.type === 'ss' && a.c === src };
 // Archfiend upkeep (as full-28.js): pay or destroy; Pandemonium removes the cost
 const archCost = n => ({ type: 'trig', mand: true, label: `Pay ${n} LP`, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-  res: function* (g, c, p) { if (!onField(c) || allField(g).some(x => faceUp(x) && named(x, 'Pandemonium'))) return; if (g.p[p].lp > n) pay(g, p, n); else destroy(g, [c], { by: p, rule: true }); } });
+  res: function* (g, c, p) { if (!onField(c) || allField(g).some(x => faceUp(x) && named(x, 'Pandemonium'))) return; if (E.lib.canPay(g, p, n)) pay(g, p, n); else destroy(g, [c], { by: p, rule: true }); } });
 // Equip Spells (as full-26.js)
 const equipAct = (filter = () => true, text = 'Equip to which face-up monster?') => ({ type: 'act',
   cond: g => fieldMons(g).some(m => faceUp(m) && filter(m)),
@@ -204,7 +204,7 @@ E.addScripts({
         res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !onField(c) || !faceUp(c)) return; c.flags.f39gt = t.u; t.flags.noTribute = true; t.flags.f39gb = c.u; log(g, `${face(g, t)} can't attack or be Tributed while Grapple Blocker is face-up.`); } },
       { type: 'trig', mand: true, label: 'Pay 500 LP or destroy it',
         on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
-        res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; const canPay = g.p[p].lp > 500; const i = canPay ? yield* choose(g, p, 'Grapple Blocker: pay 500 LP or destroy it?', ['Pay 500 LP', 'Destroy Grapple Blocker']) : 1; if (i === 0) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } },
+        res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; const canPay = E.lib.canPay(g, p, 500); const i = canPay ? yield* choose(g, p, 'Grapple Blocker: pay 500 LP or destroy it?', ['Pay 500 LP', 'Destroy Grapple Blocker']) : 1; if (i === 0) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } },
       // the lock ends when this card leaves the field or is turned face-down
       { type: 'trig', loc: 'any', res: noop, on: (g, ev, c) => { for (const m of fieldMons(g)) if (m.flags.f39gb === c.u && !(faceUp(c) && c.zone === 'm' && c.flags.f39gt === m.u)) { delete m.flags.f39gb; delete m.flags.noTribute; } return false; } }] },
   'Grass Phantom': { self: { atk: (g, c) => 500 * g.p[c.ctrl].gy.filter(x => named(x, 'Grass Phantom')).length } },
@@ -227,7 +227,7 @@ E.addScripts({
   // From the hand or the GY, when a face-up Beast you control is destroyed and sent to the GY (not in the Damage Step).
   'Green Baboon, Defender of the Forest': { effs: ['hand', 'gy'].map(loc => ({ type: 'trig', loc, when: true, tags: { ss: 1 }, label: 'Pay 1000 LP: Special Summon it',
     on: (g, ev, c) => ev.type === 'move' && ev.destroyed && ev.wasField && ev.to === 'gy' && ev.c.zone === 'gy' && !ev.battle && !g.inDS && ev.snap && ev.snap.faceUp && ev.snap.mon && ev.snap.race === 'Beast' && ev.prevCtrl === c.owner,
-    cond: (g, c, p) => g.p[p].lp > 1000 && freeM(g, p) >= 0,
+    cond: (g, c, p) => E.lib.canPay(g, p, 1000) && freeM(g, p) >= 0,
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g, c, p) { if (['hand', 'gy'].includes(c.zone)) ss(g, p, c, 'atk'); } })) },
   'Gren, Tactician of Dark World': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, label: 'Destroy a Spell/Trap',

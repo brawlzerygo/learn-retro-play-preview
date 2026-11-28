@@ -81,7 +81,7 @@ E.addScripts({
   'Jain, Lightsworn Paladin': { self: { atk: (g, c) => g.inDS && g.battle && g.battle.a === c && g.battle.t && g.battle.t.ctrl !== c.ctrl ? 300 : 0 }, effs: [lsEnd(2)] },
   'Judgment Dragon': { proc: { label: 'Special Summon (4+ Lightsworn names in your GY)', cond: (g, c, p) => new Set(g.p[p].gy.filter(x => isMon(x) && isLS(x)).map(x => D(x).n)).size >= 4 },
     effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Pay 1000: destroy all other cards',
-      cond: (g, c, p) => g.p[p].lp > 1000 && allField(g).some(x => x !== c),
+      cond: (g, c, p) => E.lib.canPay(g, p, 1000) && allField(g).some(x => x !== c),
       cost: function* (g, c, p) { pay(g, p, 1000); },
       res: function* (g, c, p) { destroy(g, allField(g).filter(x => x !== c), { by: p }); } },
     lsEnd(4)] },
@@ -116,8 +116,9 @@ E.addScripts({
     cost: function* (g, c, p) { millCost(g, p, 3); },
     res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && isLS(x) && lv(x) <= 4, 'Add a Level 4 or lower Lightsworn'); } }] },
   'Monster Reincarnation': { effs: [{ type: 'act',
-    cond: (g, c, p) => g.p[p].hand.some(x => x !== c) && g.p[p].gy.some(isMon),
-    cost: function* (g, c, p) { yield* discard1(g, p, g.p[p].hand.filter(x => x !== c)); },
+    // ruling 1: the discarded monster can be the target, so a monster in the hand is enough (then the discard must be a monster)
+    cond: (g, c, p) => g.p[p].hand.some(x => x !== c) && (g.p[p].gy.some(isMon) || g.p[p].hand.some(x => x !== c && isMon(x))),
+    cost: function* (g, c, p) { yield* discard1(g, p, g.p[p].hand.filter(x => x !== c && (g.p[p].gy.some(isMon) || isMon(x)))); },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Add which monster from your GY to your hand?', g.p[p].gy.filter(isMon), 1, 1, 'good'); },
     res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(t)} to the hand.`); } } }] },
   'Solar Recharge': { effs: [{ type: 'act',
@@ -151,7 +152,7 @@ E.addScripts({
   },
   'Machina Force': {
     // PARTIAL: "must be Special Summoned by Commander Covington" isn't enforced (Covington has no script yet). The 1000 LP is paid as the attack is declared.
-    cont: { forbid: (g, src, a) => a.type === 'attack' && a.c === src && contOn(g, src) && g.p[src.ctrl].lp <= 1000 },
+    cont: { forbid: (g, src, a) => a.type === 'attack' && a.c === src && contOn(g, src) && !E.lib.canPay(g, src.ctrl, 1000) },
     effs: [
       { type: 'trig', mand: true, on: (g, ev, c) => { if (ev.type === 'attack' && ev.a === c) pay(g, c.ctrl, 1000); return false; }, res: function* () {} },
       { type: 'ign', tags: { ss: 1 }, label: 'Send to GY: summon Soldier, Sniper, Defender',
@@ -182,8 +183,7 @@ E.addScripts({
     // ② "Control of this card can't Switch": the engine's takeControl reads noCtrlSwitch
     self: { noCtrlSwitch: true, atk: (g, c) => 300 * monsOf(g, c.ctrl).filter(x => faceUp(x) && race(x) === 'Plant').length } },
   'Dandylion': { effs: [{ type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 },
-    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'gy',
-    cond: (g, c, p) => nFreeM(g, p) >= 2,
+    on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.to === 'gy',   // archive: it always activates; with under 2 free zones it summons nothing
     res: function* (g, c, p) { if (nFreeM(g, p) >= 2) { tokens(g, p, { n: 'Fluff Token', a: 'WIND', r: 'Plant', lv: 1, atk: 0, def: 0 }, 2, 'def', { noTribute: 'summon' }); if (g.inDS) { g.sw = null; if (g.ssBatch) g.ssBatch.noSw = true; } } } }] },
   'Lonefire Blossom': { effs: [{ type: 'ign', opt: true, tags: { ss: 1 }, label: 'Tribute a Plant: summon a Plant',
     cond: (g, c, p) => monsOf(g, p).some(x => faceUp(x) && race(x) === 'Plant') && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isPlant(x) && !noSS(x)),
@@ -240,8 +240,14 @@ E.addScripts({
       res: function* (g, c, p) { const t = equippedTo(g, c); if (t && t.ctrl !== p) takeControl(g, p, t, false); } }] },
   'Queen of Thorns': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => race(c) === 'Plant' }),
     // PARTIAL: the 1000 LP is paid as a non-Plant arrives from the hand (not as a cost before it); you can't summon one with 1000 LP or less.
-    cont: { forbid: (g, src, a) => contOn(g, src) && ((a.type === 'ns' && a.c.zone === 'hand') || (a.type === 'ss' && a.c.zone === 'hand')) && a.c.id && race(a.c) !== 'Plant' && g.p[a.p].lp <= 1000 },
-    effs: [{ type: 'trig', mand: true, on: (g, ev, c) => { if (ev.type === 'move' && ev.from === 'hand' && ev.to === 'm' && ev.reason === 'summon' && isMon(ev.c) && race(ev.c) !== 'Plant') pay(g, ev.c.ctrl, 1000); return false; }, res: function* () {} }] },
+    cont: { forbid: (g, src, a) => contOn(g, src) && ((a.type === 'ns' && a.c.zone === 'hand') || (a.type === 'ss' && a.c.zone === 'hand')) && a.c.id && race(a.c) !== 'Plant' && !E.lib.canPay(g, a.p, 1000) },
+    effs: [{ type: 'trig', mand: true, on: (g, ev, c) => { if (ev.type === 'move' && ev.from === 'hand' && ev.to === 'm' && ev.reason === 'summon' && isMon(ev.c) && race(ev.c) !== 'Plant') pay(g, ev.c.ctrl, 1000); return false; }, res: function* () {} },
+      // "If you Tribute a face-up Queen of Thorns to Tribute Summon a monster, you must pay 1000 Life Points" (site ruling 2, archive): the
+      // Tributes leave before the summon (Group B), so a Queen Tributed face-up remembers the monster and pays from the GY as it lands.
+      { type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => { if (ev.type !== 'move') return false;
+        if (ev.c === c && ev.reason === 'tribute' && ev.tributeFor != null && ev.wasField && ev.snap && ev.snap.faceUp && !ev.snap.negd) (g.qTrib || (g.qTrib = {}))[c.u] = ev.tributeFor;
+        else if (g.qTrib && g.qTrib[c.u] != null && ev.c && ev.c.u === g.qTrib[c.u]) { delete g.qTrib[c.u]; if (ev.from === 'hand' && ev.to === 'm' && ev.reason === 'summon' && isMon(ev.c) && race(ev.c) !== 'Plant') pay(g, ev.c.ctrl, 1000); }
+        return false; }, res: function* () {} }] },
   'Volcanic Counter': { effs: [{ type: 'trig', loc: 'gy', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.p === c.owner,
     res: function* (g, c, p, L) { if (c.zone !== 'gy') return; move(g, c, 'ban', { reason: 'effect' }); log(g, 'Volcanic Counter was banished.'); if (g.p[p].gy.some(x => isMon(x) && attr(x) === 'FIRE' && D(x).n !== 'Volcanic Counter')) damage(g, opp(p), L.ev.n, { src: c, srcP: p }); } }] },
   'Fiend Comedian': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].deck.length >= g.p[opp(p)].gy.length,
@@ -255,7 +261,7 @@ E.addScripts({
   'Skill Drain': {
     // actOk: monsters can still activate their effects (and pay costs) under it (Edison ruling 4; engine negActAllowed)
     cont: { actOk: true, negates: (g, src, c) => !trapStunned(g) && isMon(c) && c.zone === 'm' && faceUp(c) },
-    effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000, cost: function* (g, c, p) { pay(g, p, 1000); }, res: function* () {} }] },
+    effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 1000, c), cost: function* (g, c, p) { pay(g, p, 1000); }, res: function* () {} }] },
 
   /* ----- Cat ----- */
   'Summoner Monk': { self: { noTribute: true },   // "This card cannot be Tributed": live, so Skill Drain switches it off (site ruling)
@@ -273,10 +279,10 @@ E.addScripts({
       res: function* (g, c, p) {
         const cands = g.p[p].deck.filter(x => isMon(x) && race(x) === 'Beast' && lv(x) <= 3 && E.lib.ssable(g, p, x)); if (cands.length < 2 || nFreeM(g, p) < 2) { shuffleDeck(g, p); return; }
         const xs = yield* pick(g, p, 'Special Summon 2 Level 3 or lower Beasts', cands, 2, 2, 'good');
-        for (const x of xs) if (ssx(g, p, x, 'atk')) x.flags.rescueEnd = g.turnNo;
+        for (const x of xs) if (ssx(g, p, x, 'atk')) { x.flags.rescueEnd = g.turnNo; x.flags.rescueBy = c.u; }
         shuffleDeck(g, p); } },
-    { type: 'trig', loc: 'any', mand: true, noChain: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.rescueEnd === g.turnNo && x.owner === c.owner) && !g.p[c.owner].gy.concat(g.p[c.owner].ban, g.p[c.owner].hand, g.p[c.owner].deck, fieldMons(g)).some(y => y !== c && D(y).n === 'Rescue Cat' && y.u < c.u),
-      res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.flags.rescueEnd === g.turnNo && x.owner === c.owner), { by: p }); } }] },
+    { type: 'trig', loc: 'any', mand: true, noChain: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && fieldMons(g).some(x => x.flags.rescueEnd === g.turnNo && x.flags.rescueBy === c.u),   // the Beasts this Cat summoned, whoever controls them (goat-07)
+      res: function* (g, c, p) { destroy(g, fieldMons(g).filter(x => x.flags.rescueEnd === g.turnNo && x.flags.rescueBy === c.u), { by: p }); } }] },
   'X-Saber Airbellum': { effs: [{ type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'damage' && ev.battle && ev.direct && ev.src === c,
     res: function* (g, c, p) { randomDiscard(g, opp(p)); } }] },
   'Chaos Sorcerer': { proc: { label: 'Special Summon (banish a LIGHT and a DARK)', cond: (g, c, p) => g.p[p].gy.some(x => isMon(x) && attr(x) === 'LIGHT') && g.p[p].gy.some(x => isMon(x) && attr(x) === 'DARK'),
@@ -289,7 +295,7 @@ E.addScripts({
   'Arcanite Magician': { noSynchro: true, proc: synProc({ tuner: () => true, non: c => race(c) === 'Spellcaster' }),
     self: { atk: (g, c) => 1000 * ctr(c, 'spell') },
     effs: [
-      { type: 'trig', mand: true, on: (g, ev, c) => evSummoned(ev, c, ['synchro']), res: function* (g, c) { if (onField(c)) { addCtr(g, c, 'spell', 2); log(g, 'Arcanite Magician got 2 Spell Counters.'); } } },
+      { type: 'trig', mand: true, on: (g, ev, c) => evSummoned(ev, c, ['synchro']), res: function* (g, c) { if (onField(c) && faceUp(c)) { addCtr(g, c, 'spell', 2); log(g, 'Arcanite Magician got 2 Spell Counters.'); } } },
       { type: 'ign', tags: { destroy: 1 }, label: 'Remove a Spell Counter: destroy a card',
         cond: (g, c, p) => fieldOf(g, p).some(x => ctr(x, 'spell') > 0) && fieldOf(g, opp(p)).length > 0,
         cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Remove a Spell Counter from which card?', fieldOf(g, p).filter(x => ctr(x, 'spell') > 0), 1, 1, 'cost'); if (x) { addCtr(g, x, 'spell', -1); log(g, `${PN(g, p)} removed a Spell Counter from ${name(x)}.`); } },
@@ -362,7 +368,7 @@ E.addScripts({
     self: { atk: (g, c) => g.p[c.ctrl].lp - g.p[opp(c.ctrl)].lp },
     effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Pay 1000: Special Summon this card',
       on: (g, ev, c) => takenFromBattle(ev, c) && ev.destroyed,
-      cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].lp > 1000,
+      cond: (g, c, p) => freeM(g, p) >= 0 && E.lib.canPay(g, p, 1000),
       cost: function* (g, c, p) { pay(g, p, 1000); },
       res: function* (g, c, p) { if (c.zone === 'gy') ssx(g, p, c); } }] },
   'Shadow-Imprisoning Mirror': {

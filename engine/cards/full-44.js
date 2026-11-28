@@ -368,10 +368,10 @@ E.addScripts({
   // one you control whose Level stays 1 or more. The reduction lasts until the End Phase.
   'Star Blast': { effs: [
     { type: 'act',
-      cond: (g, c, p) => { const m = Math.max(0, ...[...g.p[p].hand, ...monsOf(g, p).filter(faceUp)].filter(x => x !== c && isMon(x)).map(lv)); return m >= 2 && g.p[p].lp > 500; },
+      cond: (g, c, p) => { const m = Math.max(0, ...[...g.p[p].hand, ...monsOf(g, p).filter(faceUp)].filter(x => x !== c && isMon(x)).map(lv)); return m >= 2 && E.lib.canPay(g, p, 500, c); },
       cost: function* (g, c, p, L2) {
         const m = Math.max(...[...g.p[p].hand, ...monsOf(g, p).filter(faceUp)].filter(x => x !== c && isMon(x)).map(lv));
-        const k = Math.min(m - 1, Math.floor((g.p[p].lp - 1) / 500));
+        const k = Math.min(m - 1, Math.floor(E.lib.lpPayable(g, p) / 500));
         const i = k > 1 ? yield* choose(g, p, 'Star Blast: pay how much LP?', Array.from({ length: k }, (_, j) => `${500 * (j + 1)} LP (${j + 1} Level${j ? 's' : ''})`)) : 0;
         L2.data.n = i + 1; pay(g, p, 500 * L2.data.n); },
       res: function* (g, c, p, L2) { const n = L2.data.n;

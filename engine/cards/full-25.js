@@ -80,13 +80,13 @@ function* tributeCost(g, p, cands, text) { const [m] = yield* pick(g, p, text, c
 // Morale Boost: the Equip Spell Cards (and monsters treated as Equip Spells) equipped right now
 const equipsNow = g => allField(g).filter(x => x.zone === 'st' && x.equipTo && !isTrap(x));
 // Neko Mane King: it becomes the End Phase. The turn player can do nothing more this turn except in the End Phase.
-// PARTIAL: the turn player stays in their Main Phase with only "End turn" left (and Flip Summons, which the engine
-// can't forbid); a battle already in the Damage Step finishes its damage calculation.
+// PARTIAL: the turn player stays in their Main Phase with only "End turn" left (Flip Summons are forbidden too); a battle already in
+// the Damage Step finishes its damage calculation.
 function toEndPhase(g) {
   const q = g.tp, T = g.turnNo;
   if (g.phase === 'battle') endBattle(g);
   g.noBP[q] = true; g.noSummon[q] = true;
-  addRule(g, (g2, a) => g2.turnNo === T && g2.phase !== 'end' && a.p === q && ['activate', 'setST', 'ns', 'set', 'ss'].includes(a.type), { end: T });
+  addRule(g, (g2, a) => g2.turnNo === T && g2.phase !== 'end' && a.p === q && ['activate', 'setST', 'ns', 'set', 'ss', 'flip'].includes(a.type), { end: T });
   addRule(g, (g2, a) => g2.turnNo === T && ((a.type === 'attack' && a.c && a.c.ctrl === q) || (a.type === 'pos' && a.c && a.c.ctrl === q)), { end: T });
   log(g, 'It became the End Phase of this turn.');
 }
@@ -469,7 +469,7 @@ E.addScripts({
     { type: 'trig', mand: true, label: 'Lose 300 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; g.p[p].lp -= 300; log(g, `${PN(g, p)} lost 300 LP.`); if (g.p[p].lp <= 0) { g.p[p].lp = 0; winDuel(g, opp(p), `${PN(g, p)} hit 0 LP`); } } },
     { type: 'trig', label: 'Pay 500 LP: give control to the opponent', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
-      cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, opp(p)) >= 0,
+      cond: (g, c, p) => E.lib.canPay(g, p, 500) && freeM(g, opp(p)) >= 0,
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c, p) { if (onField(c) && c.ctrl === p) takeControl(g, opp(p), c, false); } }] },
 }, 'goat');

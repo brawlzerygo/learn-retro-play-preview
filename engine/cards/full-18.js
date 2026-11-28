@@ -306,7 +306,7 @@ E.addScripts({
     cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Discard 1 WATER monster', g.p[p].hand.filter(x => isMon(x) && attr(x) === 'WATER'), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded ${name(x)}.`); } },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which card to its owner’s hand?', allField(g), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t) return; const nm = t.pos === 'set' ? 'a face-down card' : name(t); move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${nm} returned to the hand.`); } }] },
-  'Abyssal Designator': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000,
+  'Abyssal Designator': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 1000, c),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     target: function* (g, c, p, L2) { const t = yield* choose(g, p, 'Declare a Type', TYPES); const a = yield* choose(g, p, 'Declare an Attribute', ATTRS);
       L2.data.r = TYPES[t]; L2.data.a = ATTRS[a]; log(g, `${PN(g, p)} declared ${ATTRS[a]} ${TYPES[t]}.`); },
@@ -372,7 +372,7 @@ E.addScripts({
   'Andro Sphinx': { cont: noSSFromGY, self: { cantAttack: (g, c) => c.turnIn === g.turnNo },
     effs: [
       { type: 'ign', loc: 'hand', tags: { ss: 1 }, label: 'Pay 500 LP: Special Summon',
-        cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].lp > 500 && allField(g).some(x => faceUp(x) && named(x, 'Pyramid of Light')),
+        cond: (g, c, p) => freeM(g, p) >= 0 && E.lib.canPay(g, p, 500) && allField(g).some(x => faceUp(x) && named(x, 'Pyramid of Light')),
         cost: function* (g, c, p) { pay(g, p, 500); },
         res: function* (g, c, p) { if (c.zone === 'hand' && allField(g).some(x => faceUp(x) && named(x, 'Pyramid of Light'))) ss(g, p, c, 'atk'); } },
       { type: 'trig', loc: 'any', mand: true, label: 'Half the destroyed monster’s ATK as damage',
@@ -411,7 +411,7 @@ E.addScripts({
       res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },
   // Port of goat-7.js: you declare from the names in your own deck list (the known top card first under Convulsion of Nature).
   "Archfiend's Oath": { effs: [{ type: 'act', res: function* () {} },
-    { type: 'ign', loc: 'st', opt: true, label: 'Pay 500: declare a card', cond: (g, c, p) => g.p[p].lp > 500 && g.p[p].deck.length > 0,
+    { type: 'ign', loc: 'st', opt: true, label: 'Pay 500: declare a card', cond: (g, c, p) => E.lib.canPay(g, p, 500) && g.p[p].deck.length > 0,
       cost: function* (g, c, p) { pay(g, p, 500); },
       target: function* (g, c, p, L2) { let ns = ownNames(g, p); const top = g.p[p].deck[g.p[p].deck.length - 1];
         if (top && convulsion(g)) ns = [D(top).n, ...ns.filter(n => n !== D(top).n)];
@@ -420,7 +420,7 @@ E.addScripts({
         if (D(top).n === L2.data.n && !forbid(g, { type: 'search', p })) { move(g, top, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${name(top)} to the hand.`); }
         else move(g, top, 'gy', { reason: 'effect' }); } }] },
   "Archfiend's Roar": { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isArchfiend),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.canPay(g, p, 500, c) && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(isArchfiend),
       cost: function* (g, c, p) { pay(g, p, 500); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Archfiend monster?', g.p[p].gy.filter(isArchfiend), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && ss(g, p, t, 'atk')) { t.flags.noTribute = true; t.flags.roarBy = c.u; t.flags.roarEnd = g.turnNo; } } },

@@ -183,7 +183,7 @@ E.addScripts({
     res: function* (g, c, p) { yield* ssFrom(g, p, g.p[p].deck.filter(x => isMon(x) && race(x) === 'Fiend' && lv(x) === 1 && canSS(g, p, x)), 'Special Summon which Level 1 Fiend?'); } }] },
   // 1 Fiend Tuner + 1 or more non-Tuners. The 800 ATK lasts for this Battle Phase; each use gives one more attack.
   'Stygian Sergeants': { noSynchro: true, proc: synProc({ tuner: t => race(t) === 'Fiend' }),
-    effs: [{ type: 'trig', label: 'Gain 800 ATK and attack again', on: (g, ev, c) => battleKill(ev, c) && ev.c.owner !== c.ctrl,
+    effs: [{ type: 'trig', label: 'Gain 800 ATK and attack again', on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
       res: function* (g, c) { if (!onField(c) || !faceUp(c)) return; addMod(g, c, { atk: 800, end: true, f34sg: true, own: true }); c.flags.maxAttacks = c.attacks + 1; c.flags.maxAttacksTurn = g.turnNo; g.seq++;
         log(g, 'Stygian Sergeants gained 800 ATK and can attack again.'); } },
     { type: 'trig', res: noop, on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'bpEnd' && c.mods.some(m => m.f34sg)) { c.mods = c.mods.filter(m => !m.f34sg); g.seq++; } return false; } }] },
@@ -262,7 +262,7 @@ E.addScripts({
       const [x] = yield* pick(g, p, 'Special Summon which Synchro Monster?', xs, 1, 1, 'good'); if (x && ss(g, p, x, 'atk', { negate: true })) log(g, `${name(x)}'s effects are negated.`); } }] },
   // Until the End Phase of your turn: on the opponent's turn the monster stays until your next End Phase.
   'Synchro Control': { effs: [REC, { type: 'act',
-    cond: (g, c, p) => !monsOf(g, p).some(isSynchro) && !g.p[p].gy.some(isSynchro) && g.p[p].lp > 1000 && freeM(g, p) >= 0 && oppFaceUp(g, p).some(isSynchro),
+    cond: (g, c, p) => !monsOf(g, p).some(isSynchro) && !g.p[p].gy.some(isSynchro) && E.lib.canPay(g, p, 1000, c) && freeM(g, p) >= 0 && oppFaceUp(g, p).some(isSynchro),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Take control of which Synchro Monster?', oppFaceUp(g, p).filter(isSynchro), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || t.ctrl === p) return; const mine = g.tp === p;

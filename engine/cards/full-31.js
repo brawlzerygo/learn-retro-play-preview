@@ -303,9 +303,9 @@ E.addScripts({
         while (n-- > 0 && left.length) { const i = left.length > 1 ? yield* choose(g, p, 'Divine Dragon - Excelion: which effect?', left.map(k => opts[k])) : 0; const k = left.splice(i, 1)[0];
           if (k === 0) addMod(g, c, { atk: 1000, own: true }); else if (k === 1) c.flags.exAgain = true; else c.flags.exBurn = true;
           log(g, `Divine Dragon - Excelion: ${opts[k]}.`); } } },
-    { type: 'trig', res: noop, on: (g, ev, c) => { if (c.flags.exAgain && ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c && ev.c.owner !== c.ctrl) c.flags.extraAttack = g.turnNo; return false; } },
+    { type: 'trig', res: noop, on: (g, ev, c) => { if (c.flags.exAgain && ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c && ev.prevCtrl !== c.ctrl) c.flags.extraAttack = g.turnNo; return false; } },
     { type: 'trig', mand: true, label: "Damage equal to the destroyed monster's ATK",
-      on: (g, ev, c) => !!c.flags.exBurn && L.battleKill(ev, c) && ev.c.owner !== c.ctrl,
+      on: (g, ev, c) => !!c.flags.exBurn && L.battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
       res: function* (g, c, p, L2) { const n = baseAtk(L2.ev.c); if (n > 0) damage(g, opp(p), n, { src: c, srcP: p }); } }] },
   // Ritual Summoned by Ritual of Grace (full-13.js). It selects up to as many face-up cards as monsters used for it;
   // while any of them is face-up on the field, it can't be destroyed by card effects.
@@ -344,7 +344,7 @@ E.addScripts({
   // Its damage is the destroyed monster's original ATK (read in the GY).
   'Earthbound Immortal Ccapac Apu': { self: eiSelf, cont: eiCont, effs: [eiSelfDestroy,
     { type: 'trig', mand: true, label: "Damage equal to the destroyed monster's ATK",
-      on: (g, ev, c) => L.battleKill(ev, c) && ev.c.owner !== c.ctrl,
+      on: (g, ev, c) => L.battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
       res: function* (g, c, p, L2) { const n = baseAtk(L2.ev.c); if (n > 0) damage(g, opp(p), n, { src: c, srcP: p }); } }] },
   // PARTIAL: "the opponent can't conduct their Battle Phase" is set at their Standby Phase and Main Phase 1 events while this
   // card is in face-up Defense Position (switching it back later that turn doesn't give the Battle Phase back).

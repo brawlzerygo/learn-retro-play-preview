@@ -216,7 +216,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; const n = 200 * g.p[opp(p)].hand.length; if (!n) return; addMod(g, t, { atk: n, def: n, end: true }); log(g, `${name(t)} gained ${n} ATK and DEF.`); } }] },
   'Exchange of the Spirit': { effs: [{ type: 'act',
     // Original 2005 text: no once-per-Duel limit (added by later errata).
-    cond: (g, c, p) => g.p[0].gy.length >= 15 && g.p[1].gy.length >= 15 && g.p[p].lp > 1000,
+    cond: (g, c, p) => g.p[0].gy.length >= 15 && g.p[1].gy.length >= 15 && E.lib.canPay(g, p, 1000, c),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g) {
       for (const q of [0, 1]) { const P = g.p[q]; const d = P.deck, gy = P.gy; P.deck = gy; P.gy = d; for (const x of P.deck) x.zone = 'deck'; for (const x of P.gy) x.zone = 'gy'; shuffleDeck(g, q); }
@@ -231,7 +231,7 @@ E.addScripts({
         if (coin(g, p) === call) { addMod(g, a, { set: 0, which: 'atk', end: true, fairy: c.u }); log(g, `${name(a)}'s ATK became 0.`); } else log(g, 'The call was wrong.'); } },
     { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'bpEnd') for (const m of fieldMons(g)) m.mods = m.mods.filter(x => x.fairy !== c.u); return false; }, res: function* () {} },
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 500 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500 && (yield* yn(g, p, 'Pay 500 LP to keep Fairy Box?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
+      res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500) && (yield* yn(g, p, 'Pay 500 LP to keep Fairy Box?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
   // PARTIAL: the switched attack is worked out by the card (miniBattle).
   'Jam Defender': { effs: [
     { type: 'act', res: function* () {} },

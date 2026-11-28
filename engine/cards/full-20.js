@@ -64,7 +64,7 @@ const archDice = (who, hits, label) => ({ type: 'quick', speed: 3, ds: true, lab
   res: function* (g, c, p, L2) { const T = L2.data.L; if (!T || T.negated) return; const n = (yield* L.roll(g, p)); if (hits.includes(n)) { T.negBy = p; negate(g, T, true); } else log(g, 'Nothing happened.'); } });
 const archCost = { type: 'trig', mand: true, label: 'Pay 500 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
   // PARTIAL: with 500 LP or less the card is destroyed instead of paying (the text gives no rule for it).
-  res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } };
+  res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500)) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } };
 // Cobra Jar's token remembers its Jar (the token is gone once it leaves the field)
 const cobraOf = (ev, c) => ev.type === 'move' && ev.snap && ev.snap.flags && ev.snap.flags.f20jar === c.u && ev.battle && ev.destroyed;
 
@@ -156,7 +156,7 @@ E.addScripts({
         if (ss(g, q, u, i ? 'def' : 'atk')) { m.flags.extraAttack = g.turnNo; g.seq++; log(g, `${name(m)} can attack again this turn.`); } } }] }; })(),
   'Commencement Dance': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && canRitual(g, p, { monster: x => named(x, 'Performance of Sword') }),
     res: function* (g, c, p) { yield* ritualSummon(g, p, { monster: x => named(x, 'Performance of Sword') }); } }] },
-  'Confiscation': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000 && g.p[opp(p)].hand.length > 0,
+  'Confiscation': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 1000, c) && g.p[opp(p)].hand.length > 0,
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g, c, p) { const h = g.p[opp(p)].hand; if (!h.length) return; log(g, `${PN(g, p)} looked at ${PN(g, opp(p))}'s hand: ${h.map(x => D(x).n).join(', ')}.`);
       const [x] = yield* pick(g, p, 'Discard which card from their hand?', h, 1, 1, 'bad'); if (x) { move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, opp(p))} discarded ${name(x)}.`); } } }] },
@@ -236,7 +236,7 @@ E.addScripts({
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 Dark Magician', monsOf(g, p).filter(x => named(x, 'Dark Magician')), 1, 1, 'cost'); if (x) { move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed Dark Magician.`); } },
       res: function* (g, c, p) { const cs = dmoc(g, p); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon which Dark Magician of Chaos?', cs, 1, 1, 'good'); if (!x) return;
         const fromDeck = x.zone === 'deck'; ss(g, p, x); if (fromDeck) shuffleDeck(g, p); } }] }; })(),
-  'Delinquent Duo': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000 && g.p[opp(p)].hand.length > 0,
+  'Delinquent Duo': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 1000, c) && g.p[opp(p)].hand.length > 0,
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g, c, p) { const o = opp(p); discardRandom(g, o, p); if (g.p[o].hand.length) yield* discardPick(g, o, 1, 'Discard 1 card of your choice', null, p); } }] },
   'Delta Attacker': (() => { const trio = (g, p) => { const by = {}; for (const m of monsOf(g, p)) if (faceUp(m) && D(m).k === 'normal') (by[D(m).n] || (by[D(m).n] = [])).push(m); return Object.values(by).find(a => a.length >= 3) || null; };
@@ -271,7 +271,7 @@ E.addScripts({
   'Diffusion Wave-Motion': { effs: [{ type: 'trig', loc: 'any', res: function* () {}, on: (g, ev) => {
       if (ev.type === 'move' && ev.battle && ev.destroyed && ev.killer && ev.killer.flags && ev.killer.flags.f20dwm === g.turnNo) { const x = ev.c; addRule(g, (g2, a) => a.type === 'activate' && a.c === x, { end: g.turnNo }); }
       return false; } },
-    { type: 'act', cond: (g, c, p) => g.phase === 'main1' && !E.lib.bpLocked(g, p) && g.p[p].lp > 1000 && monsOf(g, opp(p)).length > 0 && monsOf(g, p).some(m => faceUp(m) && race(m) === 'Spellcaster' && lv(m) >= 7),
+    { type: 'act', cond: (g, c, p) => g.phase === 'main1' && !E.lib.bpLocked(g, p) && E.lib.canPay(g, p, 1000, c) && monsOf(g, opp(p)).length > 0 && monsOf(g, p).some(m => faceUp(m) && race(m) === 'Spellcaster' && lv(m) >= 7),
       cost: function* (g, c, p) { pay(g, p, 1000); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Level 7 or higher Spellcaster attacks every monster?', monsOf(g, p).filter(m => faceUp(m) && race(m) === 'Spellcaster' && lv(m) >= 7), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; g.onlyAttacker[p] = t.u; t.flags.maxAttacks = Math.max(1, monsOf(g, opp(p)).length); t.flags.maxAttacksTurn = g.turnNo; t.flags.f20dwm = g.turnNo; g.seq++;
@@ -345,7 +345,7 @@ E.addScripts({
       const [x] = yield* pick(g, p, 'Special Summon which monster from your hand?', cs, 1, 1, 'good'); if (!x) return;
       const i = yield* choose(g, p, `${name(x)}: which position?`, ['Attack Position', 'Defense Position']); ss(g, p, x, i ? 'def' : 'atk'); } }] },
   'Dream Clown': { effs: [{ type: 'trig', mand: true, tags: { destroy: 1 }, label: 'Destroy a monster',
-    on: (g, ev, c) => ev.type === 'pos' && ev.c === c && c.pos === 'def',
+    on: (g, ev, c) => ev.type === 'pos' && ev.c === c && c.pos === 'def' && (ev.from == null || ev.from === 'atk'),   // "changed from Attack Position to Defense Position" (not a flip to face-up Defense)
     cond: (g, c, p) => monsOf(g, opp(p)).length > 0,
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which of their monsters?', monsOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { destroy(g, live(L2), { by: p }); } }] },

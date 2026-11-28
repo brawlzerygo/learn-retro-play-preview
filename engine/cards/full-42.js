@@ -286,7 +286,7 @@ E.addScripts({
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && c.owner === ev.tp && monsOf(g, c.owner).some(m => m.flags.f42od === g.turnNo),
       res: function* (g, c, p) { destroy(g, fieldMons(g).filter(m => m.flags.f42od === g.turnNo), { by: p }); } }] },
   'Over Limit': { effs: [watch, { type: 'act', tags: { ss: 1 },
-    cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, p) >= 0 && allCards(g, 'gy').some(x => D(x).k === 'normal' && x.f42bat === g.turnNo && printedAtk(x) <= 1000 && canSS(g, p, x)),
+    cond: (g, c, p) => E.lib.canPay(g, p, 500, c) && freeM(g, p) >= 0 && allCards(g, 'gy').some(x => D(x).k === 'normal' && x.f42bat === g.turnNo && printedAtk(x) <= 1000 && canSS(g, p, x)),
     cost: function* (g, c, p) { pay(g, p, 500); },
     res: function* (g, c, p) {
       let xs = allCards(g, 'gy').filter(x => D(x).k === 'normal' && x.f42bat === g.turnNo && printedAtk(x) <= 1000 && canSS(g, p, x));
@@ -333,7 +333,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy') ss(g, p, t, 'atk'); } }] },
   'Pandaborg': { effs: [{ type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, label: 'Pay 800 LP: Special Summon a Level 4 Psychic',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => g.p[p].lp > 800,
+    cond: (g, c, p) => E.lib.canPay(g, p, 800),
     cost: function* (g, c, p) { pay(g, p, 800); },
     res: function* (g, c, p) {
       if (freeM(g, p) < 0) return;

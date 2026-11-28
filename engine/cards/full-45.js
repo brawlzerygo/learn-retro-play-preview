@@ -148,7 +148,7 @@ E.addScripts({
     equipAct(m => race(m) === 'Psychic', 'Equip to which face-up Psychic monster?', (g, c, t) => { c.f45eq = t.u; }),
     { type: 'trig', loc: 'gy', when: true, label: 'Pay 1000 LP: return it to the hand',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.from === 'st' && ev.to === 'gy' && !!c.f45eq && g.events.some(e => e.type === 'move' && e.group === ev.group && e.c && e.c.u === c.f45eq && e.destroyed),
-      cond: (g, c, p) => g.p[p].lp > 1000 && c.zone === 'gy',
+      cond: (g, c, p) => E.lib.canPay(g, p, 1000) && c.zone === 'gy',
       cost: function* (g, c, p) { pay(g, p, 1000); },
       res: function* (g, c, p) { if (c.zone === 'gy') { move(g, c, 'hand', { reason: 'effect', by: p }); log(g, `${PN(g, p)} returned Telekinetic Charging Cell to the hand.`); } } }] },
   // Not a chain link (ruling). PARTIAL: the choice is automatic: it saves its controller's face-up Psychic monsters while the
@@ -156,7 +156,7 @@ E.addScripts({
   // together with itself.
   'Telekinetic Shocker': { cont: { replaceDestroy: (g, src, c, o) => {
     if (c === src || !onField(src) || src.zone !== 'm' || !faceUp(src) || negd(g, src)) return false;
-    if (!isMon(c) || c.zone !== 'm' || !faceUp(c) || race(c) !== 'Psychic' || c.ctrl !== src.ctrl || g.p[src.ctrl].lp <= 500) return false;
+    if (!isMon(c) || c.zone !== 'm' || !faceUp(c) || race(c) !== 'Psychic' || c.ctrl !== src.ctrl || !E.lib.canPay(g, src.ctrl, 500)) return false;
     pay(g, src.ctrl, 500); log(g, `Telekinetic Shocker was destroyed instead of ${name(c)}.`);
     move(g, src, 'gy', { reason: 'effect', destroyed: true, by: src.ctrl }); return true; } } },
   'Telepathic Power': { effs: [trapTrig({ label: 'Destroy the attacker and gain LP', tags: { destroy: 1 },
@@ -167,7 +167,7 @@ E.addScripts({
   // Paying 800 is the cost. Once per turn.
   'Teleport': { effs: [actNoop,
     { type: 'ign', loc: 'st', opt: true, tags: { ss: 1 }, label: 'Pay 800: Special Summon a Psychic',
-      cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, p).length === 0 && monsOf(g, opp(p)).length > 0 && g.p[p].lp > 800 && g.p[p].hand.some(x => isMon(x) && race(x) === 'Psychic' && canSS(g, p, x)),
+      cond: (g, c, p) => freeM(g, p) >= 0 && monsOf(g, p).length === 0 && monsOf(g, opp(p)).length > 0 && E.lib.canPay(g, p, 800) && g.p[p].hand.some(x => isMon(x) && race(x) === 'Psychic' && canSS(g, p, x)),
       cost: function* (g, c, p) { pay(g, p, 800); },
       res: function* (g, c, p) { if (freeM(g, p) < 0) return; const xs = g.p[p].hand.filter(x => isMon(x) && race(x) === 'Psychic' && canSS(g, p, x)); if (!xs.length) return;
         const [x] = yield* pick(g, p, 'Special Summon which Psychic from your hand?', xs, 1, 1, 'good'); if (x) ss(g, p, x, yield* posOf(g, p, x)); } }] },
@@ -190,7 +190,7 @@ E.addScripts({
       log(g, `${name(ev.a)} must attack Elemental HERO Terra Firma.`); })] },
   // Chained directly to the opponent's Spell Card activation (Chain Link 2 only); paying 1000 is the cost.
   'Terrible Deal': { effs: [{ type: 'act',
-    cond: (g, c, p, x) => !!x.top && g.chain.length === 1 && x.top.p !== p && spellTrapAct(x.top) && isSpell(x.top.c) && g.p[p].lp > 1000 && g.p[opp(p)].hand.length > 0,
+    cond: (g, c, p, x) => !!x.top && g.chain.length === 1 && x.top.p !== p && spellTrapAct(x.top) && isSpell(x.top.c) && E.lib.canPay(g, p, 1000, c) && g.p[opp(p)].hand.length > 0,
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g, c, p) { const h = g.p[opp(p)].hand; if (!h.length) return; const x = h[Math.floor(g.rnd() * h.length)];
       move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, opp(p))} discarded ${D(x).n} at random.`); } }] },
@@ -502,7 +502,7 @@ E.addScripts({
   "Vampire's Curse": { effs: [
     { type: 'trig', loc: 'gy', when: true, label: 'Pay 500 LP: return next Standby Phase',
       on: (g, ev, c) => battleToGY(ev, c),
-      cond: (g, c, p) => g.p[p].lp > 500,
+      cond: (g, c, p) => E.lib.canPay(g, p, 500),
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c) { if (c.zone === 'gy') { c.f45vc = g.turnNo + 1; log(g, "Vampire's Curse will return in the next Standby Phase."); } } },
     { type: 'trig', loc: 'gy', mand: true, tags: { ss: 1 }, label: 'Special Summon it',

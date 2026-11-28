@@ -226,7 +226,7 @@ E.addScripts({
   // returned to the hand is banished right after it arrives (a chain link).
   'Degenerate Circuit': { effs: [actNoop,
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 500 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { rule: true }); } },
+      res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500)) pay(g, p, 500); else destroy(g, [c], { rule: true }); } },
     { type: 'trig', loc: 'st', mand: true, label: 'Banish the returned monster',
       on: (g, ev, c) => ev.type === 'move' && ev.wasField && ev.to === 'hand' && isMon(ev.c),
       res: function* (g, c, p, L2) { const x = L2.ev.c; if (x.zone === 'hand') { move(g, x, 'ban', { reason: 'effect', by: p }); log(g, `${name(x)} was banished instead.`); } } }] },
@@ -241,7 +241,7 @@ E.addScripts({
       const a = L.effsOf(x).find(e => e.type === 'act');
       if (a && a.res) { const L2 = { c: x, eff: a, p, t: [], data: {}, tags: a.tags || {}, cardAct: true }; if (!a.cond || a.cond(g, x, p, {})) { if (a.target) yield* a.target(g, x, p, L2); yield* a.res(g, x, p, L2); } } } }] },
   'Demise, King of Armageddon': { effs: [{ type: 'ign', tags: { destroy: 1 }, label: 'Pay 2000: destroy all other cards',
-    cond: (g, c, p) => g.p[p].lp > 2000 && allField(g).some(x => x !== c),
+    cond: (g, c, p) => E.lib.canPay(g, p, 2000) && allField(g).some(x => x !== c),
     cost: function* (g, c, p) { pay(g, p, 2000); },
     res: function* (g, c, p) { destroy(g, allField(g).filter(x => x !== c), { by: p, src: c }); } }] },
   // Discarding is part of the effect, once per attack declaration. Destroyed in the opponent's 3rd End Phase after activation.
@@ -284,7 +284,7 @@ E.addScripts({
       cond: (g, c, p) => monsOf(g, p).filter(m => faceUp(m) && race(m) === 'Psychic').length === 1,
       res: function* (g, c, p) { if (onField(c) && monsOf(g, p).filter(m => faceUp(m) && race(m) === 'Psychic').length === 1) destroy(g, [c], { by: p }); } },
     { type: 'ign', tags: { destroy: 1 }, label: 'Pay 1000: destroy a Set Spell/Trap',
-      cond: (g, c, p) => g.p[p].lp > 1000 && stOf(g, opp(p)).some(x => x.pos === 'set'),
+      cond: (g, c, p) => E.lib.canPay(g, p, 1000) && stOf(g, opp(p)).some(x => x.pos === 'set'),
       cost: function* (g, c, p) { pay(g, p, 1000); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Destroy which Set Spell/Trap?', stOf(g, opp(p)).filter(x => x.pos === 'set'), 1, 1, 'bad'); },
       res: function* (g, c, p, L2) { destroy(g, live(L2).filter(x => x.pos === 'set'), { by: p }); } }] },
@@ -348,7 +348,7 @@ E.addScripts({
     { type: 'trig', res: noop, on: (g, ev, c) => { if (c.mods.some(m => m.f37disk && g.turnNo >= m.turn + 2)) c.mods = c.mods.filter(m => !(m.f37disk && g.turnNo >= m.turn + 2)); return false; } }] },
   'Doctor Cranium': { effs: [{ type: 'trig', loc: 'gy', when: true, label: 'Pay 800: add a Psychic',
     on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.battle && ev.destroyed && ev.to === 'gy',
-    cond: (g, c, p) => g.p[p].lp > 800 && g.p[p].deck.some(x => isMon(x) && race(x) === 'Psychic'),
+    cond: (g, c, p) => E.lib.canPay(g, p, 800) && g.p[p].deck.some(x => isMon(x) && race(x) === 'Psychic'),
     cost: function* (g, c, p) { pay(g, p, 800); },
     res: function* (g, c, p) { yield* search(g, p, x => isMon(x) && race(x) === 'Psychic', 'Add a Psychic monster'); } }] },
   'Doitsu': { cont: { ...unionCont, atk: (g, src, m) => src.zone === 'st' && src.flags.union && src.equipTo === m.u ? 2500 : 0 },

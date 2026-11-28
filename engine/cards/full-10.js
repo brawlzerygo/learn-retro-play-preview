@@ -347,7 +347,7 @@ E.addScripts({
       cond: (g, c, p) => g.p[p].gy.some(x => x !== c && (named(x, 'King of the Skull Servants') || named(x, 'Skull Servant'))),
       cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Banish 1 other King of the Skull Servants or Skull Servant from your GY', g.p[p].gy.filter(x => x !== c && (named(x, 'King of the Skull Servants') || named(x, 'Skull Servant'))), 1, 1, 'cost'); if (x) { move(g, x, 'ban', { reason: 'cost' }); log(g, `${PN(g, p)} banished ${D(x).n}.`); } },
       res: function* (g, c, p) { if (c.zone === 'gy' && freeM(g, p) >= 0) ss(g, p, c, 'atk'); } }] },
-  // ENGINE: ① (a substitute for any 1 listed Fusion Material) needs a name change hook in the Fusion material check.
+  // ① (a substitute for any 1 listed Fusion Material) is the engine's Fusion material check (assignMats).
   'King of the Swamp': { effs: [{ type: 'ign', loc: 'hand', label: 'Discard: add Polymerization',
     cond: (g, c, p) => g.p[p].deck.some(x => named(x, 'Polymerization')),
     cost: function* (g, c, p) { move(g, c, 'gy', { reason: 'discard' }); log(g, `${PN(g, p)} discarded King of the Swamp.`); },
@@ -399,7 +399,7 @@ E.addScripts({
         for (const q of [p, o]) for (const x of g.p[q].hand.slice()) move(g, x, 'gy', { reason: 'effect', by: p });
         log(g, 'Every other card on the field and in both hands went to the GY.');
         g.lastTurn = { turn: g.turnNo, u: c.u };
-        const ms = g.p[o].deck.filter(x => isMon(x) && !['ritual', 'token'].includes(D(x).k) && !/Cannot be Special Summoned/i.test(tx(x)));
+        const ms = g.p[o].deck.filter(x => isMon(x) && !['ritual', 'token'].includes(D(x).k) && L.ssable(g, o, x));   // summoning conditions (CED, BLS, Spirits)
         if (!ms.length || freeM(g, o) < 0) return;
         const [x] = yield* pick(g, o, 'Special Summon which monster from your Deck?', ms, 1, 1, 'good'); shuffleDeck(g, o);
         if (!x || !ss(g, o, x, 'atk')) return;
@@ -416,7 +416,9 @@ E.addScripts({
       on: (g, ev, c) => {
         if (g.lastTurn && g.lastTurn.u === c.u && ((ev.type === 'phase' && ev.ph === 'end' && g.lastTurn.turn === g.turnNo) || g.turnNo > g.lastTurn.turn)) {
           g.lastTurn = null; const all = allField(g);
-          if (all.length === 1 && isMon(all[0]) && all[0].zone === 'm') over(g, all[0].ctrl, `Last Turn: ${PN(g, all[0].ctrl)}'s monster is alone on the field`);
+          // archive (Change of Heart, Dark Necrofear) and EDOPro: a player with monsters wins if the other controls none (goat-11)
+          const m0 = L.monsOf(g, 0).length, m1 = L.monsOf(g, 1).length; void all;
+          if ((m0 > 0) !== (m1 > 0)) over(g, m0 > 0 ? 0 : 1, `Last Turn: only ${PN(g, m0 > 0 ? 0 : 1)} controls a monster`);
           over(g, -1, 'Last Turn: no monster is alone on the field, so the duel is a draw');
         }
         return false; } }] },

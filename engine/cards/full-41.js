@@ -99,7 +99,7 @@ E.addScripts({
         res: function* (g, c, p) { c.flags.f41doom = false; if (onField(c) && faceUp(c) && !fieldSpellUp(g)) destroy(g, [c], { by: p }); } }] },
 
   'Malfunction': { effs: [{ type: 'act',
-    cond: (g, c, p, x) => !!x.top && spellTrapAct(x.top) && isTrap(x.top.c) && g.p[p].lp > 500,
+    cond: (g, c, p, x) => !!x.top && spellTrapAct(x.top) && isTrap(x.top.c) && E.lib.canPay(g, p, 500, c),
     cost: function* (g, c, p) { pay(g, p, 500); },
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { const T = L2.data.L; if (!T) return; T.negBy = p; negate(g, T, false);
@@ -356,7 +356,7 @@ E.addScripts({
     { type: 'trig', mand: true, label: 'Lose 300 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
       res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return; g.p[p].lp -= 300; log(g, `${PN(g, p)} lost 300 LP.`); if (g.p[p].lp <= 0) { g.p[p].lp = 0; winDuel(g, opp(p), `${PN(g, p)} hit 0 LP`); } } },
     { type: 'trig', label: 'Pay 500 LP: give control to the opponent', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'end' && ev.tp === c.ctrl,
-      cond: (g, c, p) => g.p[p].lp > 500 && freeM(g, opp(p)) >= 0,
+      cond: (g, c, p) => E.lib.canPay(g, p, 500) && freeM(g, opp(p)) >= 0,
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c, p) { if (onField(c) && c.ctrl === p) takeControl(g, opp(p), c, false); } }] },
 

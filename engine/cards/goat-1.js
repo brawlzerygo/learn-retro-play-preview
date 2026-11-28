@@ -63,7 +63,8 @@ E.addScripts({
   // (ruling 4); a negated activation (Divine Wrath) lifts it. Revival only after a proper summon: the engine reads "Must first be".
   'Black Luster Soldier - Envoy of the Beginning': { proc: chaosProc,
     // "Once per turn, you can activate 1 of these effects": one shared use (c.flags.envoyUsed).
-    effs: [{ type: 'ign', label: 'Banish a monster', tags: {},
+    // negAct: under a face-up Skill Drain it is still activated (negated), and BLS can't attack that turn (archive ruling 4)
+    effs: [{ type: 'ign', label: 'Banish a monster', tags: {}, negAct: true,
       // not after it declared an attack this turn, even a negated one (rulings)
       cond: (g, c, p) => c.flags.envoyUsed !== g.turnNo && !c.declared && fieldMons(g).length > 0,
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Banish which monster?', fieldMons(g), 1, 1, 'bad'); },

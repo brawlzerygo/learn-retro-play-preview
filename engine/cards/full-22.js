@@ -116,7 +116,7 @@ E.addScripts({
   // PARTIAL: any Ritual Monster in the GY can be summoned (the "properly Ritual Summoned before" ruling isn't tracked).
   // The banish when this card is destroyed uses a chain link (the ruling says it starts none).
   'Fulfillment of the Contract': { effs: [
-    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => g.p[p].lp > 800 && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && D(x).k === 'ritual'),
+    { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => E.lib.canPay(g, p, 800, c) && freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && D(x).k === 'ritual'),
       cost: function* (g, c, p) { pay(g, p, 800); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which Ritual Monster from your GY?', g.p[p].gy.filter(x => isMon(x) && D(x).k === 'ritual'), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = L2.t[0]; if (t && t.zone === 'gy' && onField(c) && ss(g, p, t, 'atk') && equip(g, c, t)) c.flags.foc = t.u; } },
@@ -234,7 +234,7 @@ E.addScripts({
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Return which of their monsters to the hand?', monsOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (t && t.zone === 'm') { const n = faceUp(t) ? name(t) : 'A face-down monster'; move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${n} returned to the hand.`); } } }] },
   'Gear Golem the Moving Fortress': { self: { directAttack: (g, c) => c.flags.gearDirect === g.turnNo, lasting: ['directAttack'] },
-    effs: [{ type: 'ign', opt: true, label: 'Pay 800: attack directly', cond: (g, c, p) => g.phase === 'main1' && g.p[p].lp > 800,
+    effs: [{ type: 'ign', opt: true, label: 'Pay 800: attack directly', cond: (g, c, p) => g.phase === 'main1' && E.lib.canPay(g, p, 800),
       cost: function* (g, c, p) { pay(g, p, 800); },
       res: function* (g, c) { if (onField(c)) { c.flags.gearDirect = g.turnNo; log(g, `${name(c)} can attack directly this turn.`); } } }] },
   // Mandatory. PARTIAL: an equip that lands without an event (an Equip Spell resolving) is caught at the next game event.

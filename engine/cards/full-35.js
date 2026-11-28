@@ -179,7 +179,7 @@ E.addScripts({
   // The card comes back in the End Phase of the opponent's next turn (not this one, even on their turn); a card that left
   // the banished pile in between doesn't.
   'Appointer of the Red Lotus': { effs: [
-    { type: 'act', cond: (g, c, p) => g.p[p].lp > 2000 && g.p[p].hand.length > 0 && g.p[opp(p)].hand.length > 0,
+    { type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 2000, c) && g.p[p].hand.length > 0 && g.p[opp(p)].hand.length > 0,
       cost: function* (g, c, p) { pay(g, p, 2000); log(g, `${PN(g, p)} revealed ${g.p[p].hand.map(name).join(', ')}.`); },
       res: function* (g, c, p) { const o = opp(p), h = g.p[o].hand; if (!h.length) return; log(g, `${PN(g, p)} looked at ${PN(g, o)}'s hand.`);
         const [x] = yield* pick(g, p, 'Banish which card from their hand?', h, 1, 1, 'bad'); if (!x) return;

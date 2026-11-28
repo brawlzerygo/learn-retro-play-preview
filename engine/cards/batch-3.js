@@ -47,16 +47,18 @@ function tagOut(self, n = 1, except = self) {
     } };
 }
 /* Contact Fusion: shuffle the listed monsters you control into the Deck. preds: one test per material. */
-function contactSets(g, p, preds) {
-  const pool = monsOf(g, p).filter(faceUp), out = [];
+// fd: face-down monsters you control count too (Gladiator Beast Gyzarus/Heraklinos/Gaiodiaz site rulings: "Face-up & face-down Fusion
+// Material Monsters you control may be used"); the Neos Fusions keep face-up only (no ruling says otherwise).
+function contactSets(g, p, preds, fd) {
+  const pool = fd ? monsOf(g, p) : monsOf(g, p).filter(faceUp), out = [];
   const rec = (i, used) => { if (out.length > 6) return; if (i === preds.length) { out.push(used.slice()); return; } for (const x of pool) if (!used.includes(x) && preds[i](x)) { used.push(x); rec(i + 1, used); used.pop(); } };
   rec(0, []);
   const seen = new Set(); return out.filter(m => { const k = m.map(x => x.u).sort().join(','); if (seen.has(k)) return false; seen.add(k); return true; });
 }
-function contactProc(preds, label) {
-  return { extra: true, label, cond: (g, c, p) => contactSets(g, p, preds).length > 0,
+function contactProc(preds, label, fd) {
+  return { extra: true, label, cond: (g, c, p) => contactSets(g, p, preds, fd).length > 0,
     cost: function* (g, c, p, grp) {
-      const cs = contactSets(g, p, preds); let mats = cs[0];
+      const cs = contactSets(g, p, preds, fd); let mats = cs[0];
       if (cs.length > 1) { const i = yield* choose(g, p, 'Shuffle which monsters into the Deck?', cs.map(m => m.map(nm).join(' + '))); mats = cs[i]; }
       for (const m of mats) move(g, m, 'deck', { reason: 'fusion', group: grp });
       log(g, `${PN(g, p)} shuffled ${mats.map(nm).join(' + ')} into the Deck.`);
@@ -93,11 +95,14 @@ E.addScripts({
     res: function* (g, c, p) { if (c.zone === 'gy') ss(g, p, c); } }] },
   'Flip Flop Frog': { effs: [
     { type: 'ign', opt: true, label: 'Set this card',
-      res: function* (g, c) { if (onField(c) && faceUp(c)) { setFaceDown(g, c); c.posChanged = true; } } },
+      // Site: it "remembers" if it used this effect even after being Set (EDOPro: the use survives RESET_TURN_SET), so its own Set keeps the use.
+      res: function* (g, c) { if (onField(c) && faceUp(c)) { const used = { ...c.used }; setFaceDown(g, c); Object.assign(c.used, used); c.posChanged = true; } } },
+    // Printed text (archive, EDOPro): "return monsters your opponent controls ... up to the number of face-up "Frog" monsters you control,
+    // except "Frog the Jam"" (the site's ps paraphrase says "from the field"; RULINGS_DECIDED, E4).
     { type: 'trig', when: true, label: 'Return monsters to the hand', on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
-      cond: (g, c, p) => fieldMons(g).length > 0,
-      res: function* (g, c, p) { const n = monsOf(g, p).filter(x => faceUp(x) && isFrog(x)).length; if (!n) return;
-        const ts = yield* pick(g, p, `Return up to ${n} monster(s) to the hand`, fieldMons(g), 1, n, 'bad');
+      cond: (g, c, p) => monsOf(g, opp(p)).length > 0,
+      res: function* (g, c, p) { const n = monsOf(g, p).filter(x => faceUp(x) && isFrog(x) && nm(x) !== 'Frog the Jam').length; if (!n) return;
+        const ts = yield* pick(g, p, `Return up to ${n} of your opponent's monsters to the hand`, monsOf(g, opp(p)), 1, n, 'bad');
         for (const t of ts) move(g, t, 'hand', { reason: 'effect', by: p }); if (ts.length) log(g, `${ts.map(nm).join(', ')} returned to the hand.`); } }] },
   'Metabo-Shark': { effs: [{ type: 'trig', when: true, on: (g, ev, c) => evSummoned(ev, c, ['normal']),
     cond: (g, c, p) => g.p[p].gy.filter(isFish).length >= 2,
@@ -137,19 +142,20 @@ E.addScripts({
   // (ENGINE: mandatory Quick Effects). "Cannot be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere.
   'Light and Darkness Dragon': { cont: cantSSFromGY, effs: [
     { type: 'quick', ds: true, label: 'Negate (lose 500 ATK/DEF)',
-      cond: (g, c, p, x) => x.top && !x.top.negated && (spellTrapAct(x.top) || (!x.top.cardAct && isMon(x.top.c))) && !g.chain.some(l => l.c === c) && atk(g, c) >= 500 && def(g, c) >= 500,
+      cond: (g, c, p, x) => x.top && !x.top.negated && (spellTrapAct(x.top) || (!x.top.cardAct && isMon(x.top.c))) && !g.chain.some(l => l.c === c),   // it always activates; with under 500 ATK or DEF it negates nothing (rulings)
       cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; },
       res: function* (g, c, p, L) { if (!onField(c) || !faceUp(c) || atk(g, c) < 500 || def(g, c) < 500) return; addMod(g, c, { atk: -500, def: -500, own: true }); log(g, 'Light and Darkness Dragon lost 500 ATK and DEF.'); L.data.L.negBy = p; negate(g, L.data.L, false); } },
-    { type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.wasField && ev.to === 'gy',
+    { type: 'trig', loc: 'gy', mand: true, tags: { destroy: 1 }, // any zone, a negated summon included (site: "even if ... summon was negated by a card like Solemn Judgment"; ruling: hand, Deck, field, equipped)
+      on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.to === 'gy',
       target: function* (g, c, p, L) { const cs = g.p[p].gy.filter(x => x !== c && isMon(x)); if (cs.length) yield* tgt(g, p, L, 'Special Summon which monster from your GY?', cs, 1, 1, 'good'); },
       res: function* (g, c, p, L) { destroy(g, fieldOf(g, p), { by: p }); const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
-  'Twister': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => g.p[p].lp > 500 && stOnField(g).some(x => x !== c && faceUp(x)),
+  'Twister': { effs: [{ type: 'act', tags: { destroy: 1 }, cond: (g, c, p) => E.lib.canPay(g, p, 500, c) && stOnField(g).some(x => x !== c && faceUp(x)),
     cost: function* (g, c, p) { pay(g, p, 500); },
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which face-up Spell/Trap?', stOnField(g).filter(x => x !== c && faceUp(x)), 1, 1, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L).filter(faceUp), { by: p }); } }] },
 
   /* ===== Flamvell ===== */
-  'Flamvell Firedog': { effs: [{ type: 'trig', tags: { ss: 1 }, on: (g, ev, c) => battleKill(ev, c) && ev.c.owner !== c.ctrl,
+  'Flamvell Firedog': { effs: [{ type: 'trig', tags: { ss: 1 }, on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'FIRE' && num(D(x).def) <= 200 && nm(x) !== 'Flamvell Firedog'),
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isMon(x) && attr(x) === 'FIRE' && num(D(x).def) <= 200 && nm(x) !== 'Flamvell Firedog'); const [x] = yield* pick(g, p, 'Special Summon a FIRE with 200 or less DEF', cs, 1, 1, 'good'); if (x) ss(g, p, x); shuffleDeck(g, p); } }] },
   'Flamvell Magician': { self: { atk: (g, c) => monsOf(g, c.ctrl).some(x => faceUp(x) && /^Ally of Justice/.test(name(x))) ? 400 : 0 }, effs: [] },
@@ -159,8 +165,8 @@ E.addScripts({
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy which card?', fieldOf(g, opp(p)), 1, 1, 'bad'); },
     res: function* (g, c, p, L) { destroy(g, live(L).filter(x => x.ctrl !== p), { by: p }); } }] },
   "Gravekeeper's Spy": { effs: [{ type: 'trig', mand: true, faceDownOk: true, tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'flip' && ev.c === c,
-    cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => isGK(x) && baseAtk(x) <= 1500),
-    res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isGK(x) && baseAtk(x) <= 1500); const [x] = yield* pick(g, p, "Special Summon a Gravekeeper's with 1500 or less ATK", cs, 1, 1, 'good'); if (x && freeM(g, p) >= 0) ss(g, p, x, yield* posPick(g, p, x)); shuffleDeck(g, p); } }] },
+    // a mandatory Flip effect: it activates with nothing to summon too; the engine asks the position (its text names none)
+    res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => isGK(x) && baseAtk(x) <= 1500 && E.lib.ssable(g, p, x)); if (!cs.length || freeM(g, p) < 0) { shuffleDeck(g, p); return; } const [x] = yield* pick(g, p, "Special Summon a Gravekeeper's with 1500 or less ATK", cs, 1, 1, 'good'); if (x && freeM(g, p) >= 0) ss(g, p, x); shuffleDeck(g, p); } }] },
   'Rekindling': { effs: [
     { type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].gy.filter(x => E.lib.ssable(g, p, x)).some(x => isMon(x) && attr(x) === 'FIRE' && num(D(x).def) === 200),
       res: function* (g, c, p) {
@@ -179,7 +185,7 @@ E.addScripts({
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Return which Gladiator Beast card to your hand?', g.p[p].gy.filter(isGB), 1, 1, 'good'); },
       res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') { move(g, t, 'hand', { reason: 'effect' }); log(g, `${PN(g, p)} added ${nm(t)} to the hand.`); } } }] },
   'Gladiator Beast Samnite': { effs: [battledHook, tagOut('Gladiator Beast Samnite'),
-    { type: 'trig', on: (g, ev, c) => battleKill(ev, c) && c.flags.gb && ev.c.owner !== c.ctrl, cond: (g, c, p) => g.p[p].deck.some(isGB),
+    { type: 'trig', on: (g, ev, c) => battleKill(ev, c) && c.flags.gb && ev.prevCtrl !== c.ctrl, cond: (g, c, p) => g.p[p].deck.some(isGB),
       res: function* (g, c, p) { yield* search(g, p, isGB, 'Add a Gladiator Beast card from your Deck'); } }] },
   'Gladiator Beast Retiari': { effs: [battledHook, tagOut('Gladiator Beast Retiari'),
     { type: 'trig', when: true, on: (g, ev, c) => byGB(ev, c), cond: (g, c, p) => g.p[opp(p)].gy.length > 0,
@@ -209,14 +215,15 @@ E.addScripts({
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Shuffle which Gladiator Beast into the Deck?', monsOf(g, p).filter(x => faceUp(x) && gbMon(x)), 1, 1, 'good'); },
       res: function* (g, c, p, L) { const t = live(L)[0]; if (!t || !faceUp(t)) return; move(g, t, 'deck', { reason: 'effect' }); log(g, `${nm(t)} was shuffled into the Deck.`);
         const cs = g.p[p].deck.filter(gbMon); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon a Gladiator Beast from your Deck', cs, 1, 1, 'good'); if (x) gbSS(g, p, x, yield* posPick(g, p, x)); shuffleDeck(g, p); } }] },
-  // PARTIAL: the name change needs name() to read it (ENGINE: temporary name changes); the monster is still sent.
+  // Its name is read by name() until the End Phase (flags.prismaName).
   'Elemental HERO Prisma': { effs: [{ type: 'ign', opt: true, label: 'Send a Fusion Material to the GY',
     cond: (g, c, p) => g.p[p].extra.some(f => D(f).k === 'fusion' && fusionNames(f).some(n => g.p[p].deck.some(x => isMon(x) && nm(x) === n))),
     res: function* (g, c, p) { if (!onField(c) || !faceUp(c)) return;
       const fs = g.p[p].extra.filter(f => D(f).k === 'fusion' && fusionNames(f).some(n => g.p[p].deck.some(x => isMon(x) && nm(x) === n))); if (!fs.length) return;
       const [f] = yield* pick(g, p, 'Reveal which Fusion Monster?', fs, 1, 1, 'good'); log(g, `${PN(g, p)} revealed ${nm(f)}.`);
       const names = fusionNames(f); const x = yield* search(g, p, x => isMon(x) && names.includes(nm(x)), 'Send which listed monster to the GY?', 'gy');
-      if (x && onField(c)) { c.flags.prismaName = nm(x); c.flags.prismaTurn = g.turnNo; log(g, `Elemental HERO Prisma's name became ${nm(x)} until the End Phase.`); } } }] },
+      if (x && onField(c)) { c.flags.prismaName = nm(x); c.flags.prismaTurn = g.turnNo; log(g, `Elemental HERO Prisma's name became ${nm(x)} until the End Phase.`); } } },
+    { type: 'trig', on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'end' && c.flags.prismaName) { delete c.flags.prismaName; delete c.flags.prismaTurn; } return false; }, res: function* () {} }] },
   // Shrink: the original ATK becomes half, then other changes apply on top. A second Shrink does nothing more.
   'Shrink': { effs: [{ type: 'act', ds: true, cond: g => fieldMons(g).some(faceUp),
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Halve the original ATK of which monster?', fieldMons(g).filter(faceUp), 1, 1, 'bad'); },
@@ -229,19 +236,19 @@ E.addScripts({
     target: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
   'Gladiator Beast Gyzarus': {
-    proc: contactProc([x => nm(x) === 'Gladiator Beast Bestiari', gbMon], 'Special Summon (shuffle Bestiari + 1 Gladiator Beast)'),
+    proc: contactProc([x => nm(x) === 'Gladiator Beast Bestiari', gbMon], 'Special Summon (shuffle Bestiari + 1 Gladiator Beast)', true),
     effs: [battledHook, tagOut('Gladiator Beast Gyzarus', 2, 'Gladiator Beast Bestiari'),
       { type: 'trig', when: true, tags: { destroy: 1 }, label: 'Destroy up to 2 cards', on: (g, ev, c) => evSummoned(ev, c), cond: g => allField(g).length > 1,
         target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Destroy up to 2 cards', allField(g).filter(x => x !== c), 1, 2, 'bad'); },
         res: function* (g, c, p, L) { destroy(g, live(L), { by: p }); } }] },
   'Gladiator Beast Heraklinos': {
-    proc: contactProc([x => nm(x) === 'Gladiator Beast Laquari', gbMon, gbMon], 'Special Summon (shuffle Laquari + 2 Gladiator Beasts)'),
+    proc: contactProc([x => nm(x) === 'Gladiator Beast Laquari', gbMon, gbMon], 'Special Summon (shuffle Laquari + 2 Gladiator Beasts)', true),
     effs: [{ type: 'quick', ds: true, label: 'Discard: negate a Spell/Trap',
       cond: (g, c, p, x) => spellTrapAct(x.top) && !x.top.negated && g.p[p].hand.length > 0,
       cost: function* (g, c, p, L) { L.data.L = g.chain[g.chain.length - 1]; const [y] = yield* pick(g, p, 'Discard a card', g.p[p].hand, 1, 1, 'cost'); move(g, y, 'gy', { reason: 'cost' }); log(g, `${PN(g, p)} discarded ${nm(y)}.`); },
       res: function* (g, c, p, L) { L.data.L.negBy = p; negate(g, L.data.L, true); } }] },
   'Elemental HERO Grand Neos': {
-    proc: contactProc([x => nm(x) === 'Elemental HERO Neos', x => nm(x) === 'Neo-Spacian Grand Mole'], 'Special Summon (shuffle Neos + Grand Mole)'),
+    proc: contactProc([x => name(x) === 'Elemental HERO Neos', x => name(x) === 'Neo-Spacian Grand Mole'], 'Special Summon (shuffle Neos + Grand Mole)'),
     effs: [{ type: 'ign', opt: true, label: 'Return a monster to the hand', cond: (g, c, p) => monsOf(g, opp(p)).length > 0,
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Return which monster to the hand?', monsOf(g, opp(p)), 1, 1, 'bad'); },
       res: function* (g, c, p, L) { const t = live(L)[0]; if (t) { move(g, t, 'hand', { reason: 'effect', by: p }); log(g, `${D(t).n} returned to the hand.`); } } },
@@ -289,7 +296,7 @@ E.addScripts({
       cost: function* (g, c, p, grp) { const [a] = yield* pick(g, p, 'Banish a LIGHT Fairy from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'LIGHT' && race(x) === 'Fairy'), 1, 1, 'cost');
         const ds = yield* pick(g, p, 'Banish 3 DARK Fiends from your GY', g.p[p].gy.filter(x => isMon(x) && attr(x) === 'DARK' && race(x) === 'Fiend'), 3, 3, 'cost');
         for (const x of [a, ...ds]) move(g, x, 'ban', { reason: 'cost', group: grp }); log(g, `${PN(g, p)} banished ${[a, ...ds].map(nm).join(', ')}.`); } },
-    effs: [{ type: 'ign', label: 'Pay 1000: send all hands and fields to the GY', cond: (g, c, p) => g.p[p].lp > 1000,
+    effs: [{ type: 'ign', label: 'Pay 1000: send all hands and fields to the GY', cond: (g, c, p) => E.lib.canPay(g, p, 1000),
       cost: function* (g, c, p) { pay(g, p, 1000); },
       res: function* (g, c, p) { const grp = g.group; const xs = [...g.p[0].hand, ...g.p[1].hand, ...allField(g)]; for (const x of xs) move(g, x, 'gy', { reason: 'effect', by: p, group: grp, noLater: true });
         if (xs.length) { log(g, 'Every card in both hands and on the field was sent to the GY.'); draw(g, p, 1); } } }] },
@@ -302,7 +309,7 @@ E.addScripts({
       res: function* (g, c, p, L) { const t = L.t[0]; if (t && t.zone === 'gy') ss(g, p, t); } }] },
   // PARTIAL: copies the name and original ATK only; ENGINE: copying another card's effects (scripts are looked up by printed name).
   'Phantom of Chaos': {
-    cont: { dmg: (g, src, p, n, o) => o.battle && p !== src.ctrl && !src.flags.poc && g.battle && (g.battle.a === src || g.battle.t === src) ? 0 : n },
+    cont: { dmg: (g, src, p, n, o) => o.battle && p !== src.ctrl && g.battle && (g.battle.a === src || g.battle.t === src) ? 0 : n },
     effs: [{ type: 'ign', opt: true, label: 'Copy a monster in the GY',
       cond: (g, c, p) => g.p[p].gy.some(x => D(x).k === 'effect' && !isGemini(x)),
       target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Banish which Effect Monster to copy?', g.p[p].gy.filter(x => D(x).k === 'effect' && !isGemini(x)), 1, 1, 'good'); },
@@ -367,9 +374,10 @@ E.addScripts({
       { type: 'trig', mand: true, on: (g, ev, c) => ev.type === 'attack' && ev.a === c && ev.t && faceUp(ev.t) && D(ev.t).k === 'synchro' && lv(ev.t) >= 6,
         res: function* (g, c, p, L) { const t = g.aw ? g.aw.t : L.ev.t; if (!t || !onField(t) || !faceUp(t)) return; const A = atk(g, t); addMod(g, t, { set: Math.ceil(A / 2), which: 'atk', end: true, turbo: c.u }); log(g, `${name(t)}'s ATK was halved.`); } },
       { type: 'trig', on: (g, ev, c) => { if (ev.type === 'dsEnd' && ev.a === c && ev.t) ev.t.mods = ev.t.mods.filter(m => m.turbo !== c.u); return false; }, res: function* () {} }] },
-  'System Down': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000 && [...monsOf(g, opp(p)).filter(faceUp), ...g.p[opp(p)].gy].some(x => isMon(x) && race(x) === 'Machine'),
+  // Site ruling 2: under Kycoo the Machines in the GY aren't banished, the ones on the field still are (gyOpt: Kycoo doesn't stop the activation).
+  'System Down': { effs: [{ type: 'act', gyOpt: true, cond: (g, c, p) => E.lib.canPay(g, p, 1000, c) && [...monsOf(g, opp(p)).filter(faceUp), ...(L.forbid(g, { type: 'banish', from: 'gy', p }) ? [] : g.p[opp(p)].gy)].some(x => isMon(x) && race(x) === 'Machine'),
     cost: function* (g, c, p) { pay(g, p, 1000); },
-    res: function* (g, c, p) { const xs = [...monsOf(g, opp(p)).filter(faceUp), ...g.p[opp(p)].gy].filter(x => isMon(x) && race(x) === 'Machine'); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.map(nm).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished.`); } }] },
+    res: function* (g, c, p) { const xs = [...monsOf(g, opp(p)).filter(faceUp), ...(L.forbid(g, { type: 'banish', from: 'gy', p }) ? [] : g.p[opp(p)].gy)].filter(x => isMon(x) && race(x) === 'Machine'); for (const x of xs) move(g, x, 'ban', { reason: 'effect', by: p }); if (xs.length) log(g, `${xs.map(nm).join(', ')} ${xs.length > 1 ? 'were' : 'was'} banished.`); } }] },
   "Gottoms' Emergency Call": { effs: [{ type: 'act', tags: { ss: 1 },
     cond: (g, c, p) => nFreeM(g, p) >= 2 && fieldMons(g).some(x => faceUp(x) && /X-Saber/.test(name(x))) && allCards(g, 'gy').filter(x => isMon(x) && /X-Saber/.test(nm(x)) && E.lib.ssable(g, p, x) && L.canTarget(g, x, { c, p })).length >= 2,
     target: function* (g, c, p, L) { yield* tgt(g, p, L, 'Special Summon which 2 X-Sabers?', allCards(g, 'gy').filter(x => isMon(x) && /X-Saber/.test(nm(x))), 2, 2, 'good'); },
@@ -398,13 +406,13 @@ E.addScripts({
     effs: [
       { type: 'trig', on: (g, ev, c) => { if (evSummoned(ev, c, ['tribute']) && ev.tribs) for (const t of ev.tribs) { const n = nm(t); if (n === 'Green Gadget') c.flags.green = true; if (n === 'Red Gadget') c.flags.red = true; if (n === 'Yellow Gadget') c.flags.yellow = true; } return false; }, res: function* () {} },
       { type: 'trig', mand: true, on: (g, ev, c) => c.flags.red && ev.type === 'damage' && ev.battle && ev.src === c && ev.p !== c.ctrl, res: function* (g, c, p) { damage(g, opp(p), 400, { src: c, srcP: p }); } },
-      { type: 'trig', mand: true, on: (g, ev, c) => c.flags.yellow && battleKill(ev, c) && ev.c.owner !== c.ctrl, res: function* (g, c, p) { damage(g, opp(p), 600, { src: c, srcP: p }); } }] },
+      { type: 'trig', mand: true, on: (g, ev, c) => c.flags.yellow && battleKill(ev, c) && ev.prevCtrl !== c.ctrl, res: function* (g, c, p) { damage(g, opp(p), 600, { src: c, srcP: p }); } }] },
   // "Cannot be Special Summoned": the engine's summoning-condition check (forbid, 2026-11-27) applies its text everywhere. PARTIAL: negation of a
   // destroyed monster's GY Trigger Effects needs the engine (ENGINE: negating triggers in the GY). Flip effects are negated.
   'Ancient Gear Beast': {
     cont: { forbid: (g, src, a) => atkLock.forbid(g, src, a) || (a.type === 'activate' && a.c.zone === 'gy' && (g._agbNeg || []).includes(a.c.u)) },
     effs: [{ type: 'trig', on: (g, ev, c) => {
-        if (ev.type === 'afterCalc' && ev.a === c && ev.t && ev.t.flags.battleDoomed) ev.t.flags.negated = true;
+        if (ev.type === 'afterCalc' && ev.t && (ev.a === c || ev.t === c)) { const o = ev.a === c ? ev.t : ev.a; if (o && o.flags.battleDoomed) o.flags.negated = true; }   // attacking or attacked (edison-12)
         if (battleKill(ev, c)) (g._agbNeg = g._agbNeg || []).push(ev.c.u);
         if (ev.type === 'move' && ev.from === 'gy' && g._agbNeg) g._agbNeg = g._agbNeg.filter(u => u !== ev.c.u);
         return false; }, res: function* () {} }] },
@@ -412,7 +420,8 @@ E.addScripts({
     res: function* (g, c, p) { yield* search(g, p, x => isSpell(x) && D(x).sub === 'Field', 'Add a Field Spell'); } }] },
   // ENGINE: ① (1 less Tribute for Ancient Gear monsters) needs tribNeed() support.
   'Geartown': { effs: [{ type: 'act', res: function* () {} },
-    { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.destroyed && ev.to === 'gy',
+    // ruling 5: also when destroyed in the hand or Deck
+    { type: 'trig', loc: 'gy', when: true, tags: { ss: 1 }, on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.destroyed && ev.to === 'gy',
       cond: (g, c, p) => freeM(g, p) >= 0 && [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(x => E.lib.ssable(g, p, x)).some(isAG),
       res: function* (g, c, p) { const cs = [...g.p[p].hand, ...g.p[p].deck, ...g.p[p].gy].filter(isAG); if (!cs.length || freeM(g, p) < 0) return; const [x] = yield* pick(g, p, 'Special Summon an Ancient Gear monster', cs, 1, 1, 'good'); if (x) { const fromDeck = x.zone === 'deck'; ss(g, p, x); if (fromDeck) shuffleDeck(g, p); } } }] },
   // ① every monster on the field and in the GYs is a Zombie (cont.race); ② only Zombies can be Tribute Summoned

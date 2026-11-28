@@ -233,7 +233,7 @@ E.addScripts({
   // The destroyed monster's effects can't be activated this turn (a rule set as it is destroyed, so its triggers are dropped).
   'Guardian Baou': { effs: [lockInstall,
     { type: 'trig', on: (g, ev, c) => { if (ev.type === 'move' && ev.battle && ev.destroyed && ev.killer === c && isMon(ev.c)) { const v = ev.c; addRule(g, (g2, a) => a.type === 'activate' && a.c === v, { end: g.turnNo }); } return false; }, res: noop },
-    { type: 'trig', mand: true, label: 'Gain 1000 ATK', on: (g, ev, c) => battleKill(ev, c) && ev.c.owner !== c.ctrl,
+    { type: 'trig', mand: true, label: 'Gain 1000 ATK', on: (g, ev, c) => battleKill(ev, c) && ev.prevCtrl !== c.ctrl,
       res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: 1000, own: true }); log(g, 'Guardian Baou gained 1000 ATK.'); } } }] },
   'Guardian Ceal': { effs: [lockInstall, { type: 'ign', tags: { destroy: 1 }, label: 'Send an Equip: destroy a monster',
     cond: (g, c, p) => equipsOn(g, c).some(x => x.ctrl === p) && monsOf(g, opp(p)).length > 0,
@@ -362,7 +362,7 @@ E.addScripts({
   'Horn of Light': { cont: eqBonus(0, 800), effs: [equipAct(),
     { type: 'trig', loc: 'gy', when: true, label: 'Pay 500 LP: return it to the top of the Deck',
       on: (g, ev, c) => ev.type === 'move' && ev.c === c && ev.wasField && ev.to === 'gy',
-      cond: (g, c, p) => g.p[p].lp > 500,
+      cond: (g, c, p) => E.lib.canPay(g, p, 500),
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c) { if (c.zone === 'gy') { move(g, c, 'deckTop', { reason: 'effect' }); log(g, `Horn of Light returned to the top of ${PN(g, c.owner)}'s Deck.`); } } }] },
   'Horn of the Unicorn': { cont: eqBonus(700, 700), effs: [equipAct(),

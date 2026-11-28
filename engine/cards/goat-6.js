@@ -12,13 +12,8 @@ const { pick, move, ss, damage, addMod, name, onField, faceUp, freeM, opp, log, 
 
 E.addScripts({
   /* ----- Economics FTK, Library FTK ----- */
-  // 2005 printing: "Offer 1 monster on your side of the field as a Tribute to inflict 500 points of damage". The Toon rules in
-  // today's text (no attack the turn it is summoned, dies with Toon World, direct attacks) came with a later errata, so the shared
-  // full-17.js Toon version doesn't apply. Tributes come from tribPool (Soul Exchange targets, not a Mind Controlled monster).
-  'Toon Cannon Soldier': { effs: [{ type: 'ign', label: 'Tribute: 500 damage', cond: (g, c, p) => L.tribPool(g, p).length > 0,
-    cost: function* (g, c, p) { const [x] = yield* pick(g, p, 'Tribute 1 monster', L.tribPool(g, p), 1, 1, 'cost'); if (!x) return;
-      const nm = x.pos === 'set' ? 'a face-down monster' : name(x); move(g, x, 'gy', { reason: 'cost', by: p }); log(g, `${PN(g, p)} Tributed ${nm}.`); },
-    res: function* (g, c, p) { damage(g, opp(p), 500, { src: c, srcP: p }); } }] },
+  // Toon Cannon Soldier: no Goat override (E4, 2026-11-28). The Goat pool's own text has the Toon rules, so the shared full-17.js Toon
+  // version applies (format text first; EDOPro's Goat script agrees).
 
   /* ----- Warrior Control ----- */
   // 2005: "If this face-up card is removed from play, Special Summon it during the End Phase of this turn." No once per turn, and

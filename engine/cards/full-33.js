@@ -207,7 +207,7 @@ E.addScripts({
       for (const x of h) move(g, x, 'deck', { reason: 'effect', by: p }); log(g, `${PN(g, o)} shuffled ${h.length} card${h.length > 1 ? 's' : ''} from the hand into the Deck.`); draw(g, o, 3); } }] },
   'Psi-Station': { effs: [actNoop, { type: 'trig', loc: 'st', when: true, label: 'Pay 500: +1 Level and +300 ATK',
     on: (g, ev, c) => { if (ev.type === 'summon' && ['normal', 'tribute'].includes(ev.how) && ev.cs.length && isPsy(ev.cs[0])) { c.f33st = ev.cs[0]; return true; } return false; },
-    cond: (g, c, p) => g.p[p].lp > 500 && !!c.f33st && onField(c.f33st) && faceUp(c.f33st),
+    cond: (g, c, p) => E.lib.canPay(g, p, 500) && !!c.f33st && onField(c.f33st) && faceUp(c.f33st),
     cost: function* (g, c, p) { pay(g, p, 500); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Psychic monster?', [c.f33st].filter(x => onField(x) && faceUp(x)), 1, 1, 'good'); },
     res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t)) return; t.flags.lv = lv(t) + 1; addMod(g, t, { atk: 300 }); g.seq++; log(g, `${name(t)} gained 1 Level and 300 ATK.`); } }] },
@@ -215,7 +215,7 @@ E.addScripts({
     on: (g, ev, c) => ev.type === 'summon' && ev.cs.includes(c) && !['flip', 'gemini'].includes(ev.how),
     res: function* (g, c, p) { const n = g.p[p].gy.filter(isPsy).length; if (n) gain(g, p, 500 * n); } }] },
   'Psychic Jumper': { effs: [{ type: 'ign', opt: true, label: 'Pay 1000: switch control',
-    cond: (g, c, p) => g.p[p].lp > 1000 && oppFaceUp(g, p).length > 0 && monsOf(g, p).some(x => x !== c && faceUp(x) && isPsy(x) && !named(x, 'Psychic Jumper')),
+    cond: (g, c, p) => E.lib.canPay(g, p, 1000) && oppFaceUp(g, p).length > 0 && monsOf(g, p).some(x => x !== c && faceUp(x) && isPsy(x) && !named(x, 'Psychic Jumper')),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     target: function* (g, c, p, L2) {
       const [a] = yield* pick(g, p, 'Take which of their monsters?', oppFaceUp(g, p), 1, 1, 'bad');
@@ -231,7 +231,7 @@ E.addScripts({
     res: function* (g, c, p, L2) { if (L2.t.length < 3 || L2.t.some(x => x.zone !== 'gy')) return;
       for (const x of L2.t) move(g, x, 'deck', { reason: 'effect', by: p }); log(g, `${PN(g, p)} shuffled 3 Psychic monsters into the Deck.`); draw(g, p, 2); } }] },
   'Psychic Path': { effs: [{ type: 'act',
-    cond: (g, c, p) => g.p[p].lp > 800 && g.p[p].ban.some(isPsy),
+    cond: (g, c, p) => E.lib.canPay(g, p, 800, c) && g.p[p].ban.some(isPsy),
     cost: function* (g, c, p) { pay(g, p, 800); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Add which banished Psychic monsters?', g.p[p].ban.filter(isPsy), 1, 2, 'good'); },
     res: function* (g, c, p, L2) { const xs = L2.t.filter(x => x.zone === 'ban'); for (const x of xs) move(g, x, 'hand', { reason: 'effect', by: p }); if (xs.length) log(g, `${PN(g, p)} added ${xs.map(name).join(' and ')} to the hand.`); } }] },
@@ -240,7 +240,7 @@ E.addScripts({
     res: function* (g, c, p) { const n = monsOf(g, p).filter(x => faceUp(x) && isPsy(x)).length; if (n) gain(g, p, 1000 * n); } }] },
   'Psychic Snail': { effs: [
     { type: 'ign', label: 'Pay 800: a Psychic attacks twice',
-      cond: (g, c, p) => g.p[p].lp > 800 && monsOf(g, p).some(x => x !== c && faceUp(x) && isPsy(x)),
+      cond: (g, c, p) => E.lib.canPay(g, p, 800) && monsOf(g, p).some(x => x !== c && faceUp(x) && isPsy(x)),
       cost: function* (g, c, p) { pay(g, p, 800); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Psychic monster can attack twice?', monsOf(g, p).filter(x => x !== c && faceUp(x) && isPsy(x)), 1, 1, 'good'); },
       after: (g, c) => { const u = c.u; addRule(g, (g2, a) => a.type === 'attack' && !!a.c && a.c.u === u, { end: g.turnNo }); },
@@ -280,7 +280,7 @@ E.addScripts({
   // Port of classic-3.js (the Goat one stays there)
   'Puppet Master': { effs: [{ type: 'trig', when: true, tags: { ss: 1 }, label: 'Pay 2000: revive 2 Fiends',
     on: (g, ev, c) => evSummoned(ev, c, ['tribute']),
-    cond: (g, c, p) => g.p[p].lp > 2000 && nFreeM(g, p) >= 2 && g.p[p].gy.filter(x => isMon(x) && race(x) === 'Fiend' && canSS(g, p, x)).length >= 2,
+    cond: (g, c, p) => E.lib.canPay(g, p, 2000) && nFreeM(g, p) >= 2 && g.p[p].gy.filter(x => isMon(x) && race(x) === 'Fiend' && canSS(g, p, x)).length >= 2,
     cost: function* (g, c, p) { pay(g, p, 2000); },
     target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Special Summon which 2 Fiends from your GY?', g.p[p].gy.filter(x => isMon(x) && race(x) === 'Fiend'), 2, 2, 'good'); },
     res: function* (g, c, p, L2) { const done = [];

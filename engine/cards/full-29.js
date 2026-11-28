@@ -359,7 +359,7 @@ E.addScripts({
   'Weapon Change': { effs: [actNoop,
     { type: 'trig', loc: 'st', opt: true, label: 'Pay 700 LP: switch a monster\'s ATK and DEF',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      cond: (g, c, p) => g.p[p].lp > 700 && monsOf(g, p).some(x => faceUp(x) && ['Warrior', 'Machine'].includes(race(x))),
+      cond: (g, c, p) => E.lib.canPay(g, p, 700) && monsOf(g, p).some(x => faceUp(x) && ['Warrior', 'Machine'].includes(race(x))),
       cost: function* (g, c, p) { pay(g, p, 700); },
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Switch the ATK and DEF of which Warrior or Machine?', monsOf(g, p).filter(x => faceUp(x) && ['Warrior', 'Machine'].includes(race(x))), 1, 1, 'good'); },
       res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || !onField(c) || !faceUp(c)) return;
@@ -474,7 +474,7 @@ E.addScripts({
       on: (g, ev, c) => !!c.flags.union && ev.type === 'move' && ev.battle && ev.destroyed && !!ev.killer && ev.killer.u === c.equipTo && ev.prevCtrl !== c.ctrl,
       res: function* (g, c, p) { const h = g.p[opp(p)].hand; if (!h.length) return; const x = h[Math.floor(g.rnd() * h.length)]; move(g, x, 'gy', { reason: 'discard', by: p }); log(g, `${PN(g, opp(p))} discarded ${D(x).n} at random.`); } }] },
   'Zombyra the Dark': {
-    self: { cantAttack: (g, c) => !monsOf(g, opp(c.ctrl)).some(t => !(faceUp(t) && has(g, t, 'noAttackTarget'))) },
+    self: { noDirect: true, cantAttack: (g, c) => !monsOf(g, opp(c.ctrl)).some(t => !(faceUp(t) && has(g, t, 'noAttackTarget'))) },
     effs: [{ type: 'trig', mand: true, label: 'Lose 200 ATK', on: (g, ev, c) => battleKill(ev, c),
       res: function* (g, c) { if (onField(c) && faceUp(c)) { addMod(g, c, { atk: -200, own: true }); log(g, `${name(c)} lost 200 ATK.`); } } }] },
 

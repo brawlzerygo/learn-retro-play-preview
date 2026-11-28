@@ -134,7 +134,7 @@ E.addScripts({
       if (ev.a.flags.f23hiera !== g.turnNo) { ev.a.flags.f23hiera = g.turnNo; ev.a.attacks = Math.max(0, ev.a.attacks - 1); } }
     return false; }, res: function* () {} }] },
   // ENGINE: the hand size limit is fixed at 6.
-  'Hieroglyph Lithograph': { effs: [{ type: 'act', cond: (g, c, p) => g.p[p].lp > 1000,
+  'Hieroglyph Lithograph': { effs: [{ type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 1000, c),
     cost: function* (g, c, p) { pay(g, p, 1000); },
     res: function* (g, c, p) { g.p[p].handLimit = 7; log(g, `${PN(g, p)}'s hand size limit is now 7.`); } }] },
   // Control lasts while Hiita is face-up on the field and the monster is still FIRE (a watcher gives it back).
@@ -197,8 +197,8 @@ E.addScripts({
     cond: (g, c, p) => freeM(g, p) >= 0 && g.p[p].deck.filter(x => E.lib.ssable(g, p, x)).some(x => named(x, 'Hyena')),
     res: function* (g, c, p) { const cs = g.p[p].deck.filter(x => named(x, 'Hyena')); const n = Math.min(cs.length, nFreeM(g, p)); if (!n) return;
       const xs = yield* pick(g, p, 'Special Summon any number of Hyena from your Deck', cs, 1, n, 'good'); for (const x of xs) ss(g, p, x, 'atk'); shuffleDeck(g, p); } }] },
-  'Hysteric Fairy': { effs: [{ type: 'ign', label: 'Tribute 2 monsters: gain 1000 LP', cond: (g, c, p) => monsOf(g, p).length >= 2,
-    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 monsters', monsOf(g, p), 2, 2, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); },
+  'Hysteric Fairy': { effs: [{ type: 'ign', label: 'Tribute 2 monsters: gain 1000 LP', cond: (g, c, p) => L.tribPool(g, p).length >= 2,
+    cost: function* (g, c, p) { const xs = yield* pick(g, p, 'Tribute 2 monsters', L.tribPool(g, p), 2, 2, 'cost'); for (const x of xs) move(g, x, 'gy', { reason: 'tribute', by: p }); log(g, `${PN(g, p)} Tributed ${xs.map(x => D(x).n).join(' and ')}.`); },
     res: function* (g, c, p) { gain(g, p, 1000); } }] },
   'Impenetrable Formation': {
     cont: { def: (g, src, m) => m.u === src.flags.f23sel && m.ctrl === src.ctrl && monsOf(g, src.ctrl).length >= 2 && monsOf(g, src.ctrl).every(x => x.pos !== 'atk') ? 700 : 0 },
@@ -212,15 +212,19 @@ E.addScripts({
   'Imperial Order': {
     cont: { negates: (g, src, c) => isSpell(c) && onField(c) },
     effs: [noop, scanMenu('st'), scanWatch,
-      { type: 'trig', loc: 'st', mand: true, label: 'Pay 700 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby',
-        res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 700) pay(g, p, 700); else destroy(g, [c], { by: p, rule: true }); } }] },   // maintenance: a rule destroy, not an effect (Imperial Custom ruling 3)
+      // Edison text: "during the Standby Phase, you must pay 700 LP (this is not optional)", either player's Standby Phase. Goat (2005 errata
+      // "during each of your Standby Phases"; Netrep Q&A 2003: "This card does not have mandatory payments", and no payment to 0 LP):
+      // its controller's own Standby Phases, and they may choose not to pay (2026-11-28 audit, E4).
+      { type: 'trig', loc: 'st', mand: true, label: 'Pay 700 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && (E.format() !== 'goat' || ev.tp === c.ctrl),
+        res: function* (g, c, p) { if (!onField(c)) return; const ok = E.lib.canPay(g, p, 700) && (E.format() !== 'goat' || (yield* E.lib.yn(g, p, 'Pay 700 LP to keep Imperial Order?')));
+          if (ok) pay(g, p, 700); else destroy(g, [c], { by: p, rule: true }); } }] },   // maintenance: a rule destroy, not an effect (Imperial Custom ruling 3)
   'Inaba White Rabbit': { cont: noSSFromGY, self: { directAttack: true, attackOk: () => false }, effs: [spiritReturn] },
   'Incandescent Ordeal': { effs: [{ type: 'act', tags: { ss: 1 }, cond: (g, c, p) => freeM(g, p) >= 0 && canRitual(g, p, { monster: x => named(x, 'Legendary Flame Lord') }),
     res: function* (g, c, p) { yield* ritualSummon(g, p, { monster: x => named(x, 'Legendary Flame Lord') }); } }] },
   // PARTIAL: the Standby Phase cost is a chain link; the die roll is done by chainScan (above).
   'Infernalqueen Archfiend': { effs: [scanMenu('m'), scanWatch,
     { type: 'trig', mand: true, label: 'Pay 500 LP', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } },
+      res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500)) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } },
     { type: 'trig', mand: true, label: 'An Archfiend gains 1000 ATK', on: (g, ev) => ev.type === 'phase' && ev.ph === 'standby',
       cond: g => fieldMons(g).some(x => faceUp(x) && /Archfiend/.test(D(x).n)),
       target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Which Archfiend monster gains 1000 ATK?', fieldMons(g).filter(x => faceUp(x) && /Archfiend/.test(D(x).n)), 1, 1, 'good'); },
@@ -236,14 +240,14 @@ E.addScripts({
   'Injection Fairy Lily': {
     self: { atk: (g, c) => g.battle && c.flags.lilyB === g.battle ? 3000 : 0 },
     effs: [{ type: 'quick', ds: true, label: 'Pay 2000: +3000 ATK',
-      cond: (g, c, p) => g.inDS && inBattle(g, c) && c.flags.lilyB !== g.battle && c.flags.lilyPaid !== g.battle && g.p[p].lp > 2000,
+      cond: (g, c, p) => g.inDS && inBattle(g, c) && c.flags.lilyB !== g.battle && c.flags.lilyPaid !== g.battle && E.lib.canPay(g, p, 2000),
       cost: function* (g, c, p) { c.flags.lilyPaid = g.battle; pay(g, p, 2000); },
       res: function* (g, c) { if (onField(c) && faceUp(c) && g.battle && inBattle(g, c)) { c.flags.lilyB = g.battle; log(g, `${name(c)} gained 3000 ATK for this battle.`); } } }] },
   // PARTIAL: used once per opponent's Standby Phase (no Standby Phase window to repeat it).
   'Inspection': { effs: [noop,
     { type: 'trig', loc: 'st', label: 'Pay 500 LP: look at a random card in their hand',
       on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp !== c.ctrl,
-      cond: (g, c, p) => g.p[p].lp > 500 && g.p[opp(p)].hand.length > 0,
+      cond: (g, c, p) => E.lib.canPay(g, p, 500) && g.p[opp(p)].hand.length > 0,
       cost: function* (g, c, p) { pay(g, p, 500); },
       res: function* (g, c, p) { const h = g.p[opp(p)].hand; if (!h.length) return; const x = h[Math.floor(g.rnd() * h.length)]; log(g, `${PN(g, p)} looked at ${name(x)} in ${PN(g, opp(p))}'s hand.`); } }] },
   // PARTIAL: the return in the End Phase is a chain link. The monster comes back to its owner's field in the same position.

@@ -411,7 +411,7 @@ E.addScripts({
         target: function* (g, c, p, L2) { yield* tgt(g, p, L2, 'Negate the effects of which face-up card this turn?', allField(g).filter(faceUp), 1, 1, 'bad'); },
         res: function* (g, c, p, L2) { const t = live(L2)[0]; if (!t || !faceUp(t) || !onField(c)) return; c.f43seal = { u: t.u, turn: g.turnNo }; g.seq++; log(g, `${name(t)}'s effects are negated this turn.`); } },
       { type: 'trig', loc: 'st', mand: true, label: 'Pay 500 LP or destroy Seal of Wickedness', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-        res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500 && (yield* yn(g, p, 'Pay 500 LP to keep Seal of Wickedness?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
+        res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500) && (yield* yn(g, p, 'Pay 500 LP to keep Seal of Wickedness?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
   'Search Striker': { effs: [{ type: 'trig', tags: { destroy: 1 }, label: 'Destroy the face-down monster',
       on: (g, ev, c) => ev.type === 'dsStart' && ev.a === c && !!ev.t && ev.t.pos === 'set',
       res: function* (g, c, p, L2) { const t = L2.ev.t; if (!t || !onField(t) || t.pos !== 'set') return;

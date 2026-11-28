@@ -71,7 +71,7 @@ E.addScripts({
         if (coin(g, p) === call) { addMod(g, a, { set: 0, which: 'atk', end: true, fairy: c.u }); log(g, `${name(a)}'s ATK became 0.`); } else log(g, 'The call was wrong.'); } },
     { type: 'trig', loc: 'st', on: (g, ev, c) => { if (ev.type === 'phase' && ev.ph === 'bpEnd') for (const m of fieldMons(g)) m.mods = m.mods.filter(x => x.fairy !== c.u); return false; }, res: function* () {} },
     { type: 'trig', loc: 'st', mand: true, label: 'Pay 500 LP or destroy this card', on: (g, ev, c) => ev.type === 'phase' && ev.ph === 'standby' && ev.tp === c.ctrl,
-      res: function* (g, c, p) { if (!onField(c)) return; if (g.p[p].lp > 500 && (yield* yn(g, p, 'Pay 500 LP to keep Fairy Box?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
+      res: function* (g, c, p) { if (!onField(c)) return; if (E.lib.canPay(g, p, 500) && (yield* yn(g, p, 'Pay 500 LP to keep Fairy Box?'))) pay(g, p, 500); else destroy(g, [c], { by: p, rule: true }); } }] },
   // PARTIAL: only Spells the engine marks as sent by the opponent count (destroyed or negated by their card; discards
   // and mills from the Deck carry no "by" yet).
   'Fairy Guardian': { effs: [{ type: 'ign', label: 'Tribute: return a Spell to the Deck',
@@ -101,7 +101,7 @@ E.addScripts({
         { type: 'trig', loc: 'st', on: (g, ev, c) => { if (faceUp(c)) allAtk(g); return false; }, res: function* () {} }] }; })(),
   // The win is checked at the 20th turn's End Phase (turn 1 is the activation turn); both at once is a draw.
   'Final Countdown': { effs: [
-    { type: 'act', cond: (g, c, p) => g.p[p].lp > 2000, cost: function* (g, c, p) { pay(g, p, 2000); },
+    { type: 'act', cond: (g, c, p) => E.lib.canPay(g, p, 2000, c), cost: function* (g, c, p) { pay(g, p, 2000); },
       res: function* (g, c, p) { (g.fcd || (g.fcd = [])).push({ p, t: g.turnNo }); log(g, `${PN(g, p)} wins at the end of turn ${g.turnNo + 19}.`); } },
     { type: 'trig', loc: 'any', on: (g, ev) => {
       if (ev.type === 'phase' && ev.ph === 'end' && g.fcd) { const due = g.fcd.filter(e => g.turnNo >= e.t + 19); if (due.length) { if (new Set(due.map(e => e.p)).size > 1) winDuel(g, -1, 'Both Final Countdowns ended: the Duel is a draw'); winDuel(g, due[0].p, `${PN(g, due[0].p)} won with Final Countdown`); } }
@@ -276,7 +276,7 @@ E.addScripts({
     def: (g, c) => 1000 * fieldMons(g).filter(x => x !== c && faceUp(x) && race(x) === 'Fiend').length } },
   // PARTIAL: a discard cost is read from the card's text ("Discard ...;", "by discarding").
   'Goblin of Greed': { cont: { forbid: (g, src, a) => a.type === 'activate' && a.eff && !!a.eff.cost && discardCost(a.c) } },
-  'Goblin Out of the Frying Pan': { effs: [{ type: 'act', cond: (g, c, p, x) => spellTrapAct(x.top) && isSpell(x.top.c) && !x.top.negated && g.p[p].lp > 500,
+  'Goblin Out of the Frying Pan': { effs: [{ type: 'act', cond: (g, c, p, x) => spellTrapAct(x.top) && isSpell(x.top.c) && !x.top.negated && E.lib.canPay(g, p, 500, c),
     cost: function* (g, c, p) { pay(g, p, 500); },
     target: function* (g, c, p, L2) { L2.data.L = g.chain[g.chain.length - 1]; },
     res: function* (g, c, p, L2) { const T = L2.data.L; T.negBy = p; negate(g, T, false); if (onField(T.c)) { move(g, T.c, 'hand', { reason: 'effect', by: p }); log(g, `${D(T.c).n} returned to its owner's hand.`); } } }] },
